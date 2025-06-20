@@ -3,9 +3,6 @@ import pandas as pd
 
 def run():
     st.header("📊 갱신형 vs 비갱신형 보험 납입금 비교")
-    st.write("# 📌 페이지 설정
-st.set_page_config(page_title="갱신 vs 비갱신 보험 비교", layout="wide")
-st.title("📊 갱신형 vs 비갱신형 보험 납입금 비교")
 
 # 👉 입력 영역을 왼쪽과 오른쪽으로 나눔
 col_left, col_right = st.columns(2)
@@ -160,5 +157,5 @@ if st.button("📊 결과 보기"):
             st.markdown("### 💰 총 납입금")
             st.markdown(f"<div style='font-size:3rem; font-weight:bold; line-height:1.1'>{total_renew:,.0f} 원</div>", unsafe_allow_html=True)
     else:
-        st.warning("❗ 갱신형 보험 입력값을 모두 입력해주세요.")")
+        st.warning("❗ 갱신형 보험 입력값을 모두 입력해주세요.")
 
