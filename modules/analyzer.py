@@ -87,7 +87,7 @@ def run():
             print_ws["A1"] = f"{name_prefix}님의 기존 보험 보장 분석 {detail_text}"
 
             today_str = datetime.today().strftime("%Y%m%d")
-            filename = f"{name_prefix}님의_보장분석_{today_str}.xlsx"
+            filename = f"{name_prefix}님의_보장분석엑셀_{today_str}.xlsx"
             output_excel = BytesIO()
             print_wb.save(output_excel)
             output_excel.seek(0)
