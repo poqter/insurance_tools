@@ -92,19 +92,13 @@ def run():
             print_wb.save(output_excel)
             output_excel.seek(0)
 
-            import base64
-            b64 = base64.b64encode(output_excel.getvalue()).decode()
-            href = f'''
-                <a href="data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{b64}"
-                download="{filename}" 
-                target="_blank"
-                style="display:inline-block; padding:10px 16px; background-color:#0a84ff; color:white;
-                        border-radius:8px; text-decoration:none; font-weight:bold; margin-top:20px;">
-                📥 결과 파일 저장하기
-                </a>
-            '''
-            st.markdown(href, unsafe_allow_html=True)
-
+            st.success("✅ 분석이 완료되었습니다.")
+            st.download_button(
+                label="📥 결과 파일 다운로드",
+                data=output_excel,
+                file_name=filename,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
 
         except Exception as e:
             st.error(f"⚠️ 오류가 발생했습니다: {str(e)}")
