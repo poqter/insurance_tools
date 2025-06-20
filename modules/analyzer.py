@@ -6,11 +6,7 @@ from datetime import datetime
 
 def run():
     st.header("📑 보장 분석 도우미")
-    st.write("이곳에 병선님의 보장 분석 도우미 코드 전체를 넣어주세요.")
-
-   
-
-# ✅ 페이지 설정
+    st.write("# ✅ 페이지 설정
 st.set_page_config(page_title="보장 분석 도우미", layout="centered")
 
 # ✅ 기본 템플릿 파일 로드 (다운로드 버튼용)
@@ -115,3 +111,7 @@ if uploaded_main:
 
     except Exception as e:
         st.error(f"⚠️ 오류가 발생했습니다: {str(e)}")
+")
+
+   
+
