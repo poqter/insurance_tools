@@ -5,8 +5,6 @@ from io import BytesIO
 from datetime import datetime
 
 def run():
-    st.header("📑 보장 분석 도우미")
-
     # ✅ 기본 템플릿 파일 로드 (다운로드 버튼용)
     with open("print.xlsx", "rb") as f:
         default_template_data = f.read()

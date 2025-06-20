@@ -2,8 +2,6 @@ import streamlit as st
 import pandas as pd
 
 def run():
-    st.header("📊 갱신형 vs 비갱신형 보험 납입금 비교")
-
     # 👉 입력 영역을 왼쪽과 오른쪽으로 나눔
     col_left, col_right = st.columns(2)
 

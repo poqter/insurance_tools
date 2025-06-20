@@ -3,8 +3,6 @@ import streamlit as st
 import time
 
 def run():
-    st.header("💰 적금 vs 단기납 비교")
-
     # 강조 박스 함수
     def emphasize_box(text, bg="#e6f2ff", color="#003366"):
         return f"""<div style='background-color:{bg}; color:{color}; padding:12px; border-radius:10px;
