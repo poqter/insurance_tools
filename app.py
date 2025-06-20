@@ -1,18 +1,21 @@
 import streamlit as st
 from modules import deposit_vs_shortpay, renewal_vs_nonrenewal, analyzer
 
-st.set_page_config(page_title="보험 멀티 도우미", layout="wide")
-st.title("🔧 보험 컨설팅 멀티 도우미")
+# 페이지 설정
+st.set_page_config(page_title="보험컨설팅 멀티 도우미", layout="wide")
 
-menu = st.radio("원하는 기능을 선택하세요 👇", [
+# 👉 사이드바 메뉴로 앱 선택 이동
+st.sidebar.title("🧰 보험컨설팅 멀티 도우미")
+app_option = st.sidebar.radio("📌 사용할 기능을 선택하세요:", [
+    "📑 보장 분석 도우미",
     "💰 적금 vs 단기납 비교",
-    "📊 갱신 vs 비갱신 보험 비교",
-    "📑 보장 분석 도우미"
+    "📊 갱신 vs 비갱신 보험 비교"
 ])
 
-if menu == "💰 적금 vs 단기납 비교":
-    deposit_vs_shortpay.run()
-elif menu == "📊 갱신 vs 비갱신 보험 비교":
-    renewal_vs_nonrenewal.run()
-elif menu == "📑 보장 분석 도우미":
+# 🧠 선택된 앱 실행
+if app_option == "📑 보장 분석 도우미":
     analyzer.run()
+elif app_option == "💰 적금 vs 단기납 비교":
+    deposit_vs_shortpay.run()
+elif app_option == "📊 갱신 vs 비갱신 보험 비교":
+    renewal_vs_nonrenewal.run()
