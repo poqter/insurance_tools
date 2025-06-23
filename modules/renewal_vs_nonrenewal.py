@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 
 def run():
+    st.title("📊 갱신 vs 비갱신 보험 비교")
+
     # 👉 입력 영역을 왼쪽과 오른쪽으로 나눔
     col_left, col_right = st.columns(2)
 
@@ -33,7 +35,7 @@ def run():
         ⚙️ 아래에서 **갱신 주기별 증가율**을 직접 조정할 수 있습니다.  
         기본값은 통계 기반으로 자동 설정됩니다.
 
-        🖨️ 인쇄 시 적정 배율은 **84%**입니다.
+        🖨️ 인쇄시 배율 조정으로 페이지에 알맞게 설정
         """)
         st.markdown("---")
         st.markdown("### 📈 갱신 주기별 증가율 설정")
