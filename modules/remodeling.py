@@ -191,7 +191,7 @@ def run():
                     for line in lines:
                         st.markdown(f"- {line}")
 
-        st.subheader("🌟 기대 효과 요약.")
+        st.subheader("🌟 기대 효과 요약")
         기대효과_후보 = []
 
         if fee_diff < 0:
