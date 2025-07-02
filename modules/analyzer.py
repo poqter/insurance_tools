@@ -48,25 +48,27 @@ def run():
             print_wb = openpyxl.load_workbook(uploaded_print)
             st.info("✅ 업로드한 print.xlsx를 사용합니다.")
             # ✅ 복사 범위 설정 UI 바로 아래 위치
-            with st.sidebar.expander("🛠️ 보장사항 복사 범위 설정 (main.xlsx 기준)", expanded=True):
-                start_row = st.number_input("복사 시작 행 (예: 9)", min_value=1, max_value=100, value=9, key='start_row')
-                end_row = st.number_input("복사 종료 행 (예: 45)", min_value=1, max_value=100, value=45, key='end_row')
-                if end_row <= start_row:
-                    st.sidebar.warning("복사 종료 행은 시작 행보다 커야 합니다.")
-            with st.sidebar.expander("🛠️ 보장사항 복사 범위 설정 (main.xlsx 기준)", expanded=True):
-                start_row = st.number_input("복사 시작 행 (예: 9)", min_value=1, max_value=100, value=9)
-                end_row = st.number_input("복사 종료 행 (예: 45)", min_value=1, max_value=100, value=45)
-                if end_row <= start_row:
-                    st.sidebar.warning("복사 종료 행은 시작 행보다 커야 합니다.")
+            
+            
         else:
             print_wb = openpyxl.load_workbook("print.xlsx")
             st.info("📌 기본 내장된 print.xlsx를 사용합니다.")
-            start_row = 9
-            end_row = 45
+
+        # ✅ 기본 복사 범위 초기화 (main 화면에서 제어)
+        start_row = 9
+        end_row = 45
         print_ws = print_wb.active
     except Exception as e:
         st.error(f"❌ print.xlsx 파일을 열 수 없습니다: {e}")
         st.stop()
+
+    # ✅ 복사 범위 설정 (메인 화면에서)
+    if uploaded_print:
+        st.subheader("🛠️ 보장사항 복사 범위 설정")
+        start_row = st.number_input("복사 시작 행 (예: 9)", min_value=1, max_value=100, value=9, key='main_start_row')
+        end_row = st.number_input("복사 종료 행 (예: 45)", min_value=1, max_value=100, value=45, key='main_end_row')
+        if end_row <= start_row:
+            st.warning("복사 종료 행은 시작 행보다 커야 합니다.")
 
     # ✅ main.xlsx 처리
     if uploaded_main:
