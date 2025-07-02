@@ -49,8 +49,8 @@ def run():
             st.info("✅ 업로드한 print.xlsx를 사용합니다.")
             # ✅ 복사 범위 설정 UI 바로 아래 위치
             with st.sidebar.expander("🛠️ 보장사항 복사 범위 설정 (main.xlsx 기준)", expanded=True):
-                start_row = st.number_input("복사 시작 행 (예: 9)", min_value=1, max_value=100, value=9)
-                end_row = st.number_input("복사 종료 행 (예: 45)", min_value=1, max_value=100, value=45)
+                start_row = st.number_input("복사 시작 행 (예: 9)", min_value=1, max_value=100, value=9, key='start_row')
+                end_row = st.number_input("복사 종료 행 (예: 45)", min_value=1, max_value=100, value=45, key='end_row')
                 if end_row <= start_row:
                     st.sidebar.warning("복사 종료 행은 시작 행보다 커야 합니다.")
             with st.sidebar.expander("🛠️ 보장사항 복사 범위 설정 (main.xlsx 기준)", expanded=True):
