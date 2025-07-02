@@ -31,8 +31,8 @@ def run():
 
     st.sidebar.markdown("---")
     st.sidebar.markdown("👨‍💻 **제작자:** 비전본부 드림지점 박병선 팀장")  
-    st.sidebar.markdown("🗓️ **버전:** v1.0.0")  
-    st.sidebar.markdown("📅 **최종 업데이트:** 2025-06-13")
+    st.sidebar.markdown("🗓️ **버전:** v1.2.0")  
+    st.sidebar.markdown("📅 **최종 업데이트:** 2025-07-02")
 
     # ✅ 제목 및 설명
     st.title("📊 보장 분석 도우미")
@@ -47,13 +47,21 @@ def run():
         if uploaded_print:
             print_wb = openpyxl.load_workbook(uploaded_print)
             st.info("✅ 업로드한 print.xlsx를 사용합니다.")
+            with st.sidebar.expander("🛠️ 보장사항 복사 범위 설정 (main.xlsx 기준)", expanded=True):
+                start_row = st.number_input("복사 시작 행 (예: 9)", min_value=1, max_value=100, value=9)
+                end_row = st.number_input("복사 종료 행 (예: 45)", min_value=1, max_value=100, value=45)
+                if end_row <= start_row:
+                    st.sidebar.warning("복사 종료 행은 시작 행보다 커야 합니다.")
         else:
             print_wb = openpyxl.load_workbook("print.xlsx")
             st.info("📌 기본 내장된 print.xlsx를 사용합니다.")
+            start_row = 9
+            end_row = 45
         print_ws = print_wb.active
     except Exception as e:
         st.error(f"❌ print.xlsx 파일을 열 수 없습니다: {e}")
         st.stop()
+
 
     # ✅ main.xlsx 처리
     if uploaded_main:
@@ -78,7 +86,7 @@ def run():
                 for col in range(6, 30):
                     print_ws.cell(row=row, column=col - 2).value = main_ws2.cell(row=row, column=col).value
 
-            for row in range(9, 46):
+            for row in range(start_row, end_row + 1):
                 for col in range(6, 30):
                     print_ws.cell(row=row + 3, column=col - 2).value = main_ws2.cell(row=row, column=col).value
 
