@@ -41,13 +41,13 @@ def run():
         st.markdown("### 📈 갱신 주기별 증가율 설정")
 
         if renewal_cycle == 10:
-            default_weights = [2.5166, 1.711, 1.2959, 1.7226, 1.083, 1.0624, 1.0388]
+            default_weights = [2.2180, 1.5239, 1.4283, 1.2212, 1.0921, 1.0624, 1.0388]
             user_weights = [
                 st.number_input(f"{i+1}차 갱신 증가율", value=default_weights[i], step=0.01, format="%.4f", key=f"rate_10_{i}")
                 for i in range(7)
             ]
         else:
-            default_weights = [4.2237, 1.8207, 1.2832]
+            default_weights = [3.8982, 2.1253, 1.2832]
             user_weights = [
                 st.number_input(f"{i+1}차 갱신 증가율", value=default_weights[i], step=0.01, format="%.4f", key=f"rate_20_{i}")
                 for i in range(3)
