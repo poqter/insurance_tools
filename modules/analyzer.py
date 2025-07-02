@@ -3,6 +3,7 @@ import openpyxl
 import re
 from io import BytesIO
 from datetime import datetime
+from openpyxl.utils import get_column_letter
 
 def run():
     # ✅ 기본 템플릿 파일 로드 (다운로드 버튼용)
@@ -21,14 +22,12 @@ def run():
 - 지원 파일: .xlsx (엑셀 전용)
 """)
     st.sidebar.markdown("📝 **기본 폼을 수정하려면 아래 파일을 받아 수정 후 업로드하세요.**")
-
     st.sidebar.download_button(
         label="📥 기본 폼(print.xlsx) 다운로드",
         data=default_template_data,
         file_name="print.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-
     st.sidebar.markdown("---")
     st.sidebar.markdown("👨‍💻 **제작자:** 비전본부 드림지점 박병선 팀장")  
     st.sidebar.markdown("🗓️ **버전:** v1.2.0")  
@@ -42,14 +41,11 @@ def run():
     uploaded_main = st.file_uploader("⬆️ 컨설팅보장분석.xlsx 파일을 업로드하세요", type=["xlsx"])
     uploaded_print = st.file_uploader("🖨️ (선택) 개인용 보장분석 폼.xlsx 파일을 업로드하세요", type=["xlsx"])
 
-     # ✅ print.xlsx 로드
+    # ✅ print.xlsx 로드
     try:
         if uploaded_print:
             print_wb = openpyxl.load_workbook(uploaded_print)
             st.info("✅ 업로드한 print.xlsx를 사용합니다.")
-            # ✅ 복사 범위 설정 UI 바로 아래 위치
-            
-            
         else:
             print_wb = openpyxl.load_workbook("print.xlsx")
             st.info("📌 기본 내장된 print.xlsx를 사용합니다.")
@@ -101,34 +97,26 @@ def run():
             detail_text = main_ws1["D2"].value or ""
             print_ws["A1"] = f"{name_prefix}님의 기존 보험 보장 분석 {detail_text}"
 
-    # ✅ 인쇄 영역 설정 (활성화된 영역만)
-    from openpyxl.utils import get_column_letter
+            # ✅ 인쇄 영역 자동 설정
+            def get_real_last_row(ws):
+                for row in range(ws.max_row, 0, -1):
+                    if any(cell.value not in [None, ""] for cell in ws[row]):
+                        return row
+                return 1
 
-    max_row = print_ws.max_row
-    max_col = print_ws.max_column
+            def get_real_last_col(ws):
+                for col in range(ws.max_column, 0, -1):
+                    col_letter = get_column_letter(col)
+                    if any(ws[f"{col_letter}{row}"].value not in [None, ""] for row in range(1, ws.max_row + 1)):
+                        return col
+                return 1
 
-    # 실제로 데이터가 있는 셀의 마지막 행/열 탐색
-    def get_real_last_row(ws):
-        for row in range(ws.max_row, 0, -1):
-            if any(cell.value not in [None, ""] for cell in ws[row]):
-                return row
-        return 1
+            real_last_row = get_real_last_row(print_ws)
+            real_last_col = get_real_last_col(print_ws)
+            last_col_letter = get_column_letter(real_last_col)
+            print_ws.print_area = f"A1:{last_col_letter}{real_last_row}"
 
-    def get_real_last_col(ws):
-        for col in range(ws.max_column, 0, -1):
-            col_letter = get_column_letter(col)
-            if any(ws[f"{col_letter}{row}"].value not in [None, ""] for row in range(1, ws.max_row + 1)):
-                return col
-        return 1
-
-    real_last_row = get_real_last_row(print_ws)
-    real_last_col = get_real_last_col(print_ws)
-    last_col_letter = get_column_letter(real_last_col)
-
-    # ✅ 인쇄영역 설정
-    print_ws.print_area = f"A1:{last_col_letter}{real_last_row}"
-
-
+            # ✅ 엑셀 저장 및 다운로드
             today_str = datetime.today().strftime("%Y%m%d")
             filename = f"{name_prefix}님의_보장분석엑셀_{today_str}.xlsx"
             output_excel = BytesIO()
