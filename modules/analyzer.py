@@ -42,11 +42,17 @@ def run():
     uploaded_main = st.file_uploader("⬆️ 컨설팅보장분석.xlsx 파일을 업로드하세요", type=["xlsx"])
     uploaded_print = st.file_uploader("🖨️ (선택) 개인용 보장분석 폼.xlsx 파일을 업로드하세요", type=["xlsx"])
 
-    # ✅ print.xlsx 로드
+     # ✅ print.xlsx 로드
     try:
         if uploaded_print:
             print_wb = openpyxl.load_workbook(uploaded_print)
             st.info("✅ 업로드한 print.xlsx를 사용합니다.")
+            # ✅ 복사 범위 설정 UI 바로 아래 위치
+            with st.sidebar.expander("🛠️ 보장사항 복사 범위 설정 (main.xlsx 기준)", expanded=True):
+                start_row = st.number_input("복사 시작 행 (예: 9)", min_value=1, max_value=100, value=9)
+                end_row = st.number_input("복사 종료 행 (예: 45)", min_value=1, max_value=100, value=45)
+                if end_row <= start_row:
+                    st.sidebar.warning("복사 종료 행은 시작 행보다 커야 합니다.")
             with st.sidebar.expander("🛠️ 보장사항 복사 범위 설정 (main.xlsx 기준)", expanded=True):
                 start_row = st.number_input("복사 시작 행 (예: 9)", min_value=1, max_value=100, value=9)
                 end_row = st.number_input("복사 종료 행 (예: 45)", min_value=1, max_value=100, value=45)
@@ -61,7 +67,6 @@ def run():
     except Exception as e:
         st.error(f"❌ print.xlsx 파일을 열 수 없습니다: {e}")
         st.stop()
-
 
     # ✅ main.xlsx 처리
     if uploaded_main:
