@@ -101,6 +101,34 @@ def run():
             detail_text = main_ws1["D2"].value or ""
             print_ws["A1"] = f"{name_prefix}님의 기존 보험 보장 분석 {detail_text}"
 
+    # ✅ 인쇄 영역 설정 (활성화된 영역만)
+    from openpyxl.utils import get_column_letter
+
+    max_row = print_ws.max_row
+    max_col = print_ws.max_column
+
+    # 실제로 데이터가 있는 셀의 마지막 행/열 탐색
+    def get_real_last_row(ws):
+        for row in range(ws.max_row, 0, -1):
+            if any(cell.value not in [None, ""] for cell in ws[row]):
+                return row
+        return 1
+
+    def get_real_last_col(ws):
+        for col in range(ws.max_column, 0, -1):
+            col_letter = get_column_letter(col)
+            if any(ws[f"{col_letter}{row}"].value not in [None, ""] for row in range(1, ws.max_row + 1)):
+                return col
+        return 1
+
+    real_last_row = get_real_last_row(print_ws)
+    real_last_col = get_real_last_col(print_ws)
+    last_col_letter = get_column_letter(real_last_col)
+
+    # ✅ 인쇄영역 설정
+    print_ws.print_area = f"A1:{last_col_letter}{real_last_row}"
+
+
             today_str = datetime.today().strftime("%Y%m%d")
             filename = f"{name_prefix}님의_보장분석엑셀_{today_str}.xlsx"
             output_excel = BytesIO()
