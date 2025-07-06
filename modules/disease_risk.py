@@ -4,7 +4,7 @@ import pandas as pd
 def run():
 
     # --- 페이지 설정 ---
-    st.set_page_config(page_title="질병 위험률 분석 도구/테스트", layout="wide")
+    st.set_page_config(page_title="질병 위험률 분석 도구(테스트)", layout="wide")
 
     # --- 사이드바 정보 ---
     st.sidebar.markdown("---")
