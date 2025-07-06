@@ -7,6 +7,7 @@ def run():
     st.set_page_config(page_title="질병 위험률 분석 도구", layout="wide")
 
     # --- 사이드바 정보 ---
+    st.sidebar.markdown("---")
     st.sidebar.markdown("""
     👨‍💻 제작자: 드림지점 박병선 팀장  
     🗓️ 버전: v1.0.0  
