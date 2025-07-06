@@ -24,4 +24,4 @@ elif app_option == "📊 갱신 vs 비갱신 보험 비교":
 elif app_option == "🔁 보험 리모델링 전/후 비교":
     remodeling.run()
 elif app_option == "🧬 질병 위험률 분석 도구":
-    disease-risk.run()
+    disease_risk.run()
