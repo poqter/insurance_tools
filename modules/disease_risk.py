@@ -91,7 +91,7 @@ def run():
             base_row = DF_RISK[(DF_RISK["질병군"] == cat) & (DF_RISK["연령대"] == age_group) & (DF_RISK["성별"] == gender)]
             if base_row.empty:
                 continue
-            base_risk = float(base_row["위험률(명/1000)"]).mean()
+            base_risk = base_row["위험률(명/1000)"].mean()
 
             # 2) 보정 계수 누적 곱
             adj_mult = 1.0
