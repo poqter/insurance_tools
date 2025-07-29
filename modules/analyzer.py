@@ -71,7 +71,7 @@ def run():
         try:
             main_wb = openpyxl.load_workbook(uploaded_main, data_only=True)
             main_ws1 = main_wb["계약사항"]
-            main_ws2 = main_wb["보장사항"]
+            main_ws2 = main_wb["상품별보장내용"]
 
             for idx in range(27):
                 print_ws.cell(row=10, column=4 + idx).value = main_ws1[f"J{9+idx}"].value
