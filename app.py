@@ -1,5 +1,5 @@
 import streamlit as st
-from modules import deposit_vs_shortpay, renewal_vs_nonrenewal, analyzer, remodeling, disease_risk
+from modules import deposit_vs_shortpay, renewal_vs_nonrenewal, analyzer, remodeling
 
 # 페이지 설정
 st.set_page_config(page_title="보험컨설팅 멀티 도우미", layout="wide")
