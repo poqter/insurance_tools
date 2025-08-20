@@ -40,24 +40,28 @@ def run():
         st.markdown("---")
         st.markdown("### 📈 갱신 주기별 증가율 설정")
 
-        if renewal_cycle == 10:
-            default_weights = [2.2180, 1.5239, 1.4283, 1.2212, 1.0921, 1.0624, 1.0388]
-            user_weights = [
-                st.number_input(f"{i+1}차 갱신 증가율", value=default_weights[i], step=0.01, format="%.4f", key=f"rate_10_{i}")
-                for i in range(7)
-            ]
-        if renewal_cycle == 15:
-            default_weights = [2.7180, 1.8239, 1.6283, 1.0921, 1.0624, 1.0388]
-            user_weights = [
-                st.number_input(f"{i+1}차 갱신 증가율", value=default_weights[i], step=0.01, format="%.4f", key=f"rate_10_{i}")
-                for i in range(7)
-            ]    
-        else:
-            default_weights = [3.8982, 2.1253, 1.2832]
-            user_weights = [
-                st.number_input(f"{i+1}차 갱신 증가율", value=default_weights[i], step=0.01, format="%.4f", key=f"rate_20_{i}")
-                for i in range(3)
-            ]
+        # 주기별 기본 증가율 매핑 (필요하면 숫자만 바꾸면 됨)
+        rate_defaults = {
+            10: [2.2180, 1.5239, 1.4283, 1.2212, 1.0921, 1.0624, 1.0388],  # 7개
+            15: [2.7180, 1.8239, 1.6283, 1.0921, 1.0624, 1.0388],           # 6개
+            20: [3.8982, 2.1253, 1.2832],                                   # 3개
+        }
+
+        # 현재 선택한 갱신 주기에 맞는 기본값 선택
+        default_weights = rate_defaults.get(renewal_cycle, rate_defaults[10])
+
+        # 기본값 길이에 딱 맞춰 안전하게 UI 생성
+        user_weights = []
+        for i, v in enumerate(default_weights, start=1):
+            user_weights.append(
+                st.number_input(
+                    f"{i}차 갱신 증가율",
+                    value=float(v),
+                    step=0.01,
+                    format="%.4f",
+                    key=f"rate_{renewal_cycle}_{i-1}",
+                )
+            )
 
         st.markdown("---")
         st.markdown("""
