@@ -11,7 +11,7 @@ def run():
         st.header("🌀 갱신형 보험 입력")
         start_year = st.number_input("가입 연도", min_value=1900, max_value=2100, value=None, step=1)
         start_age = st.number_input("가입 당시 나이", min_value=0, max_value=100, value=None, step=1)
-        renewal_cycle = st.selectbox("갱신 주기", [10, 20], index=1)
+        renewal_cycle = st.selectbox("갱신 주기", [10, 15, 20], index=1)
         end_age = st.number_input("갱신 종료 나이", min_value=0, max_value=100, value=None, step=1)
         monthly_payment = st.number_input("현재 월 납입금액 (원)", min_value=0, value=None, step=1000)
 
@@ -46,6 +46,12 @@ def run():
                 st.number_input(f"{i+1}차 갱신 증가율", value=default_weights[i], step=0.01, format="%.4f", key=f"rate_10_{i}")
                 for i in range(7)
             ]
+        if renewal_cycle == 15:
+            default_weights = [2.7180, 1.8239, 1.6283, 1.0921, 1.0624, 1.0388]
+            user_weights = [
+                st.number_input(f"{i+1}차 갱신 증가율", value=default_weights[i], step=0.01, format="%.4f", key=f"rate_10_{i}")
+                for i in range(7)
+            ]    
         else:
             default_weights = [3.8982, 2.1253, 1.2832]
             user_weights = [
