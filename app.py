@@ -1,5 +1,5 @@
 import streamlit as st
-from modules import deposit_vs_shortpay, renewal_vs_nonrenewal, analyzer, remodeling
+from modules import deposit_vs_shortpay, renewal_vs_nonrenewal, analyzer, remodeling, convention
 
 # 페이지 설정
 st.set_page_config(page_title="보험컨설팅 멀티 도우미", layout="wide")
@@ -11,6 +11,7 @@ app_option = st.sidebar.radio("📌 사용할 기능을 선택하세요:", [
     "💰 적금 vs 단기납 비교",
     "📊 갱신 vs 비갱신 보험 비교",
     "🔁 보험 리모델링 전/후 비교",
+    "🧮 컨벤션/썸머 계산기"
 ])
 
 # 🧠 선택된 앱 실행
@@ -22,3 +23,5 @@ elif app_option == "📊 갱신 vs 비갱신 보험 비교":
     renewal_vs_nonrenewal.run()
 elif app_option == "🔁 보험 리모델링 전/후 비교":
     remodeling.run()
+elif app_option == "🧮 컨벤션/썸머 계산기":
+    convention.run()    
