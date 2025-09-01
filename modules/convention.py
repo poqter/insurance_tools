@@ -167,7 +167,8 @@ def run():
             styled_df["썸머환산금액"] = styled_df["썸머환산금액"].map("{:,.0f} 원".format)
 
         # ✅ 컬럼 순서 (플래그에 따라 동적 구성)
-        base_cols = ["계약일자", "보험사", "상품명", "납입기간", "보험료", "쉐어율", "컨벤션율"]
+        base_cols = ["계약일자", "보험사", "상품명", "납입기간", "보험료", #"쉐어율", 
+                     "컨벤션율"]
         base_cols += (["썸머율"] if SHOW_SUMMER else [])
         base_cols += ["실적보험료", "컨벤션환산금액"]
         base_cols += (["썸머환산금액"] if SHOW_SUMMER else [])
