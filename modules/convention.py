@@ -3,7 +3,7 @@ import pandas as pd
 from io import BytesIO
 from datetime import datetime
 from openpyxl import Workbook
-from openpyxl.styles import Alignment, Font
+from openpyxl.styles import Alignment, Font, Border, Side, PatternFill
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.worksheet.table import Table, TableStyleInfo
 import os
@@ -11,11 +11,45 @@ import os
 # ✅ 한 줄 토글: True면 썸머 기준 노출/계산 포함
 SHOW_SUMMER = True
 
+# ✅ 테이블 이름 고유화 시퀀스(충돌 방지)
+TABLE_SEQ = 0
+
+# ───────────────────────────────────────────────────────────────────
+# 유틸: 시트 이름 유니크 보장(31자 제한 고려)
+def unique_sheet_name(wb, base, limit=31):
+    name = str(base)[:limit] if base else "Sheet"
+    if name not in wb.sheetnames:
+        return name
+    i = 2
+    while True:
+        suffix = f"_{i}"
+        trunc = limit - len(suffix)
+        cand = f"{name[:trunc]}{suffix}"
+        if cand not in wb.sheetnames:
+            return cand
+        i += 1
+
+# 유틸: 헤더 안전 인덱스 조회(없으면 default로)
+def header_idx(ws, name, default=None):
+    for i in range(1, ws.max_column + 1):
+        if ws.cell(row=1, column=i).value == name:
+            return i
+    return default
+
+# 유틸: 열 너비 자동화(상위 N행만 샘플링 → 속도 개선)
+def autosize_columns(ws, sample_rows=200, max_width=40, padding=4):
+    for col in ws.iter_cols(1, ws.max_column):
+        cells = list(col)[:sample_rows]
+        width = max((len(str(c.value)) if c.value else 0) for c in cells) + padding
+        ws.column_dimensions[col[0].column_letter].width = min(width, max_width)
+
+# ───────────────────────────────────────────────────────────────────
+
 def run():
     st.set_page_config(page_title="보험 계약 환산기", layout="wide")
     st.title("📊 보험 계약 실적 환산기 (컨벤션{} 기준)".format(" & 썸머" if SHOW_SUMMER else ""))
 
-    # 👉 사이드바 안내
+    # 👉 사이드바: 사용법 + 옵션(디버그/경량모드)
     with st.sidebar:
         st.header("🧭 사용 방법")
         st.markdown(
@@ -27,15 +61,20 @@ def run():
             **- 💾 엑셀 다운로드 후 파일 첨부하면 됩니다.**
             """
         )
+        DEBUG = st.toggle("🐛 디버그 진행상태 표시", value=False)
+        LIGHT_MODE = st.toggle("⚡ 경량 모드(열 너비 계산 생략)", value=False)
 
     uploaded_file = st.file_uploader("📂 계약 목록 Excel 파일 업로드 (.xlsx)", type=["xlsx"])
-
     if not uploaded_file:
         st.info("📤 계약 목록 Excel 파일(.xlsx)을 업로드해주세요.")
         return
 
     base_filename = os.path.splitext(uploaded_file.name)[0]
     download_filename = f"{base_filename}_환산결과.xlsx"
+
+    # 상태 표시(선택)
+    status_ctx = st.status("처리 중...", expanded=DEBUG) if DEBUG else None
+    if status_ctx: status_ctx.update(label="엑셀 읽는 중...")
 
     # 1) 필요한 컬럼 로드 (✅ 수금자명 포함)
     columns_needed = [
@@ -52,16 +91,16 @@ def run():
         before_count = len(df)
 
         df["납입방법"] = df["납입방법"].astype(str).str.strip()
-        df["상품군2"] = df["상품군2"].astype(str).str.strip()
-        df["계약상태"] = df["계약상태"].astype(str).str.strip()
+        df["상품군2"]   = df["상품군2"].astype(str).str.strip()
+        df["계약상태"]  = df["계약상태"].astype(str).str.strip()
 
         is_lumpsum   = df["납입방법"].str.contains("일시납")
         is_savings   = df["상품군2"].str.contains("연금성|저축성")
         is_cancelled = df["계약상태"].str.contains("철회|해약")
 
-        is_excluded = is_lumpsum | is_savings | is_cancelled
-        excluded_df = df[is_excluded].copy()
-        df = df[~is_excluded].copy()
+        is_excluded  = is_lumpsum | is_savings | is_cancelled
+        excluded_df  = df[is_excluded].copy()
+        df           = df[~is_excluded].copy()
 
         excluded_count = before_count - len(df)
         if excluded_count > 0:
@@ -105,6 +144,8 @@ def run():
         st.error("❌ '쉐어율'에 빈 값이 포함되어 있습니다. 모든 행에 값을 입력해주세요.")
         st.stop()
 
+    if status_ctx: status_ctx.update(label="환산율 분류/계산 중...")
+
     # 5) 환산율 분류 (컨벤션 & 썸머)
     def classify(row):
         보험사원본 = str(row["보험사"])
@@ -123,7 +164,7 @@ def run():
 
         # 컨벤션
         if 보험사 == "한화생명":
-            conv_rate = 150
+            conv_rate = 120
         elif 보험사 in ["한화손보", "삼성화재", "흥국화재", "KB손보"]:
             conv_rate = 250
         elif 보험사 == "기타손보":
@@ -153,7 +194,7 @@ def run():
     df["쉐어율"] = df["쉐어율"].apply(lambda x: float(str(x).replace('%','')) if pd.notnull(x) else x)
     df["실적보험료"] = df["보험료"]  # 필요시 * df["쉐어율"] / 100
     df["컨벤션환산금액"] = df["실적보험료"] * df["컨벤션율"] / 100
-    df["썸머환산금액"] = df["실적보험료"] * df["썸머율"] / 100
+    df["썸머환산금액"]   = df["실적보험료"] * df["썸머율"] / 100
 
     # 날짜 유효성 체크
     df["계약일자_raw"] = pd.to_datetime(df["계약일자"], errors="coerce")
@@ -169,14 +210,14 @@ def run():
     # 화면 표시용 포맷팅
     def to_styled(dfin: pd.DataFrame) -> pd.DataFrame:
         _styled = dfin.copy()
-        _styled["계약일자"] = pd.to_datetime(_styled["계약일자"], errors="coerce").dt.strftime("%Y-%m-%d")
-        _styled["납입기간"] = _styled["납입기간"].astype(str) + "년"
-        _styled["보험료"] = _styled["보험료"].map("{:,.0f} 원".format)
-        _styled["쉐어율"] = _styled["쉐어율"].astype(str) + " %"
-        _styled["실적보험료"] = _styled["실적보험료"].map("{:,.0f} 원".format)
-        _styled["컨벤션율"] = _styled["컨벤션율"].astype(str) + " %"
+        _styled["계약일자"]      = pd.to_datetime(_styled["계약일자"], errors="coerce").dt.strftime("%Y-%m-%d")
+        _styled["납입기간"]      = _styled["납입기간"].astype(str) + "년"
+        _styled["보험료"]        = _styled["보험료"].map("{:,.0f} 원".format)
+        _styled["쉐어율"]        = _styled["쉐어율"].astype(str) + " %"
+        _styled["실적보험료"]    = _styled["실적보험료"].map("{:,.0f} 원".format)
+        _styled["컨벤션율"]      = _styled["컨벤션율"].astype(str) + " %"
         if SHOW_SUMMER:
-            _styled["썸머율"] = _styled["썸머율"].astype(str) + " %"
+            _styled["썸머율"]    = _styled["썸머율"].astype(str) + " %"
         _styled["컨벤션환산금액"] = _styled["컨벤션환산금액"].map("{:,.0f} 원".format)
         if SHOW_SUMMER:
             _styled["썸머환산금액"] = _styled["썸머환산금액"].map("{:,.0f} 원".format)
@@ -199,9 +240,8 @@ def run():
     SUMM_TARGET = 3_000_000
 
     # ── 화면 표시(선택된 수금자 기준) ───────────────────────────
-    disp_styled = to_styled(show_df)
     st.subheader(f"📄 {'전체' if selected_collector=='전체' else selected_collector} 환산 결과")
-    st.dataframe(disp_styled, use_container_width=True)
+    st.dataframe(to_styled(show_df), use_container_width=True)
 
     perf_sum, conv_sum, summ_sum = sums(show_df)
     conv_gap = conv_sum - CONV_TARGET
@@ -259,26 +299,32 @@ def run():
             disp_group[col] = disp_group[col].map("{:,.0f} 원".format)
     st.dataframe(disp_group, use_container_width=True)
 
+    if status_ctx: status_ctx.update(label="엑셀 워크북 생성 중...")
+
     # ── 엑셀 출력 보조 유틸 ─────────────────────────────────────
     def write_table(ws, df_for_sheet: pd.DataFrame, start_row: int = 1, name_suffix: str = "A"):
-        # df_for_sheet: 헤더 포함(문자 포맷 완료)
+        """df_for_sheet: 헤더 포함(문자 포맷 완료)"""
         for r_idx, row in enumerate(dataframe_to_rows(df_for_sheet, index=False, header=True), start_row):
             for c_idx, value in enumerate(row, 1):
                 cell = ws.cell(row=r_idx, column=c_idx, value=value)
                 cell.alignment = Alignment(horizontal="center", vertical="center")
         end_col_letter = ws.cell(row=start_row, column=df_for_sheet.shape[1]).column_letter
         end_row = start_row + len(df_for_sheet)  # 헤더 포함 길이
+
+        global TABLE_SEQ
+        TABLE_SEQ += 1
         table = Table(
-            displayName=f"tbl_{ws.title.replace(' ', '_')}_{name_suffix}",
+            displayName=f"tbl_{ws.title.replace(' ', '_')}_{name_suffix}_{TABLE_SEQ}",
             ref=f"A{start_row}:{end_col_letter}{end_row-1}"
         )
         style = TableStyleInfo(name="TableStyleMedium9", showRowStripes=True)
         table.tableStyleInfo = style
         ws.add_table(table)
-        # 열 너비 자동
-        for column_cells in ws.columns:
-            max_len = max(len(str(cell.value)) if cell.value else 0 for cell in column_cells)
-            ws.column_dimensions[column_cells[0].column_letter].width = max_len + 10
+
+        # 열 너비 자동(경량 모드면 생략)
+        if not LIGHT_MODE:
+            autosize_columns(ws, sample_rows=200, max_width=40, padding=4)
+
         return end_row  # 다음 시작 행
 
     def build_excluded_with_reason(exdf: pd.DataFrame) -> pd.DataFrame:
@@ -308,47 +354,58 @@ def run():
 
     excluded_disp_all = build_excluded_with_reason(excluded_df)
 
+    # ✅ 총합/갭을 ‘열 헤더 기준’으로 정확히 배치 + 시각 보완
+    thin_border = Border(left=Side(style="thin"), right=Side(style="thin"),
+                         top=Side(style="thin"), bottom=Side(style="thin"))
+    sum_fill = PatternFill("solid", fgColor="F2F2F2")
+
     def sums_and_gaps_block(ws, dfin_numeric: pd.DataFrame, start_row: int):
         perf, conv, summ = sums(dfin_numeric)
-        # 헤더 인덱스 매핑
-        headers = {ws.cell(row=1, column=i).value: i for i in range(1, ws.max_column + 1)}
 
+        # 헤더 인덱스
+        col_conv_rate = header_idx(ws, "컨벤션율", 1)
+        col_perf      = header_idx(ws, "실적보험료", 2)
+        col_conv_amt  = header_idx(ws, "컨벤션환산금액", 3)
+        col_summ_amt  = header_idx(ws, "썸머환산금액", None)
+
+        # 총 합계 행(헤더 정렬)
         sum_row = start_row
-        # 총 합계
-        ws.cell(row=sum_row, column=headers.get("컨벤션율", 1), value="총 합계").alignment = Alignment(horizontal="center")
-        ws.cell(row=sum_row, column=headers.get("실적보험료", 2), value=f"{perf:,.0f} 원").alignment = Alignment(horizontal="center")
-        ws.cell(row=sum_row, column=headers.get("컨벤션환산금액", 3), value=f"{conv:,.0f} 원").alignment = Alignment(horizontal="center")
-        if SHOW_SUMMER and "썸머환산금액" in headers:
-            ws.cell(row=sum_row, column=headers["썸머환산금액"], value=f"{summ:,.0f} 원").alignment = Alignment(horizontal="center")
+        ws.cell(row=sum_row, column=col_conv_rate, value="총 합계").alignment = Alignment(horizontal="center")
+        cell_perf = ws.cell(row=sum_row, column=col_perf, value=f"{perf:,.0f} 원")
+        cell_conv = ws.cell(row=sum_row, column=col_conv_amt, value=f"{conv:,.0f} 원")
+        cell_perf.alignment = Alignment(horizontal="center"); cell_perf.font = Font(bold=True)
+        cell_conv.alignment = Alignment(horizontal="center"); cell_conv.font = Font(bold=True)
+        if SHOW_SUMMER and col_summ_amt:
+            cell_summ = ws.cell(row=sum_row, column=col_summ_amt, value=f"{summ:,.0f} 원")
+            cell_summ.alignment = Alignment(horizontal="center"); cell_summ.font = Font(bold=True)
 
-        # 글씨 굵게
-        for name in ["실적보험료","컨벤션환산금액"] + (["썸머환산금액"] if SHOW_SUMMER else []):
-            if name in headers:
-                ws.cell(row=sum_row, column=headers[name]).font = Font(bold=True)
+        # 총합 행 시각 보완(연한 회색 + 테두리)
+        for c in [col_conv_rate, col_perf, col_conv_amt] + ([col_summ_amt] if SHOW_SUMMER and col_summ_amt else []):
+            cell = ws.cell(row=sum_row, column=c)
+            cell.fill = sum_fill
+            cell.border = thin_border
 
-        # 갭 계산 및 표시
+        # 갭 행
         def style_gap(amount):
             if amount > 0: return f"+{amount:,.0f} 원 초과", "008000"
             if amount < 0: return f"{amount:,.0f} 원 부족", "FF0000"
             return "기준 달성", "000000"
 
-        conv_gap = conv - CONV_TARGET
         gap_row = sum_row + 2
-        if "컨벤션환산금액" in headers and "실적보험료" in headers:
-            ws.cell(row=gap_row, column=headers["컨벤션환산금액"], value="컨벤션 기준 대비").alignment = Alignment(horizontal="center")
-            txt, col = style_gap(conv_gap)
-            ws.cell(row=gap_row, column=headers["실적보험료"], value=txt).alignment = Alignment(horizontal="center")
-            ws.cell(row=gap_row, column=headers["실적보험료"]).font = Font(bold=True, color=col)
+        txt, col = style_gap(conv - CONV_TARGET)
+        ws.cell(row=gap_row, column=col_conv_amt, value="컨벤션 기준 대비").alignment = Alignment(horizontal="center")
+        gap_cell = ws.cell(row=gap_row, column=col_perf, value=txt)
+        gap_cell.alignment = Alignment(horizontal="center")
+        gap_cell.font = Font(bold=True, color=col)
 
-        if SHOW_SUMMER and "썸머환산금액" in headers and "실적보험료" in headers:
-            summ_gap = summ - SUMM_TARGET
-            ws.cell(row=gap_row+1, column=headers["컨벤션환산금액"], value="썸머 기준 대비").alignment = Alignment(horizontal="center")
-            txt, col = style_gap(summ_gap)
-            ws.cell(row=gap_row+1, column=headers["실적보험료"], value=txt).alignment = Alignment(horizontal="center")
-            ws.cell(row=gap_row+1, column=headers["실적보험료"]).font = Font(bold=True, color=col)
+        if SHOW_SUMMER and col_summ_amt:
+            txt2, col2 = style_gap(summ - SUMM_TARGET)
+            ws.cell(row=gap_row+1, column=col_conv_amt, value="썸머 기준 대비").alignment = Alignment(horizontal="center")
+            gap_cell2 = ws.cell(row=gap_row+1, column=col_perf, value=txt2)
+            gap_cell2.alignment = Alignment(horizontal="center")
+            gap_cell2.font = Font(bold=True, color=col2)
 
-        return gap_row + (2 if SHOW_SUMMER else 1)
-
+        return gap_row + (2 if SHOW_SUMMER and col_summ_amt else 1)
 
     # ── 엑셀 워크북 작성: 요약 + 수금자별 ───────────────────────
     wb = Workbook()
@@ -375,7 +432,9 @@ def run():
         sub = df[df["수금자명"].astype(str) == collector].copy()
         styled_sub = to_styled(sub)
 
-        ws = wb.create_sheet(title=collector[:31])  # 시트명 31자 제한
+        sheet_title = unique_sheet_name(wb, collector)
+        ws = wb.create_sheet(title=sheet_title)  # 시트명 31자 제한+유니크
+
         next_row = write_table(ws, styled_sub, start_row=1, name_suffix="NORM")  # 정상 계약 표
         next_row = sums_and_gaps_block(ws, sub, start_row=next_row+1)           # 합계/갭
 
@@ -385,10 +444,14 @@ def run():
             ws.cell(row=next_row+1, column=1, value="제외 계약").font = Font(bold=True)
             write_table(ws, ex_sub, start_row=next_row+2, name_suffix="EXC")
 
+    if status_ctx: status_ctx.update(label="엑셀 파일 생성 중...")
+
     # 저장/다운로드
     excel_output = BytesIO()
     wb.save(excel_output)
     excel_output.seek(0)
+
+    if status_ctx: status_ctx.update(label="완료 ✅")
 
     st.download_button(
         label="📥 환산 결과 엑셀 다운로드 (요약 + 수금자별 시트 + 제외사유 포함)",
