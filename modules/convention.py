@@ -6,7 +6,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, Border, Side, PatternFill
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.worksheet.table import Table, TableStyleInfo
-import os
+import os, re  # ← re 추가 (표 이름 정규화용)
 
 # ✅ 한 줄 토글: True면 썸머 기준 노출/계산 포함
 SHOW_SUMMER = True
@@ -36,6 +36,13 @@ def header_idx(ws, name, default=None):
             return i
     return default
 
+# ✅ 표 이름을 안전하게(영문/숫자/밑줄만, 첫 글자 규칙 준수)
+def safe_table_name(base: str) -> str:
+    name = re.sub(r'[^A-Za-z0-9_]', '_', base)
+    if not re.match(r'^[A-Za-z_]', name):
+        name = f"tbl_{name}"
+    return name[:254]  # 엑셀 제한(여유)
+
 # ✅ 유틸: 열 너비 자동화(예전 스타일 – 전체 열 스캔 + 10 패딩)
 def autosize_columns_full(ws, padding=10):
     for column_cells in ws.columns:
@@ -48,7 +55,7 @@ def run():
     st.set_page_config(page_title="보험 계약 환산기", layout="wide")
     st.title("📊 보험 계약 실적 환산기 (컨벤션{} 기준)".format(" & 썸머" if SHOW_SUMMER else ""))
 
-    # 👉 사이드바: 사용법 + 경량 모드(원하시면 열 너비 생략)
+    # 👉 사이드바: 사용법
     with st.sidebar:
         st.header("🧭 사용 방법")
         st.markdown(
@@ -293,18 +300,27 @@ def run():
     # ── 엑셀 출력 보조 유틸 ─────────────────────────────────────
     def write_table(ws, df_for_sheet: pd.DataFrame, start_row: int = 1, name_suffix: str = "A"):
         """df_for_sheet: 헤더 포함(문자 포맷 완료)"""
+        # 데이터 쓰기
+        r_idx = start_row - 1  # 루프 후 마지막 행 번호를 잡기 위한 초기값
         for r_idx, row in enumerate(dataframe_to_rows(df_for_sheet, index=False, header=True), start_row):
             for c_idx, value in enumerate(row, 1):
                 cell = ws.cell(row=r_idx, column=c_idx, value=value)
                 cell.alignment = Alignment(horizontal="center", vertical="center")
-        end_col_letter = ws.cell(row=start_row, column=df_for_sheet.shape[1]).column_letter
-        end_row = start_row + len(df_for_sheet)  # 헤더 포함 길이
 
+        # 마지막 열/행 계산
+        end_col_letter = ws.cell(row=start_row, column=df_for_sheet.shape[1]).column_letter
+        last_row = r_idx if df_for_sheet.shape[0] > 0 else start_row  # 실제 마지막으로 쓴 행
+
+        # 안전한 표 이름 생성
         global TABLE_SEQ
         TABLE_SEQ += 1
+        raw_name = f"tbl_{ws.title}_{name_suffix}_{TABLE_SEQ}"
+        display_name = safe_table_name(raw_name)
+
+        # 표 정의(마지막 행까지 정확히 포함)
         table = Table(
-            displayName=f"tbl_{ws.title.replace(' ', '_')}_{name_suffix}_{TABLE_SEQ}",
-            ref=f"A{start_row}:{end_col_letter}{end_row-1}"
+            displayName=display_name,
+            ref=f"A{start_row}:{end_col_letter}{last_row}"
         )
         style = TableStyleInfo(name="TableStyleMedium9", showRowStripes=True)
         table.tableStyleInfo = style
@@ -313,7 +329,7 @@ def run():
         # ✅ 열 너비 자동(예전 스타일): 전체 열 스캔 + 패딩 5
         autosize_columns_full(ws, padding=5)
 
-        return end_row  # 다음 시작 행
+        return last_row  # 다음 시작 기준이 되는 '마지막으로 쓴 행'
 
     def build_excluded_with_reason(exdf: pd.DataFrame) -> pd.DataFrame:
         if exdf is None or exdf.empty:
@@ -410,10 +426,10 @@ def run():
         summary_fmt[c] = summary_fmt[c].map(lambda x: f"{x:,.0f} 원")
     next_row = write_table(ws_summary, summary_fmt, start_row=1, name_suffix="SUM")
 
-    # 요약 시트에 제외 목록 전체(있을 때만)
+    # 요약 시트에 제외 목록 전체(있을 때만) — 표와 한 줄 띄우기
     if not excluded_disp_all.empty:
         ws_summary.cell(row=next_row+2, column=1, value="제외 계약 목록").font = Font(bold=True)
-        write_table(ws_summary, excluded_disp_all, start_row=next_row+3, name_suffix="EXC")
+        next_row = write_table(ws_summary, excluded_disp_all, start_row=next_row+3, name_suffix="EXC")
 
     # 수금자별 상세 시트
     for collector in sorted(df["수금자명"].astype(str).unique().tolist()):
@@ -424,12 +440,15 @@ def run():
         ws = wb.create_sheet(title=sheet_title)  # 시트명 31자 제한+유니크
 
         next_row = write_table(ws, styled_sub, start_row=1, name_suffix="NORM")   # 정상 계약 표
+
+        # 👉 주요 금액 컬럼 최소 열 너비 20 보장
         for header in ["실적보험료", "컨벤션환산금액", "썸머환산금액"]:
             idx = header_idx(ws, header)
             if idx:
                 col_letter = ws.cell(row=1, column=idx).column_letter  # 헤더는 1행
                 cur = ws.column_dimensions[col_letter].width
                 ws.column_dimensions[col_letter].width = 20 if (cur is None or cur < 20) else cur
+
         next_row = sums_and_gaps_block(ws, sub, start_row=next_row)               # ✅ 합계/갭: 합계 한 줄 더 아래
 
         # 해당 수금자의 제외건(있다면)
