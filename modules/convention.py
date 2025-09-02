@@ -60,8 +60,7 @@ def run():
             **- 💾 엑셀 다운로드 후 파일 첨부하면 됩니다.**
             """
         )
-        LIGHT_MODE = st.toggle("⚡ 경량 모드(열 너비 계산 생략)", value=False)
-
+        
     uploaded_file = st.file_uploader("📂 계약 목록 Excel 파일 업로드 (.xlsx)", type=["xlsx"])
     if not uploaded_file:
         st.info("📤 계약 목록 Excel 파일(.xlsx)을 업로드해주세요.")
@@ -312,8 +311,7 @@ def run():
         ws.add_table(table)
 
         # ✅ 열 너비 자동(예전 스타일): 전체 열 스캔 + 패딩 5
-        if not LIGHT_MODE:
-            autosize_columns_full(ws, padding=5)
+        autosize_columns_full(ws, padding=5)
 
         return end_row  # 다음 시작 행
 
