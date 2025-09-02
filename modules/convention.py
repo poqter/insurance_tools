@@ -359,7 +359,7 @@ def run():
         col_summ_amt  = header_idx(ws, "썸머환산금액", None)
 
         # ✅ 총 합계 행: 테이블 바로 아래에서 "한 줄 더 밑"으로
-        sum_row = start_row + 1  # ← 공백 1줄 확보
+        sum_row = start_row + 2  # ← 공백 1줄 확보
         ws.cell(row=sum_row, column=col_conv_rate, value="총 합계").alignment = Alignment(horizontal="center")
         cell_perf = ws.cell(row=sum_row, column=col_perf, value=f"{perf:,.0f} 원")
         cell_conv = ws.cell(row=sum_row, column=col_conv_amt, value=f"{conv:,.0f} 원")
