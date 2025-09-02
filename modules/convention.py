@@ -9,7 +9,7 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 import os
 
 # ✅ 한 줄로 제어: True로 바꾸면 썸머 기준 즉시 복원
-SHOW_SUMMER = False
+SHOW_SUMMER = True
 
 def run():
     st.set_page_config(page_title="보험 계약 환산기", layout="wide")
