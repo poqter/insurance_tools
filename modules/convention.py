@@ -96,7 +96,7 @@ def run():
 
         # 컨벤션 기준
         if 보험사 == "한화생명":
-            conv_rate = 120
+            conv_rate = 150
         elif 보험사 in ["한화손보", "삼성화재", "흥국화재", "KB손보"]:
             conv_rate = 250
         elif 보험사 == "기타손보":
