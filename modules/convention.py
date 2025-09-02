@@ -426,6 +426,12 @@ def run():
         ws = wb.create_sheet(title=sheet_title)  # 시트명 31자 제한+유니크
 
         next_row = write_table(ws, styled_sub, start_row=1, name_suffix="NORM")   # 정상 계약 표
+        for header in ["실적보험료", "컨벤션환산금액", "썸머환산금액"]:
+            idx = header_idx(ws, header)
+            if idx:
+                col_letter = ws.cell(row=1, column=idx).column_letter  # 헤더는 1행
+                cur = ws.column_dimensions[col_letter].width
+                ws.column_dimensions[col_letter].width = 20 if (cur is None or cur < 20) else cur
         next_row = sums_and_gaps_block(ws, sub, start_row=next_row)               # ✅ 합계/갭: 합계 한 줄 더 아래
 
         # 해당 수금자의 제외건(있다면)
