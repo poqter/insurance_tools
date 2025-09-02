@@ -414,8 +414,8 @@ def run():
 
     # 요약 시트에 제외 목록 전체(있을 때만)
     if not excluded_disp_all.empty:
-        ws_summary.cell(row=next_row+1, column=1, value="제외 계약 목록").font = Font(bold=True)
-        write_table(ws_summary, excluded_disp_all, start_row=next_row+2, name_suffix="EXC")
+        ws_summary.cell(row=next_row+2, column=1, value="제외 계약 목록").font = Font(bold=True)
+        write_table(ws_summary, excluded_disp_all, start_row=next_row+3, name_suffix="EXC")
 
     # 수금자별 상세 시트
     for collector in sorted(df["수금자명"].astype(str).unique().tolist()):
