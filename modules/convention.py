@@ -310,28 +310,45 @@ def run():
 
     def sums_and_gaps_block(ws, dfin_numeric: pd.DataFrame, start_row: int):
         perf, conv, summ = sums(dfin_numeric)
-        row = start_row
-        ws.cell(row=row, column=1, value="총 합계").font = Font(bold=True)
-        ws.cell(row=row, column=2, value=f"실적보험료: {perf:,.0f} 원").font = Font(bold=True)
-        ws.cell(row=row, column=3, value=f"컨벤션합계: {conv:,.0f} 원").font = Font(bold=True)
-        if SHOW_SUMMER:
-            ws.cell(row=row, column=4, value=f"썸머합계: {summ:,.0f} 원").font = Font(bold=True)
+        # 헤더 인덱스 매핑
+        headers = {ws.cell(row=1, column=i).value: i for i in range(1, ws.max_column + 1)}
 
+        sum_row = start_row
+        # 총 합계
+        ws.cell(row=sum_row, column=headers.get("컨벤션율", 1), value="총 합계").alignment = Alignment(horizontal="center")
+        ws.cell(row=sum_row, column=headers.get("실적보험료", 2), value=f"{perf:,.0f} 원").alignment = Alignment(horizontal="center")
+        ws.cell(row=sum_row, column=headers.get("컨벤션환산금액", 3), value=f"{conv:,.0f} 원").alignment = Alignment(horizontal="center")
+        if SHOW_SUMMER and "썸머환산금액" in headers:
+            ws.cell(row=sum_row, column=headers["썸머환산금액"], value=f"{summ:,.0f} 원").alignment = Alignment(horizontal="center")
+
+        # 글씨 굵게
+        for name in ["실적보험료","컨벤션환산금액"] + (["썸머환산금액"] if SHOW_SUMMER else []):
+            if name in headers:
+                ws.cell(row=sum_row, column=headers[name]).font = Font(bold=True)
+
+        # 갭 계산 및 표시
         def style_gap(amount):
             if amount > 0: return f"+{amount:,.0f} 원 초과", "008000"
             if amount < 0: return f"{amount:,.0f} 원 부족", "FF0000"
             return "기준 달성", "000000"
 
         conv_gap = conv - CONV_TARGET
-        label, color = style_gap(conv_gap)
-        ws.cell(row=row+1, column=2, value=f"컨벤션 기준 대비: {label}").font = Font(bold=True, color=color)
+        gap_row = sum_row + 2
+        if "컨벤션환산금액" in headers and "실적보험료" in headers:
+            ws.cell(row=gap_row, column=headers["컨벤션환산금액"], value="컨벤션 기준 대비").alignment = Alignment(horizontal="center")
+            txt, col = style_gap(conv_gap)
+            ws.cell(row=gap_row, column=headers["실적보험료"], value=txt).alignment = Alignment(horizontal="center")
+            ws.cell(row=gap_row, column=headers["실적보험료"]).font = Font(bold=True, color=col)
 
-        if SHOW_SUMMER:
+        if SHOW_SUMMER and "썸머환산금액" in headers and "실적보험료" in headers:
             summ_gap = summ - SUMM_TARGET
-            label2, color2 = style_gap(summ_gap)
-            ws.cell(row=row+2, column=2, value=f"썸머 기준 대비: {label2}").font = Font(bold=True, color=color2)
+            ws.cell(row=gap_row+1, column=headers["컨벤션환산금액"], value="썸머 기준 대비").alignment = Alignment(horizontal="center")
+            txt, col = style_gap(summ_gap)
+            ws.cell(row=gap_row+1, column=headers["실적보험료"], value=txt).alignment = Alignment(horizontal="center")
+            ws.cell(row=gap_row+1, column=headers["실적보험료"]).font = Font(bold=True, color=col)
 
-        return row + (3 if SHOW_SUMMER else 2)
+        return gap_row + (2 if SHOW_SUMMER else 1)
+
 
     # ── 엑셀 워크북 작성: 요약 + 수금자별 ───────────────────────
     wb = Workbook()
