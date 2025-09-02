@@ -36,12 +36,11 @@ def header_idx(ws, name, default=None):
             return i
     return default
 
-# 유틸: 열 너비 자동화(상위 N행만 샘플링 → 속도 개선)
-def autosize_columns(ws, sample_rows=200, max_width=40, padding=4):
-    for col in ws.iter_cols(1, ws.max_column):
-        cells = list(col)[:sample_rows]
-        width = max((len(str(c.value)) if c.value else 0) for c in cells) + padding
-        ws.column_dimensions[col[0].column_letter].width = min(width, max_width)
+# ✅ 유틸: 열 너비 자동화(예전 스타일 – 전체 열 스캔 + 10 패딩)
+def autosize_columns_full(ws, padding=10):
+    for column_cells in ws.columns:
+        max_len = max(len(str(cell.value)) if cell.value is not None else 0 for cell in column_cells)
+        ws.column_dimensions[column_cells[0].column_letter].width = max_len + padding
 
 # ───────────────────────────────────────────────────────────────────
 
@@ -49,7 +48,7 @@ def run():
     st.set_page_config(page_title="보험 계약 환산기", layout="wide")
     st.title("📊 보험 계약 실적 환산기 (컨벤션{} 기준)".format(" & 썸머" if SHOW_SUMMER else ""))
 
-    # 👉 사이드바: 사용법 + 옵션(디버그/경량모드)
+    # 👉 사이드바: 사용법 + 경량 모드(원하시면 열 너비 생략)
     with st.sidebar:
         st.header("🧭 사용 방법")
         st.markdown(
@@ -61,7 +60,6 @@ def run():
             **- 💾 엑셀 다운로드 후 파일 첨부하면 됩니다.**
             """
         )
-        DEBUG = st.toggle("🐛 디버그 진행상태 표시", value=False)
         LIGHT_MODE = st.toggle("⚡ 경량 모드(열 너비 계산 생략)", value=False)
 
     uploaded_file = st.file_uploader("📂 계약 목록 Excel 파일 업로드 (.xlsx)", type=["xlsx"])
@@ -71,10 +69,6 @@ def run():
 
     base_filename = os.path.splitext(uploaded_file.name)[0]
     download_filename = f"{base_filename}_환산결과.xlsx"
-
-    # 상태 표시(선택)
-    status_ctx = st.status("처리 중...", expanded=DEBUG) if DEBUG else None
-    if status_ctx: status_ctx.update(label="엑셀 읽는 중...")
 
     # 1) 필요한 컬럼 로드 (✅ 수금자명 포함)
     columns_needed = [
@@ -144,8 +138,6 @@ def run():
         st.error("❌ '쉐어율'에 빈 값이 포함되어 있습니다. 모든 행에 값을 입력해주세요.")
         st.stop()
 
-    if status_ctx: status_ctx.update(label="환산율 분류/계산 중...")
-
     # 5) 환산율 분류 (컨벤션 & 썸머)
     def classify(row):
         보험사원본 = str(row["보험사"])
@@ -164,7 +156,7 @@ def run():
 
         # 컨벤션
         if 보험사 == "한화생명":
-            conv_rate = 120
+            conv_rate = 150
         elif 보험사 in ["한화손보", "삼성화재", "흥국화재", "KB손보"]:
             conv_rate = 250
         elif 보험사 == "기타손보":
@@ -299,8 +291,6 @@ def run():
             disp_group[col] = disp_group[col].map("{:,.0f} 원".format)
     st.dataframe(disp_group, use_container_width=True)
 
-    if status_ctx: status_ctx.update(label="엑셀 워크북 생성 중...")
-
     # ── 엑셀 출력 보조 유틸 ─────────────────────────────────────
     def write_table(ws, df_for_sheet: pd.DataFrame, start_row: int = 1, name_suffix: str = "A"):
         """df_for_sheet: 헤더 포함(문자 포맷 완료)"""
@@ -321,9 +311,9 @@ def run():
         table.tableStyleInfo = style
         ws.add_table(table)
 
-        # 열 너비 자동(경량 모드면 생략)
+        # ✅ 열 너비 자동(예전 스타일): 전체 열 스캔 + 패딩 10
         if not LIGHT_MODE:
-            autosize_columns(ws, sample_rows=200, max_width=40, padding=4)
+            autosize_columns_full(ws, padding=10)
 
         return end_row  # 다음 시작 행
 
@@ -354,7 +344,7 @@ def run():
 
     excluded_disp_all = build_excluded_with_reason(excluded_df)
 
-    # ✅ 총합/갭을 ‘열 헤더 기준’으로 정확히 배치 + 시각 보완
+    # ✅ 총합/갭을 ‘열 헤더 기준’으로 정확히 배치 + “총 합계” 한 줄 더 아래
     thin_border = Border(left=Side(style="thin"), right=Side(style="thin"),
                          top=Side(style="thin"), bottom=Side(style="thin"))
     sum_fill = PatternFill("solid", fgColor="F2F2F2")
@@ -368,8 +358,8 @@ def run():
         col_conv_amt  = header_idx(ws, "컨벤션환산금액", 3)
         col_summ_amt  = header_idx(ws, "썸머환산금액", None)
 
-        # 총 합계 행(헤더 정렬)
-        sum_row = start_row
+        # ✅ 총 합계 행: 테이블 바로 아래에서 "한 줄 더 밑"으로
+        sum_row = start_row + 1  # ← 공백 1줄 확보
         ws.cell(row=sum_row, column=col_conv_rate, value="총 합계").alignment = Alignment(horizontal="center")
         cell_perf = ws.cell(row=sum_row, column=col_perf, value=f"{perf:,.0f} 원")
         cell_conv = ws.cell(row=sum_row, column=col_conv_amt, value=f"{conv:,.0f} 원")
@@ -385,7 +375,7 @@ def run():
             cell.fill = sum_fill
             cell.border = thin_border
 
-        # 갭 행
+        # 갭 행: 총합과도 한 줄 띄우고 배치
         def style_gap(amount):
             if amount > 0: return f"+{amount:,.0f} 원 초과", "008000"
             if amount < 0: return f"{amount:,.0f} 원 부족", "FF0000"
@@ -435,8 +425,8 @@ def run():
         sheet_title = unique_sheet_name(wb, collector)
         ws = wb.create_sheet(title=sheet_title)  # 시트명 31자 제한+유니크
 
-        next_row = write_table(ws, styled_sub, start_row=1, name_suffix="NORM")  # 정상 계약 표
-        next_row = sums_and_gaps_block(ws, sub, start_row=next_row+1)           # 합계/갭
+        next_row = write_table(ws, styled_sub, start_row=1, name_suffix="NORM")   # 정상 계약 표
+        next_row = sums_and_gaps_block(ws, sub, start_row=next_row)               # ✅ 합계/갭: 합계 한 줄 더 아래
 
         # 해당 수금자의 제외건(있다면)
         ex_sub = excluded_disp_all[excluded_disp_all["수금자명"].astype(str) == collector]
@@ -444,14 +434,10 @@ def run():
             ws.cell(row=next_row+1, column=1, value="제외 계약").font = Font(bold=True)
             write_table(ws, ex_sub, start_row=next_row+2, name_suffix="EXC")
 
-    if status_ctx: status_ctx.update(label="엑셀 파일 생성 중...")
-
     # 저장/다운로드
     excel_output = BytesIO()
     wb.save(excel_output)
     excel_output.seek(0)
-
-    if status_ctx: status_ctx.update(label="완료 ✅")
 
     st.download_button(
         label="📥 환산 결과 엑셀 다운로드 (요약 + 수금자별 시트 + 제외사유 포함)",
