@@ -311,9 +311,9 @@ def run():
         table.tableStyleInfo = style
         ws.add_table(table)
 
-        # ✅ 열 너비 자동(예전 스타일): 전체 열 스캔 + 패딩 10
+        # ✅ 열 너비 자동(예전 스타일): 전체 열 스캔 + 패딩 5
         if not LIGHT_MODE:
-            autosize_columns_full(ws, padding=10)
+            autosize_columns_full(ws, padding=5)
 
         return end_row  # 다음 시작 행
 
