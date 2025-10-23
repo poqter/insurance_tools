@@ -9,7 +9,7 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 import os, re  # ← re 추가 (표 이름 정규화용)
 
 # ✅ 한 줄 토글: True면 썸머 기준 노출/계산 포함
-SHOW_SUMMER = True
+SHOW_SUMMER = False
 
 # ✅ 테이블 이름 고유화 시퀀스(충돌 방지)
 TABLE_SEQ = 0
