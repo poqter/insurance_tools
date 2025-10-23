@@ -145,9 +145,15 @@ def run():
         st.stop()
 
     # 5) 환산율 분류 (컨벤션 & 썸머)
+    def to_int_safe(x, default=0):
+        try:
+            return int(float(x))
+        except Exception:
+            return default
+
     def classify(row):
         보험사원본 = str(row["보험사"])
-        납기 = int(row["납입기간"])
+        납기 = to_int_safe(row["납입기간"], 0)
 
         if 보험사원본 == "한화생명":
             보험사 = "한화생명"
@@ -331,9 +337,13 @@ def run():
 
         return last_row  # 다음 시작 기준이 되는 '마지막으로 쓴 행'
 
+    # ✅ 권장안(#1): 비어도 스키마 유지
     def build_excluded_with_reason(exdf: pd.DataFrame) -> pd.DataFrame:
+        base_cols = ["수금자명","계약일자","보험사","상품명","납입기간","보험료","납입방법","제외사유"]
         if exdf is None or exdf.empty:
-            return pd.DataFrame()
+            # 스키마를 갖춘 빈 DF 반환 → 이후 "수금자명" 접근시 KeyError 방지
+            return pd.DataFrame(columns=base_cols)
+
         tmp = exdf.copy()
         reasons = []
         for _, row in tmp.iterrows():
@@ -353,8 +363,8 @@ def run():
         tmp_disp.rename(columns={"계약일":"계약일자","초회보험료":"보험료"}, inplace=True)
         tmp_disp["계약일자"] = pd.to_datetime(tmp_disp["계약일자"], errors="coerce").dt.strftime("%Y-%m-%d")
         tmp_disp["납입기간"] = tmp_disp["납입기간"].astype(str) + "년"
-        tmp_disp["보험료"] = tmp_disp["보험료"].map(lambda x: "{:,.0f} 원".format(x) if pd.notnull(x) else "")
-        return tmp_disp
+        tmp_disp["보험료"]   = tmp_disp["보험료"].map(lambda x: "{:,.0f} 원".format(x) if pd.notnull(x) else "")
+        return tmp_disp[base_cols]
 
     excluded_disp_all = build_excluded_with_reason(excluded_df)
 
