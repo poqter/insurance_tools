@@ -23,7 +23,7 @@ SUMM_TARGET = 3_000_000
 
 # ✅ 필수 조건
 MIN_COUNT = 5
-HANWHA_MIN_PREMIUM = 20_000  # 한화생명 가동 2만원 이상 1건 필수
+HANWHA_MIN_PREMIUM = 30_000  # 한화생명 가동 3만원 이상 1건 필수
 
 
 # ── 유틸 ────────────────────────────────────────────────────
@@ -202,16 +202,16 @@ def make_group(df: pd.DataFrame, show_summer: bool) -> pd.DataFrame:
         컨벤션합계=("컨벤션환산금액", "sum"),
         썸머합계=("썸머환산금액", "sum") if show_summer else ("실적보험료", "sum"),
         건수=("수금자명", "size"),
-        한화가동2만=("보험료", lambda s: 0),  # placeholder
+        한화가동3만=("보험료", lambda s: 0),  # placeholder
     ).reset_index()
 
-    # 한화가동2만 계산(수금자별)
+    # 한화가동3만 계산(수금자별)
     tmp = df.copy()
     tmp["보험료_num"] = pd.to_numeric(tmp["보험료"], errors="coerce").fillna(0)
     tmp["is_hanwha_ok"] = (tmp["보험사"].astype(str).str.strip() == "한화생명") & (tmp["보험료_num"] >= HANWHA_MIN_PREMIUM)
 
     hanwha_cnt = tmp.groupby("수금자명", dropna=False)["is_hanwha_ok"].any().reset_index(name="hanwha_ok")
-    group_sum = group_sum.drop(columns=["한화가동2만"])
+    group_sum = group_sum.drop(columns=["한화가동3만"])
     group_sum = group_sum.merge(hanwha_cnt, on="수금자명", how="left")
     group_sum["hanwha_ok"] = group_sum["hanwha_ok"].fillna(False)
 
@@ -227,14 +227,14 @@ def make_group(df: pd.DataFrame, show_summer: bool) -> pd.DataFrame:
 
     # ✅ 필수조건 달성 여부
     group_sum["5건"] = (group_sum["건수"] >= MIN_COUNT).map(mark)
-    group_sum["한화가동2만"] = group_sum["hanwha_ok"].map(mark)
+    group_sum["한화가동3만"] = group_sum["hanwha_ok"].map(mark)
     group_sum["전체"] = ((group_sum["건수"] >= MIN_COUNT) & (group_sum["hanwha_ok"])).map(mark)
 
     # 보기용: 중간 컬럼 정리
     group_sum.drop(columns=["hanwha_ok"], inplace=True)
 
     # 컬럼 순서 정리(가독성)
-    base_cols = ["수금자명", "건수", "5건", "한화가동2만", "실적보험료합계", "컨벤션합계"]
+    base_cols = ["수금자명", "건수", "5건", "한화가동3만", "실적보험료합계", "컨벤션합계"]
     conv_cols = [f"컨벤션_{label}달성" for label, _ in CONV_TARGETS]
     summer_cols = ["썸머합계", "썸머달성"] if show_summer else []
     group_sum = group_sum[base_cols + conv_cols + summer_cols]
