@@ -515,6 +515,23 @@ def run():
     st.subheader(f"📄 {'전체' if selected_collector=='전체' else selected_collector} 환산 결과")
     st.dataframe(to_styled(show_df, SHOW_SUMMER), use_container_width=True)
 
+    # ── 선택된 수금자의 제외 계약 목록 (개인 선택 시만 표시) ─────────
+    if selected_collector != "전체":
+
+        st.subheader("🚫 제외된 계약 목록 (선택된 수금자)")
+
+        if excluded_disp_all.empty:
+            st.caption("제외된 계약이 없습니다.")
+        else:
+            ex_view = excluded_disp_all[
+                excluded_disp_all["수금자명"].astype(str) == str(selected_collector)
+            ].copy()
+
+            if ex_view.empty:
+                st.caption("해당 수금자의 제외된 계약이 없습니다.")
+            else:
+                st.dataframe(ex_view, use_container_width=True)        
+
     # 총합/목표 대비
     perf_sum, conv_sum, summ_sum = sums(show_df, SHOW_SUMMER)
     st.subheader("📈 총합")
