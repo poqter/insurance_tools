@@ -94,7 +94,7 @@ def exclude_contracts(df: pd.DataFrame):
 
         is_lumpsum = tmp["납입방법"].str.contains("일시납", na=False)
         is_savings = tmp["상품군2"].str.contains("연금성|저축성", na=False)
-        is_cancelled = tmp["계약상태"].str.contains("철회|해약", na=False)
+        is_cancelled = tmp["계약상태"].str.contains("철회|해약|실효", na=False)
 
         is_excluded = is_lumpsum | is_savings | is_cancelled
         excluded_df = tmp[is_excluded].copy()
@@ -489,7 +489,7 @@ def run():
 
     # 제외 건 화면 표시(있을 때만)
     if not excluded_df.empty:
-        st.warning(f"⚠️ 제외된 계약 {len(excluded_df)}건 (일시납 / 연금성·저축성 / 철회|해약)")
+        st.warning(f"⚠️ 제외된 계약 {len(excluded_df)}건 (일시납 / 연금성·저축성 / 철회|해약|실효)")
         st.subheader("🚫 제외된 계약 목록")
         excluded_display = excluded_df[["수금자명","계약일","보험사","상품명","납입기간","초회보험료","납입방법"]].copy()
         excluded_display.columns = ["수금자명","계약일","보험사","상품명","납입기간","보험료","납입방법"]
