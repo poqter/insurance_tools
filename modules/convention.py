@@ -113,11 +113,19 @@ def build_excluded_with_reason(exdf: pd.DataFrame) -> pd.DataFrame:
 
     def reason_row(row):
         r = []
-        if "일시납" in str(row.get("납입방법", "")): r.append("일시납")
-        if ("연금성" in str(row.get("상품군2", ""))) or ("저축성" in str(row.get("상품군2", ""))): r.append("연금/저축성")
-        if "철회" in str(row.get("계약상태", "")): r.append("철회")
-        if "해약" in str(row.get("계약상태", "")): r.append("해약")
-        if "실효" in str(row.get("계약상태", "")): r.append("실효")
+        if "일시납" in str(row.get("납입방법", "")):
+            r.append("일시납")
+        if ("연금성" in str(row.get("상품군2", ""))) or ("저축성" in str(row.get("상품군2", ""))):
+            r.append("연금/저축성")
+
+        status = str(row.get("계약상태", ""))
+        if "철회" in status:
+            r.append("철회")
+        if "해약" in status:
+            r.append("해약")
+        if "실효" in status:
+            r.append("실효")
+
         return " / ".join(r) if r else "제외 조건 미상"
 
     tmp["제외사유"] = tmp.apply(reason_row, axis=1)
