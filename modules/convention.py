@@ -499,10 +499,12 @@ def run():
     # 제외 건 화면 표시(있을 때만)
     if not excluded_df.empty:
         st.warning(f"⚠️ 제외된 계약 {len(excluded_df)}건 (일시납 / 연금성·저축성 / 철회|해약|실효)")
-        st.subheader("🚫 제외된 계약 목록")
-        excluded_display = excluded_df[["수금자명","계약일","보험사","상품명","납입기간","초회보험료","납입방법"]].copy()
-        excluded_display.columns = ["수금자명","계약일","보험사","상품명","납입기간","보험료","납입방법"]
-        st.dataframe(excluded_display, use_container_width=True)
+        st.subheader("🚫 제외된 계약 목록 (사유 포함)")
+        if excluded_disp_all.empty:
+            st.caption("제외된 계약이 없습니다.")
+        else:
+            st.dataframe(excluded_disp_all, use_container_width=True)
+
 
     # 수금자 선택
     collectors = ["전체"] + sorted(df["수금자명"].astype(str).unique().tolist())
