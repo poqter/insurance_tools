@@ -499,7 +499,7 @@ def run():
     # 제외 건 화면 표시(있을 때만)
     if not excluded_df.empty:
         st.warning(f"⚠️ 제외된 계약 {len(excluded_df)}건 (일시납 / 연금성·저축성 / 철회|해약|실효)")
-        st.subheader("🚫 제외된 계약 목록 (사유 포함)")
+        st.subheader("🚫 제외된 계약 목록")
         if excluded_disp_all.empty:
             st.caption("제외된 계약이 없습니다.")
         else:
