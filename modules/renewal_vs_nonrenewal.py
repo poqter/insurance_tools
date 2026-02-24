@@ -11,8 +11,8 @@ def run():
         st.header("🌀 갱신형 보험 입력")
         start_year = st.number_input("가입 연도", min_value=1900, max_value=2100, value=None, step=1)
         start_age = st.number_input("가입 당시 나이", min_value=0, max_value=100, value=None, step=1)
-        renewal_cycle = st.selectbox("갱신 주기", [10, 15, 20], index=0)
-        end_age = st.number_input("갱신 종료 나이", min_value=0, max_value=100, value=None, step=1)
+        renewal_cycle = st.selectbox("갱신 주기", [10, 15, 20, 30], index=0)
+        end_age = st.number_input("갱신 종료 나이", min_value=0, max_value=110, value=None, step=1)
         monthly_payment = st.number_input("현재 월 납입금액 (원)", min_value=0, value=None, step=1000)
 
     with col_right:
@@ -45,6 +45,7 @@ def run():
             10: [2.2180, 1.5239, 1.4283, 1.2212, 1.0921, 1.0624, 1.0388],  # 7개
             15: [2.7180, 1.8239, 1.6283, 1.0921, 1.0624, 1.0388],           # 6개
             20: [3.8982, 2.1253, 1.2832],                                   # 3개
+            30: [5.1982, 2.1253, 1.2832]
         }
 
         # 현재 선택한 갱신 주기에 맞는 기본값 선택
