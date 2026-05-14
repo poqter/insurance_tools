@@ -12,11 +12,14 @@ from modules import (
 st.set_page_config(page_title="보험컨설팅 멀티 도우미", layout="wide")
 
 # -----------------------------
-# 🔐 여러 비밀번호 인증
+# 🔐 여러 비밀번호 인증 + 사용자 구분
 # -----------------------------
 def check_password():
     if "password_correct" not in st.session_state:
         st.session_state["password_correct"] = False
+
+    if "login_user" not in st.session_state:
+        st.session_state["login_user"] = None
 
     if st.session_state["password_correct"]:
         return True
@@ -27,10 +30,18 @@ def check_password():
     password = st.text_input("비밀번호", type="password")
 
     if st.button("로그인"):
-        valid_passwords = list(st.secrets["passwords"].values())
+        passwords = dict(st.secrets["passwords"])
 
-        if password in valid_passwords:
+        matched_user = None
+
+        for user_name, saved_password in passwords.items():
+            if password == saved_password:
+                matched_user = user_name
+                break
+
+        if matched_user:
             st.session_state["password_correct"] = True
+            st.session_state["login_user"] = matched_user
             st.rerun()
         else:
             st.error("비밀번호가 올바르지 않습니다.")
@@ -40,6 +51,10 @@ def check_password():
 
 if not check_password():
     st.stop()
+
+
+# 로그인 사용자 표시
+st.sidebar.caption(f"접속 계정: {st.session_state.get('login_user')}")
 
 # 👉 사이드바 메뉴로 앱 선택 이동
 st.sidebar.title("🧰 보험컨설팅 멀티 도우미")
