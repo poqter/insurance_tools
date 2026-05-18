@@ -31,7 +31,7 @@ def run():
     st.sidebar.markdown("---")
     st.sidebar.markdown("👨‍💻 **제작자:** 비전본부 드림지점 박병선 팀장")  
     st.sidebar.markdown("🗓️ **버전:** v1.2.0")  
-    st.sidebar.markdown("📅 **최종 업데이트:** 2025-07-02")
+    st.sidebar.markdown("📅 **최종 업데이트:** 2026-05-17")
 
     # ✅ 제목 및 설명
     st.title("📊 보장 분석 도우미")
