@@ -8,10 +8,11 @@ from io import BytesIO
 
 import pandas as pd
 import streamlit as st
-import pyautogui
-import pyperclip
 
 
+# =========================
+# 기본 설정
+# =========================
 REQUIRED_COLUMNS = ["고객명", "카톡검색명", "보낼메시지", "발송상태", "발송일시"]
 OPTIONAL_COLUMNS = ["고객구분", "메시지유형", "실패사유", "메모"]
 
@@ -21,6 +22,28 @@ DEFAULT_KAKAO_PATHS = [
 ]
 
 
+# =========================
+# 실행 환경 확인
+# =========================
+def is_windows_local() -> bool:
+    """
+    Windows 로컬 PC 환경인지 확인합니다.
+    카카오톡 PC 자동 조작은 Windows 로컬에서만 작동합니다.
+    """
+    return os.name == "nt"
+
+
+def is_streamlit_cloud_like() -> bool:
+    """
+    Streamlit Cloud 또는 Linux 서버 환경인지 확인합니다.
+    Streamlit Cloud는 일반적으로 Linux 환경이며, 화면/마우스/키보드를 조작할 수 없습니다.
+    """
+    return not is_windows_local()
+
+
+# =========================
+# 엑셀 처리 함수
+# =========================
 def find_default_kakao_path() -> str:
     """일반적인 카카오톡 설치 경로를 탐색합니다."""
     for path in DEFAULT_KAKAO_PATHS:
@@ -32,17 +55,24 @@ def find_default_kakao_path() -> str:
 def normalize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     """엑셀 데이터를 앱에서 사용하기 좋게 정리합니다."""
     df = df.copy()
+
+    # 열 이름 앞뒤 공백 제거
     df.columns = [str(col).strip() for col in df.columns]
 
+    # 필수 열이 없으면 생성
     for col in REQUIRED_COLUMNS:
         if col not in df.columns:
             df[col] = ""
 
+    # 선택 열이 없으면 생성
     for col in OPTIONAL_COLUMNS:
         if col not in df.columns:
             df[col] = ""
 
+    # NaN 제거
     df = df.fillna("")
+
+    # 발송상태 기본값
     df["발송상태"] = df["발송상태"].replace("", "대기")
 
     return df
@@ -73,7 +103,8 @@ def validate_dataframe(df: pd.DataFrame) -> list[str]:
 
     if duplicated_kakao > 0:
         warnings.append(
-            f"카톡검색명이 중복된 행이 {duplicated_kakao}개 있습니다. 오발송 방지를 위해 확인하세요."
+            f"카톡검색명이 중복된 행이 {duplicated_kakao}개 있습니다. "
+            "오발송 방지를 위해 확인하세요."
         )
 
     return warnings
@@ -89,8 +120,38 @@ def dataframe_to_excel_bytes(df: pd.DataFrame) -> bytes:
     return output.getvalue()
 
 
+def make_sample_excel() -> bytes:
+    """샘플 엑셀 파일을 생성합니다."""
+    sample_df = pd.DataFrame(
+        [
+            {
+                "고객명": "김민지",
+                "카톡검색명": "김민지 고객님",
+                "고객구분": "태아보험",
+                "메시지유형": "상담안내",
+                "보낼메시지": (
+                    "김민지 고객님 안녕하세요. 박병선입니다 😊\n"
+                    "태아보험 관련해서 안내드릴 내용이 있어 연락드립니다."
+                ),
+                "발송상태": "대기",
+                "발송일시": "",
+                "실패사유": "",
+                "메모": "",
+            }
+        ]
+    )
+
+    return dataframe_to_excel_bytes(sample_df)
+
+
+# =========================
+# 카카오톡 제어 함수
+# =========================
 def open_kakao(kakao_path: str) -> bool:
-    """카카오톡 PC버전을 실행합니다."""
+    """카카오톡 PC버전을 실행합니다. Windows 로컬에서만 작동합니다."""
+    if not is_windows_local():
+        return False
+
     try:
         if kakao_path and os.path.exists(kakao_path):
             subprocess.Popen(kakao_path)
@@ -105,8 +166,16 @@ def open_kakao(kakao_path: str) -> bool:
 
 
 def activate_kakao_window() -> bool:
-    """카카오톡 창을 찾아 활성화합니다."""
+    """
+    카카오톡 창을 찾아 활성화합니다.
+    pyautogui는 로컬 Windows 환경에서만 함수 내부에서 import합니다.
+    """
+    if not is_windows_local():
+        return False
+
     try:
+        import pyautogui
+
         possible_titles = ["KakaoTalk", "카카오톡"]
 
         for title in possible_titles:
@@ -139,6 +208,21 @@ def paste_message_to_kakao(
     카카오톡 PC버전에서 고객명을 검색하고 메시지를 붙여넣습니다.
     안전을 위해 Enter 전송은 하지 않습니다.
     """
+
+    if not is_windows_local():
+        return (
+            False,
+            "이 기능은 로컬 Windows PC 전용입니다. "
+            "Streamlit Cloud에서는 카카오톡 PC버전을 조작할 수 없습니다.",
+        )
+
+    try:
+        import pyautogui
+        import pyperclip
+
+    except Exception as e:
+        return False, f"pyautogui 또는 pyperclip 불러오기에 실패했습니다: {e}"
+
     kakao_search_name = str(kakao_search_name).strip()
     message = str(message).strip()
 
@@ -155,7 +239,11 @@ def paste_message_to_kakao(
             return False, "카카오톡 실행에 실패했습니다. 경로를 확인하세요."
 
         if not activate_kakao_window():
-            return False, "카카오톡 창을 찾지 못했습니다. 카카오톡을 직접 열고 다시 시도하세요."
+            return (
+                False,
+                "카카오톡 창을 찾지 못했습니다. "
+                "카카오톡 PC버전을 직접 열고 다시 시도하세요.",
+            )
 
     try:
         # 검색창 열기
@@ -166,10 +254,11 @@ def paste_message_to_kakao(
 
         time.sleep(delay)
 
-        # 기존 검색어 제거 후 카톡검색명 입력
+        # 검색창 기존 내용 제거
         pyautogui.hotkey("ctrl", "a")
         time.sleep(0.1)
 
+        # 카톡검색명 붙여넣기
         pyperclip.copy(kakao_search_name)
         pyautogui.hotkey("ctrl", "v")
         time.sleep(delay)
@@ -183,12 +272,19 @@ def paste_message_to_kakao(
         pyautogui.hotkey("ctrl", "v")
         time.sleep(delay)
 
-        return True, "카카오톡 창에 메시지를 붙여넣었습니다. 최종 전송은 직접 Enter로 확인하세요."
+        return (
+            True,
+            "카카오톡 창에 메시지를 붙여넣었습니다. "
+            "최종 전송은 직접 Enter를 눌러 확인하세요.",
+        )
 
     except Exception as e:
         return False, f"자동화 중 오류가 발생했습니다: {e}"
 
 
+# =========================
+# 상태 업데이트 함수
+# =========================
 def update_send_status(
     df: pd.DataFrame,
     row_index: int,
@@ -213,35 +309,24 @@ def update_send_status(
     return df
 
 
-def make_sample_excel() -> bytes:
-    """샘플 엑셀 파일을 생성합니다."""
-    sample_df = pd.DataFrame(
-        [
-            {
-                "고객명": "김민지",
-                "카톡검색명": "김민지 고객님",
-                "고객구분": "태아보험",
-                "메시지유형": "상담안내",
-                "보낼메시지": (
-                    "김민지 고객님 안녕하세요. 박병선입니다 😊\n"
-                    "태아보험 관련해서 안내드릴 내용이 있어 연락드립니다."
-                ),
-                "발송상태": "대기",
-                "발송일시": "",
-                "실패사유": "",
-                "메모": "",
-            }
-        ]
-    )
-
-    return dataframe_to_excel_bytes(sample_df)
-
-
+# =========================
+# Streamlit 화면
+# =========================
 def run():
     st.title("💬 카카오톡 발송 도우미")
     st.caption(
         "엑셀 고객목록을 불러와 카카오톡 PC버전에 메시지를 붙여넣는 반자동 발송 도구입니다."
     )
+
+    if is_streamlit_cloud_like():
+        st.warning(
+            "현재 이 앱은 Streamlit Cloud 또는 서버 환경에서 실행 중입니다. "
+            "카카오톡 PC 자동 조작은 로컬 Windows PC에서만 사용할 수 있습니다."
+        )
+        st.info(
+            "Cloud에서는 엑셀 업로드, 고객 목록 확인, 메시지 미리보기, 결과 엑셀 다운로드는 사용할 수 있습니다. "
+            "다만 카카오톡 창 열기/붙여넣기 기능은 작동하지 않습니다."
+        )
 
     # 다른 모듈과 session_state 충돌 방지를 위해 prefix 사용
     df_key = "kakao_sender_df"
@@ -253,6 +338,9 @@ def run():
     if selected_key not in st.session_state:
         st.session_state[selected_key] = None
 
+    # =========================
+    # 사이드바 설정
+    # =========================
     with st.sidebar:
         st.divider()
         st.subheader("💬 카톡 발송 설정")
@@ -262,7 +350,7 @@ def run():
         kakao_path = st.text_input(
             "카카오톡 실행 파일 경로",
             value=default_path,
-            help="비워도 실행을 시도하지만, 실행이 안 되면 KakaoTalk.exe 경로를 직접 입력하세요.",
+            help="로컬 Windows PC에서만 사용됩니다. 실행이 안 되면 KakaoTalk.exe 경로를 직접 입력하세요.",
             key="kakao_sender_path",
         )
 
@@ -284,6 +372,9 @@ def run():
             key="kakao_sender_delay",
         )
 
+    # =========================
+    # 엑셀 업로드
+    # =========================
     uploaded_file = st.file_uploader(
         "customers.xlsx 파일을 업로드하세요",
         type=["xlsx"],
@@ -300,6 +391,9 @@ def run():
         except Exception as e:
             st.error(f"엑셀 파일을 읽는 중 오류가 발생했습니다: {e}")
 
+    # =========================
+    # 파일이 없을 때
+    # =========================
     if st.session_state[df_key] is None:
         st.info("먼저 고객목록 엑셀 파일을 업로드하세요.")
 
@@ -314,10 +408,16 @@ def run():
         st.markdown("### 필수 엑셀 열")
         st.code("고객명, 카톡검색명, 보낼메시지, 발송상태, 발송일시")
 
+        st.markdown("### 선택 엑셀 열")
+        st.code("고객구분, 메시지유형, 실패사유, 메모")
+
         return
 
     df = st.session_state[df_key]
 
+    # =========================
+    # 데이터 검증
+    # =========================
     warnings = validate_dataframe(df)
 
     if warnings:
@@ -325,7 +425,11 @@ def run():
             for warning in warnings:
                 st.warning(warning)
 
+    # =========================
+    # 요약 지표
+    # =========================
     col1, col2, col3, col4 = st.columns(4)
+
     col1.metric("전체 고객", len(df))
     col2.metric("대기", int((df["발송상태"] == "대기").sum()))
     col3.metric("완료", int((df["발송상태"] == "완료").sum()))
@@ -333,6 +437,9 @@ def run():
 
     st.divider()
 
+    # =========================
+    # 고객 선택
+    # =========================
     st.subheader("1. 고객 선택")
 
     status_options = ["전체"] + sorted(
@@ -371,6 +478,7 @@ def run():
 
     if filtered_df.empty:
         st.info("조건에 맞는 고객이 없습니다.")
+
     else:
         display_columns = [
             "고객명",
@@ -408,12 +516,16 @@ def run():
 
     st.divider()
 
+    # =========================
+    # 메시지 미리보기
+    # =========================
     st.subheader("2. 메시지 미리보기")
 
     selected_row_index = st.session_state[selected_key]
 
     if selected_row_index is None:
         st.info("고객을 먼저 선택하세요.")
+
     else:
         row = df.loc[selected_row_index]
 
@@ -429,6 +541,7 @@ def run():
 
         with right:
             st.markdown("#### 메시지")
+
             edited_message = st.text_area(
                 "보낼 메시지",
                 value=str(row["보낼메시지"]),
@@ -449,18 +562,32 @@ def run():
 
         st.divider()
 
+        # =========================
+        # 카카오톡 붙여넣기
+        # =========================
         st.subheader("3. 카카오톡에 붙여넣기")
-        st.warning(
-            "안전상 이 앱은 메시지를 붙여넣기까지만 합니다. 최종 전송 Enter는 직접 눌러 확인하세요."
-        )
+
+        if is_windows_local():
+            st.warning(
+                "안전상 이 앱은 메시지를 붙여넣기까지만 합니다. "
+                "최종 전송 Enter는 직접 눌러 확인하세요."
+            )
+        else:
+            st.warning(
+                "현재 환경에서는 카카오톡 자동 붙여넣기를 사용할 수 없습니다. "
+                "이 기능은 로컬 Windows PC에서 실행해야 작동합니다."
+            )
 
         col_a, col_b, col_c = st.columns(3)
 
         with col_a:
+            paste_disabled = not is_windows_local()
+
             if st.button(
                 "카카오톡 열고 메시지 붙여넣기",
                 type="primary",
                 use_container_width=True,
+                disabled=paste_disabled,
                 key="kakao_sender_paste",
             ):
                 success, msg = paste_message_to_kakao(
@@ -523,6 +650,9 @@ def run():
 
     st.divider()
 
+    # =========================
+    # 결과 엑셀 다운로드
+    # =========================
     st.subheader("4. 결과 엑셀 다운로드")
 
     result_bytes = dataframe_to_excel_bytes(st.session_state[df_key])
@@ -536,6 +666,6 @@ def run():
     )
 
     st.caption(
-        "주의: Streamlit Cloud나 서버 배포 환경에서는 사용자의 PC 카카오톡을 제어할 수 없습니다. "
-        "이 기능은 카카오톡 PC버전이 설치된 로컬 Windows PC에서 실행해야 합니다."
+        "카카오톡 자동 붙여넣기는 로컬 Windows PC에서만 작동합니다. "
+        "Streamlit Cloud에서는 고객 목록 확인, 메시지 미리보기, 결과 엑셀 다운로드 용도로 사용할 수 있습니다."
     )
