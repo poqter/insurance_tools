@@ -6,7 +6,6 @@ from modules import (
     analyzer,
     remodeling,
     convention,
-    kakao_sender,
 )
 
 # 페이지 설정
@@ -71,8 +70,7 @@ all_apps = {
     "📊 갱신 vs 비갱신 보험 비교": renewal_vs_nonrenewal.run,
     "🔁 보험 리모델링 전/후 비교": remodeling.run,
     "🧮 컨벤션 계산기": convention.run,
-    "💬 카카오톡 발송 도우미": kakao_sender.run,
-}
+    }
 
 
 # -----------------------------
@@ -86,7 +84,6 @@ user_permissions = {
         # "📊 갱신 vs 비갱신 보험 비교",
         # "🔁 보험 리모델링 전/후 비교",
         # "🧮 컨벤션 계산기",
-        "💬 카카오톡 발송 도우미",
     ],
 
     # team2용: 전체 기능 사용 가능
