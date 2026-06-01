@@ -6,6 +6,7 @@ from modules import (
     analyzer,
     remodeling,
     convention,
+    manager_results,
 )
 
 # 페이지 설정
@@ -70,7 +71,8 @@ all_apps = {
     "📊 갱신 vs 비갱신 보험 비교": renewal_vs_nonrenewal.run,
     "🔁 보험 리모델링 전/후 비교": remodeling.run,
     "🧮 컨벤션 계산기": convention.run,
-    }
+    "📊 매니저 업적 환산": manager_results.run,
+}
 
 
 # -----------------------------
@@ -84,9 +86,10 @@ user_permissions = {
         # "📊 갱신 vs 비갱신 보험 비교",
         # "🔁 보험 리모델링 전/후 비교",
         # "🧮 컨벤션 계산기",
+        "📊 매니저 업적 환산"
     ],
 
-    # team2용: 전체 기능 사용 가능
+    # team2용: 전체 공유 비밀번호
     "team2": [
         "📑 보장 분석 도우미",
         "💰 적금 vs 단기납 비교",
@@ -102,6 +105,7 @@ user_permissions = {
         # "📊 갱신 vs 비갱신 보험 비교",
         # "🔁 보험 리모델링 전/후 비교",
         # "🧮 컨벤션 계산기",
+        "📊 매니저 업적 환산"
     ],
 
      # team4용: 전체 기능 사용 가능
