@@ -73,7 +73,7 @@ all_apps = {
     "🔁 보험 리모델링 전/후 비교": remodeling.run,
     "🧮 컨벤션 계산기": convention.run,
     "📊 매니저 업적 환산": manager_results.run,
-    "📄 이관 PDF 변환기": pdf_converter.run,
+    "📄 PDF 표 엑셀 변환기": pdf_converter.run,
 }
 
 
@@ -88,7 +88,7 @@ user_permissions = {
         # "📊 갱신 vs 비갱신 보험 비교",
         # "🔁 보험 리모델링 전/후 비교",
         # "🧮 컨벤션 계산기",
-        "📄 이관 PDF 변환기",
+        "📄 PDF 표 엑셀 변환기"
         "📊 매니저 업적 환산"
     ],
 
