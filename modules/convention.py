@@ -464,7 +464,7 @@ def run():
         )
         SHOW_SUMMER = st.toggle("🌞 썸머 기준 포함", value=False)
 
-    st.title("📊 보험 계약 실적 환산기 (컨벤션{} 기준)".format(" & 썸머" if SHOW_SUMMER else ""))
+    st.title("📊 TEST!!! 보험 계약 실적 환산기 (컨벤션{} 기준)".format(" & 썸머" if SHOW_SUMMER else ""))
 
     uploaded_file = st.file_uploader("📂 계약 목록 Excel 파일 업로드 (.xlsx)", type=["xlsx"])
     if not uploaded_file:
