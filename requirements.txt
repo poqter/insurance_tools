@@ -4,3 +4,4 @@ pandas
 openpyxl
 pyautogui
 pyperclip
+pdfplumber
