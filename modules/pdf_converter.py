@@ -154,12 +154,12 @@ def run():
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        add_file_name = st.checkbox("파일명 열 추가", value=True)
-        add_page_info = st.checkbox("페이지/표번호 열 추가", value=True)
+        add_file_name = st.checkbox("파일명 열 추가", value=False)
+        add_page_info = st.checkbox("페이지/표번호 열 추가", value=False)
 
     with col2:
-        remove_empty_rows = st.checkbox("빈 행 제거", value=True)
-        remove_empty_cols = st.checkbox("빈 열 제거", value=True)
+        remove_empty_rows = st.checkbox("빈 행 제거", value=False)
+        remove_empty_cols = st.checkbox("빈 열 제거", value=False)
 
     with col3:
         first_row_as_header = st.checkbox("첫 행을 제목행으로 사용", value=False)
