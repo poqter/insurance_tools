@@ -22,14 +22,30 @@ st.set_page_config(page_title="보험컨설팅 멀티 도우미", layout="wide")
 def show_login_notice_popup():
     login_user = st.session_state.get("login_user", "사용자")
 
-    st.markdown(f"""
-    ### {login_user}님, 로그인되었습니다. 
-    #### - 제작 : 박병선 팀장
+    st.markdown(
+        f"""
+        <h3 style="margin-bottom:0;">
+            {login_user}님, 로그인되었습니다.
+        </h3>
+        <div style="
+            text-align:right;
+            font-size:13px;
+            color:#777777;
+            margin-top:-6px;
+            margin-bottom:18px;
+            font-weight:600;
+        ">
+            제작 : 박병선 팀장
+        </div>
 
-    멀티 도우미를 사용하기 전 아래 내용을 확인해주세요.
+        <p style="margin-top:0;">
+            보험컨설팅 멀티 도우미를 사용하기 전 아래 내용을 확인해주세요.
+        </p>
 
-    ---
-    """)
+        <hr>
+        """,
+        unsafe_allow_html=True
+    )
     
     st.markdown(
         """
