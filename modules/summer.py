@@ -6,6 +6,7 @@ import re
 from io import BytesIO
 
 from openpyxl import Workbook
+from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, Border, Side, PatternFill
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.worksheet.table import Table, TableStyleInfo
@@ -470,6 +471,21 @@ def check_final_summer_requirements(july_df: pd.DataFrame, august_df: pd.DataFra
 def to_styled(dfin: pd.DataFrame) -> pd.DataFrame:
     df = dfin.copy()
 
+    if df.empty:
+        return pd.DataFrame(columns=[
+            "계약월",
+            "수금자명",
+            "계약일자",
+            "보험사",
+            "상품명",
+            "납입기간",
+            "보험료",
+            "쉐어율",
+            "실적보험료",
+            "썸머율",
+            "썸머환산금액",
+        ])
+
     df["계약일자"] = pd.to_datetime(df["계약일자"], errors="coerce").dt.strftime("%Y-%m-%d")
 
     df["납입기간"] = pd.to_numeric(df["납입기간"], errors="coerce").apply(
@@ -575,6 +591,25 @@ def make_collector_summary(july_df: pd.DataFrame, august_df: pd.DataFrame) -> pd
 
     rows = []
 
+    if all_df.empty:
+        return pd.DataFrame(columns=[
+            "수금자명",
+            "7월건수",
+            "7월환산",
+            "7월한화5만",
+            "7월50만",
+            "7월달성",
+            "8월건수",
+            "8월환산",
+            "8월한화5만",
+            "8월50만",
+            "8월달성",
+            "합산환산",
+            "월별필수조건",
+            "금액기준등급",
+            "최종인정등급",
+        ])
+
     for collector, sub in all_df.groupby("수금자명", dropna=False):
         july_sub = sub[sub["계약월"] == 7].copy()
         august_sub = sub[sub["계약월"] == 8].copy()
@@ -600,26 +635,6 @@ def make_collector_summary(july_df: pd.DataFrame, august_df: pd.DataFrame) -> pd
         })
 
     summary = pd.DataFrame(rows)
-
-    if summary.empty:
-        return pd.DataFrame(columns=[
-            "수금자명",
-            "7월건수",
-            "7월환산",
-            "7월한화5만",
-            "7월50만",
-            "7월달성",
-            "8월건수",
-            "8월환산",
-            "8월한화5만",
-            "8월50만",
-            "8월달성",
-            "합산환산",
-            "월별필수조건",
-            "금액기준등급",
-            "최종인정등급",
-        ])
-
     return summary
 
 
@@ -631,6 +646,14 @@ def format_summary_for_display(summary: pd.DataFrame) -> pd.DataFrame:
             df[col] = df[col].map(won)
 
     return df
+
+
+# ── 선택 수금자 필터 ─────────────────────────────────────────
+def filter_by_collector(df: pd.DataFrame, selected_collector: str) -> pd.DataFrame:
+    if selected_collector == "전체":
+        return df.copy()
+
+    return df[df["수금자명"].astype(str) == selected_collector].copy()
 
 
 # ── 엑셀 출력 ────────────────────────────────────────────────
@@ -767,6 +790,32 @@ def build_workbook(
     return wb
 
 
+# ── 탭 렌더링 함수 ───────────────────────────────────────────
+def render_result_tabs(summary_df, july_df, august_df, other_month_df):
+    tab1, tab2, tab3, tab4 = st.tabs(["🧮 수금자별 요약", "7월 상세", "8월 상세", "7월/8월 외"])
+
+    with tab1:
+        st.dataframe(format_summary_for_display(summary_df), use_container_width=True)
+
+    with tab2:
+        if july_df.empty:
+            st.info("7월 계약이 없습니다.")
+        else:
+            st.dataframe(to_styled(july_df), use_container_width=True)
+
+    with tab3:
+        if august_df.empty:
+            st.info("8월 계약이 없습니다.")
+        else:
+            st.dataframe(to_styled(august_df), use_container_width=True)
+
+    with tab4:
+        if other_month_df.empty:
+            st.info("7월/8월 외 계약이 없습니다.")
+        else:
+            st.dataframe(to_styled(other_month_df), use_container_width=True)
+
+
 # ── 메인 실행 ────────────────────────────────────────────────
 def run():
     st.title("🌞 썸머 계산기")
@@ -851,15 +900,6 @@ def run():
             "계약일은 `2026-07-06`처럼 yyyy-mm-dd 형식으로 입력해주세요."
         )
 
-    if not excluded_disp.empty:
-        st.warning(
-            f"⚠️ 제외된 계약 {len(excluded_disp)}건이 있습니다. "
-            "제외 조건: 일시납 / 연금성·저축성 / 철회·해약·실효"
-        )
-
-        with st.expander("🚫 제외된 계약 보기", expanded=False):
-            st.dataframe(excluded_disp, use_container_width=True)
-
     july_df = df[df["계약월"] == 7].copy()
     august_df = df[df["계약월"] == 8].copy()
     other_month_df = df[~df["계약월"].isin([7, 8])].copy()
@@ -876,33 +916,61 @@ def run():
             "이 계약들은 썸머 최종 조건 계산에서는 제외하고, 엑셀에는 별도 시트로 저장합니다."
         )
 
-    result = check_final_summer_requirements(july_df, august_df)
+    # 전체 기준 결과
+    total_result = check_final_summer_requirements(july_df, august_df)
+    total_summary = make_collector_summary(july_df, august_df)
 
-    # ── 최종 결과 ───────────────────────────────────────────
-    st.subheader("🏆 썸머 최종 결과")
+    # 1. 제외 계약 보기 - 기본 펼침
+    if excluded_disp is not None and not excluded_disp.empty:
+        st.warning(
+            f"⚠️ 제외된 계약 {len(excluded_disp)}건이 있습니다. "
+            "제외 조건: 일시납 / 연금성·저축성 / 철회·해약·실효"
+        )
 
-    st.markdown(
-        grade_box(
-            result["최종인정등급"],
-            result["금액기준등급"],
-            result["합산환산금액"],
-            result["월별필수조건"],
-        ),
-        unsafe_allow_html=True,
+        with st.expander("🚫 제외된 계약 보기", expanded=True):
+            st.dataframe(excluded_disp, use_container_width=True)
+    else:
+        with st.expander("🚫 제외된 계약 보기", expanded=True):
+            st.info("제외된 계약이 없습니다.")
+
+    # 2. 전체 환산 결과
+    st.subheader("📄 전체 환산 결과")
+    render_result_tabs(
+        summary_df=total_summary,
+        july_df=july_df,
+        august_df=august_df,
+        other_month_df=other_month_df,
     )
 
-    if result["다음등급"]:
-        st.markdown(
-            gap_box(
-                f"다음 등급 {result['다음등급']}({result['다음등급기준']:,.0f}원)까지",
-                -result["다음등급부족금액"],
-            ),
-            unsafe_allow_html=True,
-        )
-    else:
-        st.success("🎉 최고 등급 HWARANG 기준을 달성했습니다.")
+    # 3. 수금자별 결과 확인
+    st.subheader("👤 수금자별 결과 확인")
 
-    # ── 월별 조건 체크 ───────────────────────────────────────
+    collectors = ["전체"] + sorted(df["수금자명"].astype(str).dropna().unique().tolist())
+
+    selected_collector = st.selectbox(
+        "👤 확인할 수금자를 선택하세요.",
+        collectors,
+        index=0,
+        key="summer_selected_collector",
+    )
+
+    selected_july_df = filter_by_collector(july_df, selected_collector)
+    selected_august_df = filter_by_collector(august_df, selected_collector)
+    selected_other_month_df = filter_by_collector(other_month_df, selected_collector)
+
+    selected_summary = make_collector_summary(selected_july_df, selected_august_df)
+    selected_result = check_final_summer_requirements(selected_july_df, selected_august_df)
+
+    st.markdown(f"### 📌 선택 기준: {selected_collector}")
+
+    render_result_tabs(
+        summary_df=selected_summary,
+        july_df=selected_july_df,
+        august_df=selected_august_df,
+        other_month_df=selected_other_month_df,
+    )
+
+    # 4. 선택값 기준 월별 필수조건 체크
     st.subheader("✅ 월별 필수조건 체크")
 
     col1, col2 = st.columns(2)
@@ -910,88 +978,90 @@ def run():
     with col1:
         st.markdown("### 7월")
         st.markdown(
-            money_box("7월 환산업적", result["7월"]["환산금액"]),
+            money_box("7월 환산업적", selected_result["7월"]["환산금액"]),
             unsafe_allow_html=True,
         )
         st.markdown(
             req_box(
                 f"7월 한화생명 {MONTHLY_HANWHA_MIN_PREMIUM:,.0f}원 이상 1건",
-                result["7월"]["한화생명5만"],
+                selected_result["7월"]["한화생명5만"],
             ),
             unsafe_allow_html=True,
         )
         st.markdown(
             req_box(
                 f"7월 환산업적 {MONTHLY_TARGET:,.0f}원 이상",
-                result["7월"]["환산50만"],
+                selected_result["7월"]["환산50만"],
             ),
             unsafe_allow_html=True,
         )
         st.markdown(
-            req_box("7월 필수조건 전체", result["7월"]["월달성"]),
+            req_box("7월 필수조건 전체", selected_result["7월"]["월달성"]),
             unsafe_allow_html=True,
         )
 
     with col2:
         st.markdown("### 8월")
         st.markdown(
-            money_box("8월 환산업적", result["8월"]["환산금액"]),
+            money_box("8월 환산업적", selected_result["8월"]["환산금액"]),
             unsafe_allow_html=True,
         )
         st.markdown(
             req_box(
                 f"8월 한화생명 {MONTHLY_HANWHA_MIN_PREMIUM:,.0f}원 이상 1건",
-                result["8월"]["한화생명5만"],
+                selected_result["8월"]["한화생명5만"],
             ),
             unsafe_allow_html=True,
         )
         st.markdown(
             req_box(
                 f"8월 환산업적 {MONTHLY_TARGET:,.0f}원 이상",
-                result["8월"]["환산50만"],
+                selected_result["8월"]["환산50만"],
             ),
             unsafe_allow_html=True,
         )
         st.markdown(
-            req_box("8월 필수조건 전체", result["8월"]["월달성"]),
+            req_box("8월 필수조건 전체", selected_result["8월"]["월달성"]),
             unsafe_allow_html=True,
         )
 
     st.markdown(
-        req_box("7월·8월 월별 필수조건 전체", result["월별필수조건"]),
+        req_box("7월·8월 월별 필수조건 전체", selected_result["월별필수조건"]),
         unsafe_allow_html=True,
     )
 
-    # ── 상세 데이터 표시 ─────────────────────────────────────
-    st.subheader("📄 상세 환산 결과")
+    # 5. 선택값 기준 썸머 최종 결과
+    st.subheader("🏆 썸머 최종 결과")
 
-    summary = make_collector_summary(july_df, august_df)
+    st.markdown(
+        grade_box(
+            selected_result["최종인정등급"],
+            selected_result["금액기준등급"],
+            selected_result["합산환산금액"],
+            selected_result["월별필수조건"],
+        ),
+        unsafe_allow_html=True,
+    )
 
-    tab1, tab2, tab3, tab4 = st.tabs(["🧮 수금자별 요약", "7월 상세", "8월 상세", "7월/8월 외"])
+    if selected_result["다음등급"]:
+        st.markdown(
+            gap_box(
+                f"다음 등급 {selected_result['다음등급']}({selected_result['다음등급기준']:,.0f}원)까지",
+                -selected_result["다음등급부족금액"],
+            ),
+            unsafe_allow_html=True,
+        )
+    else:
+        st.success("🎉 최고 등급 HWARANG 기준을 달성했습니다.")
 
-    with tab1:
-        st.dataframe(format_summary_for_display(summary), use_container_width=True)
-
-    with tab2:
-        st.dataframe(to_styled(july_df), use_container_width=True)
-
-    with tab3:
-        st.dataframe(to_styled(august_df), use_container_width=True)
-
-    with tab4:
-        if other_month_df.empty:
-            st.info("7월/8월 외 계약이 없습니다.")
-        else:
-            st.dataframe(to_styled(other_month_df), use_container_width=True)
-
-    # ── 엑셀 다운로드 ────────────────────────────────────────
+    # 6. 엑셀 다운로드
     wb = build_workbook(
         df_all=df,
         july_df=july_df,
         august_df=august_df,
         other_month_df=other_month_df,
-        summary=summary,
-        result=result,
+        summary=total_summary,
+        result=total_result,
         excluded_disp=excluded_disp,
     )
 
