@@ -74,6 +74,16 @@ def safe_table_name(base: str) -> str:
     return name[:254]
 
 
+def safe_filename_part(text: str) -> str:
+    """
+    파일명에 사용할 수 없는 문자를 제거합니다.
+    """
+    text = str(text).strip()
+    text = re.sub(r'[\\/:*?"<>|]', "_", text)
+    text = re.sub(r"\s+", "_", text)
+    return text if text else "미지정"
+
+
 def unique_sheet_name(wb, base, limit=31):
     name = str(base)[:limit] if base else "Sheet"
 
@@ -396,7 +406,10 @@ def check_monthly_requirements(dfin: pd.DataFrame):
 
     hanwha_ok = (
         is_hanwha_life_series(dfin["보험사"])
-        & (pd.to_numeric(dfin["보험료"], errors="coerce").fillna(0) >= MONTHLY_HANWHA_MIN_PREMIUM)
+        & (
+            pd.to_numeric(dfin["보험료"], errors="coerce").fillna(0)
+            >= MONTHLY_HANWHA_MIN_PREMIUM
+        )
     ).any()
 
     total_ok = amount_ok and hanwha_ok
@@ -693,6 +706,24 @@ def filter_by_collector(df: pd.DataFrame, selected_collector: str) -> pd.DataFra
     return df[df["수금자명"].astype(str) == selected_collector].copy()
 
 
+def filter_excluded_by_collector(excluded_disp: pd.DataFrame, selected_collector: str) -> pd.DataFrame:
+    """
+    엑셀 다운로드 시 제외계약도 선택한 수금자 기준으로 필터링합니다.
+    """
+    if excluded_disp is None or excluded_disp.empty:
+        return pd.DataFrame()
+
+    if selected_collector == "전체":
+        return excluded_disp.copy()
+
+    if "수금자명" not in excluded_disp.columns:
+        return pd.DataFrame()
+
+    return excluded_disp[
+        excluded_disp["수금자명"].astype(str) == str(selected_collector)
+    ].copy()
+
+
 # ── 엑셀 출력 ────────────────────────────────────────────────
 def write_table(ws, df_for_sheet: pd.DataFrame, start_row: int = 1, name_suffix: str = "A"):
     global TABLE_SEQ
@@ -784,13 +815,14 @@ def build_workbook(
     summary: pd.DataFrame,
     result: dict,
     excluded_disp: pd.DataFrame,
+    selected_collector: str = "전체",
 ):
     wb = Workbook()
 
     ws_summary = wb.active
     ws_summary.title = "요약"
 
-    write_title(ws_summary, 1, "썸머 최종 결과")
+    write_title(ws_summary, 1, f"썸머 최종 결과 - {selected_collector}")
     next_row = write_final_result_block(ws_summary, 2, result)
 
     write_title(ws_summary, next_row + 2, "수금자별 요약")
@@ -801,30 +833,30 @@ def build_workbook(
         name_suffix="SUMMARY",
     )
 
-    write_title(ws_summary, next_row + 2, "전체 상세")
+    write_title(ws_summary, next_row + 2, "상세 내역")
     next_row = write_table(
         ws_summary,
         to_styled(df_all),
         start_row=next_row + 3,
-        name_suffix="ALL_DETAIL",
+        name_suffix="DETAIL",
     )
 
     ws_july = wb.create_sheet("7월")
-    write_title(ws_july, 1, "7월 썸머 환산 결과")
+    write_title(ws_july, 1, f"7월 썸머 환산 결과 - {selected_collector}")
     write_table(ws_july, to_styled(july_df), start_row=2, name_suffix="JULY_DETAIL")
 
     ws_august = wb.create_sheet("8월")
-    write_title(ws_august, 1, "8월 썸머 환산 결과")
+    write_title(ws_august, 1, f"8월 썸머 환산 결과 - {selected_collector}")
     write_table(ws_august, to_styled(august_df), start_row=2, name_suffix="AUGUST_DETAIL")
 
     if not other_month_df.empty:
         ws_other = wb.create_sheet("7월8월외")
-        write_title(ws_other, 1, "7월/8월 외 계약")
+        write_title(ws_other, 1, f"7월/8월 외 계약 - {selected_collector}")
         write_table(ws_other, to_styled(other_month_df), start_row=2, name_suffix="OTHER_MONTH")
 
     if excluded_disp is not None and not excluded_disp.empty:
         ws_ex = wb.create_sheet("제외계약")
-        write_title(ws_ex, 1, "제외 계약")
+        write_title(ws_ex, 1, f"제외 계약 - {selected_collector}")
         write_table(ws_ex, excluded_disp, start_row=2, name_suffix="EXCLUDED")
 
     return wb
@@ -921,7 +953,6 @@ def run():
         return
 
     base_filename = os.path.splitext(uploaded_file.name)[0]
-    download_filename = f"{base_filename}_썸머환산결과.xlsx"
 
     try:
         raw = load_df(uploaded_file)
@@ -1016,6 +1047,7 @@ def run():
         key="summer_ready_bonus_rate",
     )
 
+    selected_df = filter_by_collector(df, selected_collector)
     selected_july_df = filter_by_collector(july_df, selected_collector)
     selected_august_df = filter_by_collector(august_df, selected_collector)
     selected_other_month_df = filter_by_collector(other_month_df, selected_collector)
@@ -1027,6 +1059,8 @@ def run():
         selected_august_df,
         ready_bonus_rate=ready_bonus_rate,
     )
+
+    selected_excluded_disp = filter_excluded_by_collector(excluded_disp, selected_collector)
 
     st.markdown(f"### 📌 선택 기준: {selected_collector}")
     st.caption(f"레디포썸머 보너스율: {ready_bonus_rate}%")
@@ -1139,14 +1173,23 @@ def run():
         st.success("🎉 최고 등급 HWARANG 기준을 달성했습니다.")
 
     # 7. 엑셀 다운로드
+    # 선택 기준에 따라 다운로드 데이터 분기
+    # - 전체 선택: 전체 다운로드
+    # - 수금자 선택: 해당 수금자만 다운로드
+    # - 제외계약도 선택 기준에 맞게 필터링
+    # - 선택한 보너스율이 엑셀 결과에 반영
+    file_collector_name = safe_filename_part(selected_collector)
+    download_filename = f"{base_filename}_썸머환산결과_{file_collector_name}.xlsx"
+
     wb = build_workbook(
-        df_all=df,
-        july_df=july_df,
-        august_df=august_df,
-        other_month_df=other_month_df,
-        summary=total_summary,
-        result=total_result,
-        excluded_disp=excluded_disp,
+        df_all=selected_df,
+        july_df=selected_july_df,
+        august_df=selected_august_df,
+        other_month_df=selected_other_month_df,
+        summary=selected_summary,
+        result=selected_result,
+        excluded_disp=selected_excluded_disp,
+        selected_collector=selected_collector,
     )
 
     excel_output = BytesIO()
@@ -1154,7 +1197,7 @@ def run():
     excel_output.seek(0)
 
     st.download_button(
-        label="📥 썸머 환산 결과 엑셀 다운로드",
+        label=f"📥 {selected_collector} 썸머 환산 결과 엑셀 다운로드",
         data=excel_output,
         file_name=download_filename,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

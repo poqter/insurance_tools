@@ -12,9 +12,21 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 
 
 # ── 컨벤션 기준 ──────────────────────────────────────────────
-CONVENTION_TARGET = 1_800_000
+CONVENTION_GENERAL_TARGET = 1_800_000
+CONVENTION_DOUBLE_TARGET = 3_600_000
+CONVENTION_TRIPLE_TARGET = 5_400_000
+
+# 기존 코드 호환용: 일반 달성 기준
+CONVENTION_TARGET = CONVENTION_GENERAL_TARGET
+
 CONVENTION_MIN_COUNT = 5
 CONVENTION_HANWHA_MIN_PREMIUM = 50_000
+
+CONVENTION_LEVELS = [
+    ("트리플 달성", CONVENTION_TRIPLE_TARGET),
+    ("더블 달성", CONVENTION_DOUBLE_TARGET),
+    ("일반 달성", CONVENTION_GENERAL_TARGET),
+]
 
 TABLE_SEQ = 0
 
@@ -357,33 +369,91 @@ def compute_convention(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def get_amount_level(conv_sum: float) -> str:
+    """
+    금액만 기준으로 봤을 때의 수준.
+    실제 달성등급과 다를 수 있음.
+    """
+    for level_name, target in CONVENTION_LEVELS:
+        if conv_sum >= target:
+            return level_name
+
+    return "미달성"
+
+
+def get_final_level(conv_sum: float, count_ok: bool, hanwha_ok: bool) -> str:
+    """
+    최종 달성등급.
+    계약 5건 이상 + 한화생명 5만 원 이상 1건이 필수 조건.
+    필수 조건 미충족 시 금액이 높아도 달성 인정하지 않음.
+    """
+    required_ok = count_ok and hanwha_ok
+
+    if not required_ok:
+        if conv_sum >= CONVENTION_GENERAL_TARGET:
+            return "필수조건 미충족"
+        return "미달성"
+
+    for level_name, target in CONVENTION_LEVELS:
+        if conv_sum >= target:
+            return level_name
+
+    return "미달성"
+
+
 def check_convention_requirements(dfin: pd.DataFrame):
     if dfin.empty:
         return {
             "컨벤션환산금액": 0,
+            "금액수준": "미달성",
+            "달성등급": "미달성",
             "환산180만": False,
+            "일반달성": False,
+            "더블달성": False,
+            "트리플달성": False,
             "건수5건": False,
             "한화생명5만": False,
+            "필수조건": False,
             "전체달성": False,
         }
 
     conv_sum = dfin["컨벤션환산금액"].sum()
-    amount_ok = conv_sum >= CONVENTION_TARGET
+
+    general_amount_ok = conv_sum >= CONVENTION_GENERAL_TARGET
+    double_amount_ok = conv_sum >= CONVENTION_DOUBLE_TARGET
+    triple_amount_ok = conv_sum >= CONVENTION_TRIPLE_TARGET
+
     count_ok = len(dfin) >= CONVENTION_MIN_COUNT
 
     hanwha_ok = (
         is_hanwha_life_series(dfin["보험사"])
-        & (pd.to_numeric(dfin["보험료"], errors="coerce").fillna(0) >= CONVENTION_HANWHA_MIN_PREMIUM)
+        & (
+            pd.to_numeric(dfin["보험료"], errors="coerce").fillna(0)
+            >= CONVENTION_HANWHA_MIN_PREMIUM
+        )
     ).any()
 
-    total_ok = amount_ok and count_ok and hanwha_ok
+    required_ok = count_ok and hanwha_ok
+
+    final_general_ok = required_ok and general_amount_ok
+    final_double_ok = required_ok and double_amount_ok
+    final_triple_ok = required_ok and triple_amount_ok
+
+    amount_level = get_amount_level(conv_sum)
+    final_level = get_final_level(conv_sum, count_ok, hanwha_ok)
 
     return {
         "컨벤션환산금액": conv_sum,
-        "환산180만": amount_ok,
+        "금액수준": amount_level,
+        "달성등급": final_level,
+        "환산180만": final_general_ok,
+        "일반달성": final_general_ok,
+        "더블달성": final_double_ok,
+        "트리플달성": final_triple_ok,
         "건수5건": count_ok,
         "한화생명5만": hanwha_ok,
-        "전체달성": total_ok,
+        "필수조건": required_ok,
+        "전체달성": final_general_ok,
     }
 
 
@@ -424,6 +494,36 @@ def money_box(title, value, color="#1f77b4"):
     <div style='border: 2px solid {color}; border-radius: 10px; padding: 18px; background-color: #f7faff; margin-bottom: 12px;'>
         <h4 style='color:{color}; margin:0 0 8px 0;'>{title}</h4>
         <p style='font-size:20px; font-weight:bold; margin:0;'>{value:,.0f} 원</p>
+    </div>
+    """
+
+
+def level_box(level_name):
+    if level_name == "트리플 달성":
+        color = "#7b2cbf"
+        bg = "#f3e8ff"
+        icon = "🏆"
+    elif level_name == "더블 달성":
+        color = "#0b5394"
+        bg = "#e8f1ff"
+        icon = "🥈"
+    elif level_name == "일반 달성":
+        color = "#0c6b2c"
+        bg = "#e6f4ea"
+        icon = "✅"
+    elif level_name == "필수조건 미충족":
+        color = "#b85c00"
+        bg = "#fff4e5"
+        icon = "⚠️"
+    else:
+        color = "#b80000"
+        bg = "#fdecea"
+        icon = "❌"
+
+    return f"""
+    <div style='border: 2px solid {color}; border-radius: 10px; padding: 18px; background-color: {bg}; margin-bottom: 12px;'>
+        <h4 style='color:{color}; margin:0 0 8px 0;'>{icon} 현재 달성 등급</h4>
+        <p style='font-size:24px; font-weight:bold; color:{color}; margin:0;'>{level_name}</p>
     </div>
     """
 
@@ -472,10 +572,13 @@ def make_group(df: pd.DataFrame) -> pd.DataFrame:
             "건수": len(sub),
             "실적보험료합계": sub["실적보험료"].sum(),
             "컨벤션환산합계": sub["컨벤션환산금액"].sum(),
-            "환산180만": mark(req["환산180만"]),
+            "달성등급": req["달성등급"],
+            "필수조건": mark(req["필수조건"]),
+            "일반": mark(req["일반달성"]),
+            "더블": mark(req["더블달성"]),
+            "트리플": mark(req["트리플달성"]),
             "5건": mark(req["건수5건"]),
             "한화생명5만": mark(req["한화생명5만"]),
-            "전체달성": mark(req["전체달성"]),
         })
 
     group = pd.DataFrame(rows)
@@ -486,10 +589,13 @@ def make_group(df: pd.DataFrame) -> pd.DataFrame:
             "건수",
             "실적보험료합계",
             "컨벤션환산합계",
-            "환산180만",
+            "달성등급",
+            "필수조건",
+            "일반",
+            "더블",
+            "트리플",
             "5건",
             "한화생명5만",
-            "전체달성",
         ])
 
     return group
@@ -542,10 +648,13 @@ def write_requirements_line(ws, row, dfin: pd.DataFrame):
 
     line = (
         f"컨벤션 조건: "
-        f"환산보험료 {CONVENTION_TARGET:,.0f}원 {mark(req['환산180만'])}  |  "
+        f"달성등급 [{req['달성등급']}]  |  "
+        f"일반 {CONVENTION_GENERAL_TARGET:,.0f}원 {mark(req['일반달성'])}  |  "
+        f"더블 {CONVENTION_DOUBLE_TARGET:,.0f}원 {mark(req['더블달성'])}  |  "
+        f"트리플 {CONVENTION_TRIPLE_TARGET:,.0f}원 {mark(req['트리플달성'])}  |  "
         f"건수 {CONVENTION_MIN_COUNT}건 {mark(req['건수5건'])}  |  "
         f"한화생명 {CONVENTION_HANWHA_MIN_PREMIUM:,.0f}원 이상 1건 {mark(req['한화생명5만'])}  |  "
-        f"전체 {mark(req['전체달성'])}"
+        f"필수조건 {mark(req['필수조건'])}"
     )
 
     cell = ws.cell(row=row, column=1, value=line)
@@ -565,11 +674,18 @@ def write_totals_block(ws, dfin: pd.DataFrame, start_row: int):
 
     perf = dfin["실적보험료"].sum()
     conv = dfin["컨벤션환산금액"].sum()
+    req = check_convention_requirements(dfin)
 
     rows = [
         ["실적보험료 합계", won(perf)],
         ["컨벤션 환산 합계", won(conv)],
-        ["컨벤션 목표 대비", f"{conv - CONVENTION_TARGET:,.0f} 원"],
+        ["현재 달성등급", req["달성등급"]],
+        ["일반 달성 목표 대비", f"{conv - CONVENTION_GENERAL_TARGET:,.0f} 원"],
+        ["더블 달성 목표 대비", f"{conv - CONVENTION_DOUBLE_TARGET:,.0f} 원"],
+        ["트리플 달성 목표 대비", f"{conv - CONVENTION_TRIPLE_TARGET:,.0f} 원"],
+        ["계약 5건 이상", mark(req["건수5건"])],
+        ["한화생명 5만원 이상 1건", mark(req["한화생명5만"])],
+        ["필수조건", mark(req["필수조건"])],
     ]
 
     for i, row_data in enumerate(rows, start=start_row):
@@ -636,9 +752,16 @@ def run():
         st.subheader("🏆 컨벤션 기준")
         st.markdown(
             f"""
-            - 환산보험료 **{CONVENTION_TARGET:,.0f}원**
-            - 계약 건수 **{CONVENTION_MIN_COUNT}건**
+            **달성 기준**
+            - 일반 달성: **{CONVENTION_GENERAL_TARGET:,.0f}원**
+            - 더블 달성: **{CONVENTION_DOUBLE_TARGET:,.0f}원**
+            - 트리플 달성: **{CONVENTION_TRIPLE_TARGET:,.0f}원**
+
+            **필수 조건**
+            - 계약 건수 **{CONVENTION_MIN_COUNT}건 이상**
             - 한화생명 **{CONVENTION_HANWHA_MIN_PREMIUM:,.0f}원 이상 1건**
+
+            ※ 필수 조건 미충족 시 금액이 높아도 달성으로 인정하지 않습니다.
             """
         )
 
@@ -722,15 +845,38 @@ def run():
     )
 
     st.markdown(
+        level_box(req["달성등급"]),
+        unsafe_allow_html=True,
+    )
+
+    if req["달성등급"] == "필수조건 미충족":
+        st.warning(
+            f"금액 기준으로는 [{req['금액수준']}] 수준이지만, "
+            "계약 5건 이상 또는 한화생명 5만원 이상 1건 조건이 충족되지 않아 "
+            "최종 달성으로 인정되지 않습니다."
+        )
+
+    st.markdown(
         gap_box(
-            f"컨벤션 목표 {CONVENTION_TARGET:,.0f}원 대비",
-            conv_sum - CONVENTION_TARGET,
+            f"일반 달성 {CONVENTION_GENERAL_TARGET:,.0f}원 대비",
+            conv_sum - CONVENTION_GENERAL_TARGET,
         ),
         unsafe_allow_html=True,
     )
 
     st.markdown(
-        req_box(f"환산보험료 {CONVENTION_TARGET:,.0f}원 이상", req["환산180만"]),
+        gap_box(
+            f"더블 달성 {CONVENTION_DOUBLE_TARGET:,.0f}원 대비",
+            conv_sum - CONVENTION_DOUBLE_TARGET,
+        ),
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        gap_box(
+            f"트리플 달성 {CONVENTION_TRIPLE_TARGET:,.0f}원 대비",
+            conv_sum - CONVENTION_TRIPLE_TARGET,
+        ),
         unsafe_allow_html=True,
     )
 
@@ -748,7 +894,22 @@ def run():
     )
 
     st.markdown(
-        req_box("컨벤션 전체 조건", req["전체달성"]),
+        req_box("컨벤션 필수 조건", req["필수조건"]),
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        req_box("일반 달성", req["일반달성"]),
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        req_box("더블 달성", req["더블달성"]),
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        req_box("트리플 달성", req["트리플달성"]),
         unsafe_allow_html=True,
     )
 
