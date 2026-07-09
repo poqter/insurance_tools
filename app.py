@@ -40,6 +40,7 @@ def show_login_notice_popup():
 
         <p style="margin-top:0;">
             멀티 도우미를 사용하기 전 아래 내용을 확인해주세요.
+            아래 "확인했습니다."를 눌러주세요.
         </p>
 
         <hr>
