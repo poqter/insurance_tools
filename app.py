@@ -24,7 +24,7 @@ def show_login_notice_popup():
 
     st.markdown(f"""
     ### {login_user}님, 로그인되었습니다. 
-    # - 제작 : 박병선 팀장
+    #### - 제작 : 박병선 팀장
 
     멀티 도우미를 사용하기 전 아래 내용을 확인해주세요.
 
