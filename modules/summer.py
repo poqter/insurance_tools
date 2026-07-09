@@ -6,7 +6,6 @@ import re
 from io import BytesIO
 
 from openpyxl import Workbook
-from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, Border, Side, PatternFill
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.worksheet.table import Table, TableStyleInfo
@@ -15,6 +14,8 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 # ── 썸머 기준 ────────────────────────────────────────────────
 MONTHLY_TARGET = 500_000
 MONTHLY_HANWHA_MIN_PREMIUM = 50_000
+
+READY_BONUS_RATES = [0, 15, 20, 25, 30]
 
 SUMMER_GRADES = [
     ("HWARANG", 15_000_000),
@@ -436,14 +437,24 @@ def get_next_grade_gap(total_amount: float):
     return None, None, 0
 
 
-def check_final_summer_requirements(july_df: pd.DataFrame, august_df: pd.DataFrame):
+def check_final_summer_requirements(
+    july_df: pd.DataFrame,
+    august_df: pd.DataFrame,
+    ready_bonus_rate: float = 0,
+):
+    """
+    1. 월별 필수조건은 보너스 전 금액 기준으로 판단
+    2. 등급 판정은 레디포썸머 보너스 반영 후 금액 기준으로 판단
+    """
     july_req = check_monthly_requirements(july_df)
     august_req = check_monthly_requirements(august_df)
 
-    total_amount = july_req["환산금액"] + august_req["환산금액"]
+    base_total_amount = july_req["환산금액"] + august_req["환산금액"]
+    bonus_amount = base_total_amount * ready_bonus_rate / 100
+    final_total_amount = base_total_amount + bonus_amount
 
-    amount_grade, grade_target = get_summer_grade(total_amount)
-    next_grade, next_target, next_gap = get_next_grade_gap(total_amount)
+    amount_grade, grade_target = get_summer_grade(final_total_amount)
+    next_grade, next_target, next_gap = get_next_grade_gap(final_total_amount)
 
     monthly_all_ok = july_req["월달성"] and august_req["월달성"]
 
@@ -456,7 +467,10 @@ def check_final_summer_requirements(july_df: pd.DataFrame, august_df: pd.DataFra
     return {
         "7월": july_req,
         "8월": august_req,
-        "합산환산금액": total_amount,
+        "기본합산환산금액": base_total_amount,
+        "레디포썸머보너스율": ready_bonus_rate,
+        "레디포썸머보너스금액": bonus_amount,
+        "합산환산금액": final_total_amount,
         "월별필수조건": monthly_all_ok,
         "금액기준등급": amount_grade,
         "최종인정등급": final_grade,
@@ -524,7 +538,21 @@ def money_box(title, value, color="#ff9800"):
     """
 
 
-def grade_box(final_grade, amount_grade, total_amount, monthly_ok):
+def bonus_box(base_amount, bonus_rate, bonus_amount, final_amount):
+    return f"""
+    <div style='border: 2px solid #6f42c1; border-radius: 10px; padding: 18px; background-color: #f3ecff; margin-bottom: 12px;'>
+        <h4 style='color:#6f42c1; margin:0 0 10px 0;'>🎁 레디포썸머 보너스 반영</h4>
+        <p style='margin:4px 0;'><strong>기본 썸머 환산업적:</strong> {base_amount:,.0f} 원</p>
+        <p style='margin:4px 0;'><strong>보너스율:</strong> {bonus_rate:.0f} %</p>
+        <p style='margin:4px 0;'><strong>보너스 가산금액:</strong> {bonus_amount:,.0f} 원</p>
+        <p style='font-size:20px; font-weight:bold; margin:10px 0 0 0; color:#6f42c1;'>
+            보너스 반영 최종 환산업적: {final_amount:,.0f} 원
+        </p>
+    </div>
+    """
+
+
+def grade_box(final_grade, amount_grade, base_amount, bonus_rate, bonus_amount, final_amount, monthly_ok):
     if final_grade == "필수조건 미충족":
         color = "#b80000"
         bg = "#fdecea"
@@ -546,9 +574,12 @@ def grade_box(final_grade, amount_grade, total_amount, monthly_ok):
     return f"""
     <div style='border: 2px solid {color}; border-radius: 12px; padding: 20px; background-color: {bg}; margin-bottom: 16px;'>
         <h3 style='color:{color}; margin:0 0 10px 0;'>최종 인정 등급: {final_grade}</h3>
-        <p style='font-size:20px; font-weight:bold; margin:0 0 8px 0;'>합산 환산업적: {total_amount:,.0f} 원</p>
-        <p style='font-weight:bold; margin:0 0 8px 0;'>금액 기준 등급: {amount_grade}</p>
-        <p style='font-weight:bold; margin:0;'>월별 필수조건: {monthly_text}</p>
+        <p style='margin:4px 0;'><strong>기본 썸머 환산업적:</strong> {base_amount:,.0f} 원</p>
+        <p style='margin:4px 0;'><strong>레디포썸머 보너스율:</strong> {bonus_rate:.0f} %</p>
+        <p style='margin:4px 0;'><strong>레디포썸머 보너스금액:</strong> {bonus_amount:,.0f} 원</p>
+        <p style='font-size:20px; font-weight:bold; margin:8px 0;'>보너스 반영 최종 환산업적: {final_amount:,.0f} 원</p>
+        <p style='font-weight:bold; margin:4px 0;'>금액 기준 등급: {amount_grade}</p>
+        <p style='font-weight:bold; margin:4px 0;'>월별 필수조건: {monthly_text}</p>
     </div>
     """
 
@@ -587,6 +618,10 @@ def req_box(title, ok):
 
 
 def make_collector_summary(july_df: pd.DataFrame, august_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    수금자별 요약은 기본 환산업적 기준으로 표시.
+    레디포썸머 보너스는 선택 수금자 화면에서 직접 선택 후 별도 반영.
+    """
     all_df = pd.concat([july_df, august_df], ignore_index=True)
 
     rows = []
@@ -604,17 +639,20 @@ def make_collector_summary(july_df: pd.DataFrame, august_df: pd.DataFrame) -> pd
             "8월한화5만",
             "8월50만",
             "8월달성",
-            "합산환산",
+            "기본합산환산",
             "월별필수조건",
-            "금액기준등급",
-            "최종인정등급",
+            "기본금액등급",
         ])
 
     for collector, sub in all_df.groupby("수금자명", dropna=False):
         july_sub = sub[sub["계약월"] == 7].copy()
         august_sub = sub[sub["계약월"] == 8].copy()
 
-        result = check_final_summer_requirements(july_sub, august_sub)
+        result = check_final_summer_requirements(
+            july_sub,
+            august_sub,
+            ready_bonus_rate=0,
+        )
 
         rows.append({
             "수금자명": collector,
@@ -628,10 +666,9 @@ def make_collector_summary(july_df: pd.DataFrame, august_df: pd.DataFrame) -> pd
             "8월한화5만": mark(result["8월"]["한화생명5만"]),
             "8월50만": mark(result["8월"]["환산50만"]),
             "8월달성": mark(result["8월"]["월달성"]),
-            "합산환산": result["합산환산금액"],
+            "기본합산환산": result["기본합산환산금액"],
             "월별필수조건": mark(result["월별필수조건"]),
-            "금액기준등급": result["금액기준등급"],
-            "최종인정등급": result["최종인정등급"],
+            "기본금액등급": result["금액기준등급"],
         })
 
     summary = pd.DataFrame(rows)
@@ -641,7 +678,7 @@ def make_collector_summary(july_df: pd.DataFrame, august_df: pd.DataFrame) -> pd
 def format_summary_for_display(summary: pd.DataFrame) -> pd.DataFrame:
     df = summary.copy()
 
-    for col in ["7월환산", "8월환산", "합산환산"]:
+    for col in ["7월환산", "8월환산", "기본합산환산"]:
         if col in df.columns:
             df[col] = df[col].map(won)
 
@@ -707,7 +744,10 @@ def write_final_result_block(ws, row, result):
         ["8월 한화생명 5만원 이상 1건", mark(result["8월"]["한화생명5만"])],
         ["8월 환산업적 50만원 이상", mark(result["8월"]["환산50만"])],
         ["8월 조건 달성", mark(result["8월"]["월달성"])],
-        ["7월+8월 합산 환산업적", won(result["합산환산금액"])],
+        ["기본 7월+8월 합산 환산업적", won(result["기본합산환산금액"])],
+        ["레디포썸머 보너스율", f"{result['레디포썸머보너스율']:.0f} %"],
+        ["레디포썸머 보너스금액", won(result["레디포썸머보너스금액"])],
+        ["보너스 반영 최종 환산업적", won(result["합산환산금액"])],
         ["월별 필수조건", mark(result["월별필수조건"])],
         ["금액 기준 등급", result["금액기준등급"]],
         ["최종 인정 등급", result["최종인정등급"]],
@@ -832,6 +872,16 @@ def run():
             """
         )
 
+        st.subheader("🎁 레디포썸머 보너스")
+        st.markdown(
+            """
+            - 수금자 선택 후 보너스율 직접 선택
+            - 선택 가능: 0%, 15%, 20%, 25%, 30%
+            - 등급 판정은 보너스 반영 후 금액 기준
+            - 월별 필수조건은 보너스 전 기준으로 판단
+            """
+        )
+
         st.subheader("🏆 최종 합산 등급")
         st.markdown(
             """
@@ -916,8 +966,12 @@ def run():
             "이 계약들은 썸머 최종 조건 계산에서는 제외하고, 엑셀에는 별도 시트로 저장합니다."
         )
 
-    # 전체 기준 결과
-    total_result = check_final_summer_requirements(july_df, august_df)
+    # 전체 기준 결과: 보너스율 0% 기준
+    total_result = check_final_summer_requirements(
+        july_df,
+        august_df,
+        ready_bonus_rate=0,
+    )
     total_summary = make_collector_summary(july_df, august_df)
 
     # 1. 제외 계약 보기 - 기본 펼침
@@ -954,14 +1008,28 @@ def run():
         key="summer_selected_collector",
     )
 
+    ready_bonus_rate = st.selectbox(
+        "🎁 레디포썸머 보너스율을 선택하세요.",
+        READY_BONUS_RATES,
+        index=0,
+        format_func=lambda x: f"{x}%",
+        key="summer_ready_bonus_rate",
+    )
+
     selected_july_df = filter_by_collector(july_df, selected_collector)
     selected_august_df = filter_by_collector(august_df, selected_collector)
     selected_other_month_df = filter_by_collector(other_month_df, selected_collector)
 
     selected_summary = make_collector_summary(selected_july_df, selected_august_df)
-    selected_result = check_final_summer_requirements(selected_july_df, selected_august_df)
+
+    selected_result = check_final_summer_requirements(
+        selected_july_df,
+        selected_august_df,
+        ready_bonus_rate=ready_bonus_rate,
+    )
 
     st.markdown(f"### 📌 선택 기준: {selected_collector}")
+    st.caption(f"레디포썸머 보너스율: {ready_bonus_rate}%")
 
     render_result_tabs(
         summary_df=selected_summary,
@@ -1030,13 +1098,29 @@ def run():
         unsafe_allow_html=True,
     )
 
-    # 5. 선택값 기준 썸머 최종 결과
+    # 5. 레디포썸머 보너스 반영 결과
+    st.subheader("🎁 레디포썸머 보너스 반영 결과")
+
+    st.markdown(
+        bonus_box(
+            selected_result["기본합산환산금액"],
+            selected_result["레디포썸머보너스율"],
+            selected_result["레디포썸머보너스금액"],
+            selected_result["합산환산금액"],
+        ),
+        unsafe_allow_html=True,
+    )
+
+    # 6. 선택값 기준 썸머 최종 결과
     st.subheader("🏆 썸머 최종 결과")
 
     st.markdown(
         grade_box(
             selected_result["최종인정등급"],
             selected_result["금액기준등급"],
+            selected_result["기본합산환산금액"],
+            selected_result["레디포썸머보너스율"],
+            selected_result["레디포썸머보너스금액"],
             selected_result["합산환산금액"],
             selected_result["월별필수조건"],
         ),
@@ -1054,7 +1138,7 @@ def run():
     else:
         st.success("🎉 최고 등급 HWARANG 기준을 달성했습니다.")
 
-    # 6. 엑셀 다운로드
+    # 7. 엑셀 다운로드
     wb = build_workbook(
         df_all=df,
         july_df=july_df,
