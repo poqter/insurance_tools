@@ -12,7 +12,7 @@ from modules import (
 )
 
 # 페이지 설정
-st.set_page_config(page_title="보험컨설팅 멀티 도우미", layout="wide")
+st.set_page_config(page_title="화랑사업부 멀티 도우미", layout="wide")
 
 
 # -----------------------------
@@ -39,7 +39,7 @@ def show_login_notice_popup():
         </div>
 
         <p style="margin-top:0;">
-            보험컨설팅 멀티 도우미를 사용하기 전 아래 내용을 확인해주세요.
+            멀티 도우미를 사용하기 전 아래 내용을 확인해주세요.
         </p>
 
         <hr>
@@ -103,7 +103,7 @@ def check_password():
     if st.session_state["password_correct"]:
         return True
 
-    st.title("🔐 보험컨설팅 멀티 도우미")
+    st.title("🔐 화랑사업부 멀티 도우미")
     st.caption("접근 권한 확인을 위해 비밀번호를 입력해주세요.")
 
     password = st.text_input("비밀번호", type="password")
@@ -254,7 +254,7 @@ if not available_apps:
 # -----------------------------
 # 🧰 사이드바 메뉴
 # -----------------------------
-st.sidebar.title("🧰 보험컨설팅 멀티 도우미")
+st.sidebar.title("🧰 화랑사업부 멀티 도우미")
 st.sidebar.caption(f"접속 계정: {login_user}")
 
 app_option = st.sidebar.radio(
