@@ -64,7 +64,7 @@ def show_login_notice_popup():
             </p>
             <p style="font-size:15px; color:#333333; margin-bottom:0;">
                 업데이트 이후 기존 비밀번호로는 접속이 제한됩니다.<br>
-                변경된 비밀번호가 필요하신 분은 박병선 팀장에게 편하게 문의해주세요.
+                변경 비밀번호는 박병선 팀장에게 편하게 문의해주세요.
             </p>
         </div>
         """,
