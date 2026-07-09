@@ -16,6 +16,46 @@ st.set_page_config(page_title="보험컨설팅 멀티 도우미", layout="wide")
 
 
 # -----------------------------
+# 🔔 로그인 후 공지 팝업
+# -----------------------------
+@st.dialog("📌 보험컨설팅 멀티 도우미 공지사항")
+def show_login_notice_popup():
+    login_user = st.session_state.get("login_user", "사용자")
+
+    st.markdown(f"""
+    ### {login_user}님, 로그인되었습니다.
+
+    보험컨설팅 멀티 도우미를 사용하기 전 아래 내용을 확인해주세요.
+
+    ---
+
+    #### ✅ 사용 전 안내사항
+
+    1. **엑셀 파일은 지정된 양식에 맞춰 업로드해주세요.**  
+       열 이름이나 순서가 다르면 일부 계산 결과가 다르게 나올 수 있습니다.
+
+    2. **계산 결과는 최종 제출 전 반드시 한 번 더 확인해주세요.**  
+       이 도구는 상담과 계산을 돕기 위한 보조 도구입니다.
+
+    3. **썸머 계산기 사용 시 수금자와 보너스율을 정확히 선택해주세요.**  
+       보너스 반영 후 금액을 기준으로 등급이 판정됩니다.
+
+    4. **PDF 표 엑셀 변환기는 원본 PDF 상태에 따라 결과가 달라질 수 있습니다.**  
+       변환 후 엑셀 내용을 확인하고 사용해주세요.
+
+    5. **고객 정보가 포함된 파일은 외부에 공유하지 않도록 주의해주세요.**
+
+    ---
+    """)
+
+    st.info("확인 버튼을 누르면 메인 화면으로 이동합니다.")
+
+    if st.button("확인했습니다", type="primary", use_container_width=True):
+        st.session_state["notice_confirmed"] = True
+        st.rerun()
+
+
+# -----------------------------
 # 🔐 여러 비밀번호 인증 + 사용자 구분
 # -----------------------------
 def check_password():
@@ -24,6 +64,9 @@ def check_password():
 
     if "login_user" not in st.session_state:
         st.session_state["login_user"] = None
+
+    if "notice_confirmed" not in st.session_state:
+        st.session_state["notice_confirmed"] = False
 
     if st.session_state["password_correct"]:
         return True
@@ -46,6 +89,10 @@ def check_password():
         if matched_user:
             st.session_state["password_correct"] = True
             st.session_state["login_user"] = matched_user
+
+            # 로그인 성공 후 공지 팝업을 다시 띄우기 위한 초기화
+            st.session_state["notice_confirmed"] = False
+
             st.rerun()
         else:
             st.error("비밀번호가 올바르지 않습니다.")
@@ -62,6 +109,13 @@ if not check_password():
 # 👤 현재 로그인 사용자
 # -----------------------------
 login_user = st.session_state.get("login_user")
+
+
+# -----------------------------
+# 🔔 로그인 후 공지 팝업 표시
+# -----------------------------
+if not st.session_state.get("notice_confirmed", False):
+    show_login_notice_popup()
 
 
 # -----------------------------
@@ -95,7 +149,7 @@ user_permissions = {
         "📊 매니저 업적 환산",
     ],
 
-    # team2용: 전체 공유 비밀번호
+    # team2용: 일부 기능 사용 가능
     "team2": [
         "📑 보장 분석 도우미",
         "💰 적금 vs 단기납 비교",
@@ -107,7 +161,7 @@ user_permissions = {
         # "📊 매니저 업적 환산",
     ],
 
-    # team3용: 전체 기능 사용 가능
+    # team3용: 일부 기능 사용 가능
     "team3": [
         "📑 보장 분석 도우미",
         "💰 적금 vs 단기납 비교",
@@ -119,7 +173,7 @@ user_permissions = {
         "📊 매니저 업적 환산",
     ],
 
-     # team4용: 전체 기능 사용 가능
+    # team4용: 일부 기능 사용 가능
     "team4": [
         "📑 보장 분석 도우미",
         "💰 적금 vs 단기납 비교",
@@ -131,7 +185,7 @@ user_permissions = {
         # "📊 매니저 업적 환산",
     ],
 
-    # team5용: 전체 기능 사용 가능
+    # team5용: 일부 기능 사용 가능
     "team5": [
         "📑 보장 분석 도우미",
         "💰 적금 vs 단기납 비교",
@@ -141,8 +195,7 @@ user_permissions = {
         # "🌞 썸머 계산기",
         # "📄 PDF 표 엑셀 변환기",
         # "📊 매니저 업적 환산",
-    ],   
-    
+    ],
 }
 
 
