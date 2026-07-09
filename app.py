@@ -63,7 +63,7 @@ def show_login_notice_popup():
                 8월 1일 기능 업데이트 및 비밀번호 변경 예정입니다.
             </p>
             <p style="font-size:15px; color:#333333; margin-bottom:0;">
-                업데이트 이후 기존 비밀번호가 변경됩니다.
+                업데이트 이후 비밀번호가 변경됩니다.
             </p>
         </div>
         """,
