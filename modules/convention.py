@@ -1,76 +1,25 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
+import os
+import re
 from io import BytesIO
+
 from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, Border, Side, PatternFill
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.worksheet.table import Table, TableStyleInfo
-import os
-import re
-import numpy as np
 
 
-# ── 전역 상수 ────────────────────────────────────────────────
-TABLE_SEQ = 0
-
-# ✅ 컨벤션 기준
+# ── 컨벤션 기준 ──────────────────────────────────────────────
 CONVENTION_TARGET = 1_800_000
 CONVENTION_MIN_COUNT = 5
 CONVENTION_HANWHA_MIN_PREMIUM = 50_000
 
-# ✅ 썸머 기준
-# 7월/8월 구분은 코드에서 하지 않음.
-# 업로드한 엑셀 1개를 해당 월 실적으로 보고 계산.
-SUMMER_TARGET = 500_000
-SUMMER_HANWHA_MIN_PREMIUM = 50_000
+TABLE_SEQ = 0
 
 
-# ── 유틸 ────────────────────────────────────────────────────
-def unique_sheet_name(wb, base, limit=31):
-    name = str(base)[:limit] if base else "Sheet"
-
-    if name not in wb.sheetnames:
-        return name
-
-    i = 2
-    while True:
-        suffix = f"_{i}"
-        trunc = limit - len(suffix)
-        cand = f"{name[:trunc]}{suffix}"
-
-        if cand not in wb.sheetnames:
-            return cand
-
-        i += 1
-
-
-def header_idx(ws, name, default=None):
-    for i in range(1, ws.max_column + 1):
-        if ws.cell(row=1, column=i).value == name:
-            return i
-
-    return default
-
-
-def safe_table_name(base: str) -> str:
-    name = re.sub(r"[^A-Za-z0-9_]", "_", str(base))
-
-    if not re.match(r"^[A-Za-z_]", name):
-        name = f"tbl_{name}"
-
-    return name[:254]
-
-
-def autosize_columns_full(ws, padding=5):
-    for column_cells in ws.columns:
-        max_len = max(
-            len(str(cell.value)) if cell.value is not None else 0
-            for cell in column_cells
-        )
-
-        ws.column_dimensions[column_cells[0].column_letter].width = max_len + padding
-
-
+# ── 기본 유틸 ────────────────────────────────────────────────
 def mark(ok: bool) -> str:
     return "✅" if ok else "❌"
 
@@ -95,7 +44,55 @@ def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-# ── 보험사 분류 함수 ─────────────────────────────────────────
+def standardize_columns(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+
+    if "계약일" in df.columns and "계약일자" not in df.columns:
+        df.rename(columns={"계약일": "계약일자"}, inplace=True)
+
+    if "초회보험료" in df.columns and "보험료" not in df.columns:
+        df.rename(columns={"초회보험료": "보험료"}, inplace=True)
+
+    return df
+
+
+def safe_table_name(base: str) -> str:
+    name = re.sub(r"[^A-Za-z0-9_]", "_", str(base))
+
+    if not re.match(r"^[A-Za-z_]", name):
+        name = f"tbl_{name}"
+
+    return name[:254]
+
+
+def unique_sheet_name(wb, base, limit=31):
+    name = str(base)[:limit] if base else "Sheet"
+
+    if name not in wb.sheetnames:
+        return name
+
+    i = 2
+    while True:
+        suffix = f"_{i}"
+        trunc = limit - len(suffix)
+        cand = f"{name[:trunc]}{suffix}"
+
+        if cand not in wb.sheetnames:
+            return cand
+
+        i += 1
+
+
+def autosize_columns_full(ws, padding=5):
+    for column_cells in ws.columns:
+        max_len = max(
+            len(str(cell.value)) if cell.value is not None else 0
+            for cell in column_cells
+        )
+        ws.column_dimensions[column_cells[0].column_letter].width = max_len + padding
+
+
+# ── 보험사 분류 ───────────────────────────────────────────────
 def is_hanwha_life_series(ins: pd.Series) -> pd.Series:
     ins = ins.astype(str).str.strip()
 
@@ -160,7 +157,7 @@ def is_heungkuk_nonlife_series(ins: pd.Series) -> pd.Series:
 
 def is_special_nonlife_series(ins: pd.Series) -> pd.Series:
     """
-    컨벤션/썸머에서 별도 우대율이 적용되는 손해보험사:
+    컨벤션 우대 손해보험사:
     흥국화재, KB손해, 한화손해, DB손해
     """
     return (
@@ -193,14 +190,11 @@ def is_other_life_series(ins: pd.Series) -> pd.Series:
     return is_life_series(ins) & ~is_hanwha_life_series(ins)
 
 
-# ── 데이터 준비 단계 ─────────────────────────────────────────
-def load_df(uploaded_file: BytesIO) -> pd.DataFrame:
-    """
-    원본 엑셀 전체 컬럼을 읽은 뒤 필요한 컬럼을 검사.
-    기존처럼 usecols를 고정하면 컬럼명이 조금만 달라도 read_excel 단계에서 오류가 날 수 있음.
-    """
+# ── 데이터 준비 ──────────────────────────────────────────────
+def load_df(uploaded_file) -> pd.DataFrame:
     df = pd.read_excel(uploaded_file)
     df = normalize_columns(df)
+    df = standardize_columns(df)
     return df
 
 
@@ -252,13 +246,7 @@ def build_excluded_with_reason(exdf: pd.DataFrame) -> pd.DataFrame:
     if exdf is None or exdf.empty:
         return pd.DataFrame(columns=base_cols)
 
-    tmp = exdf.copy()
-
-    if "계약일" in tmp.columns and "계약일자" not in tmp.columns:
-        tmp.rename(columns={"계약일": "계약일자"}, inplace=True)
-
-    if "초회보험료" in tmp.columns and "보험료" not in tmp.columns:
-        tmp.rename(columns={"초회보험료": "보험료"}, inplace=True)
+    tmp = standardize_columns(exdf.copy())
 
     def reason_row(row):
         reasons = []
@@ -267,12 +255,10 @@ def build_excluded_with_reason(exdf: pd.DataFrame) -> pd.DataFrame:
             reasons.append("일시납")
 
         product_group = str(row.get("상품군2", ""))
-
         if "연금성" in product_group or "저축성" in product_group:
             reasons.append("연금/저축성")
 
         status = str(row.get("계약상태", ""))
-
         if "철회" in status:
             reasons.append("철회")
         if "해약" in status:
@@ -301,18 +287,24 @@ def build_excluded_with_reason(exdf: pd.DataFrame) -> pd.DataFrame:
     return tmp[base_cols]
 
 
-# ── 환산율 계산 ───────────────────────────────────────────────
-def compute_rates_and_amounts(df: pd.DataFrame) -> pd.DataFrame:
-    df = df.copy()
+def check_required_columns(df: pd.DataFrame):
+    required_columns = {
+        "수금자명",
+        "계약일자",
+        "보험사",
+        "상품명",
+        "납입기간",
+        "보험료",
+    }
 
-    if "계약일" in df.columns and "계약일자" not in df.columns:
-        df.rename(columns={"계약일": "계약일자"}, inplace=True)
+    return required_columns - set(df.columns)
 
-    if "초회보험료" in df.columns and "보험료" not in df.columns:
-        df.rename(columns={"초회보험료": "보험료"}, inplace=True)
+
+# ── 컨벤션 계산 ──────────────────────────────────────────────
+def compute_convention(df: pd.DataFrame) -> pd.DataFrame:
+    df = standardize_columns(df.copy())
 
     df["계약일자_raw"] = pd.to_datetime(df["계약일자"], errors="coerce")
-
     df["보험료"] = pd.to_numeric(df["보험료"], errors="coerce").fillna(0)
     df["납입기간_num"] = pd.to_numeric(df["납입기간"], errors="coerce").fillna(0).astype(int)
 
@@ -358,60 +350,14 @@ def compute_rates_and_amounts(df: pd.DataFrame) -> pd.DataFrame:
         default=0,
     ).astype(int)
 
-    # ✅ 썸머 환산율
-    # 손해보험
-    # - 10년납 초과: 흥국/한화/KB/DB 250%, 이외 손해/화재 100%
-    # - 10년납 이하: 흥국/한화/KB/DB 100%, 이외 손해/화재 50%
-    #
-    # 생명보험
-    # - 10년납 초과: 한화생명 150%, 이외 생명보험 100%
-    # - 10년납 이하: 한화생명 100%, 이외 생명보험 50%
-    df["썸머율"] = np.select(
-        [
-            is_special_nonlife & (term > 10),
-            is_special_nonlife & (term <= 10),
-            is_other_nonlife & (term > 10),
-            is_other_nonlife & (term <= 10),
-            is_hanwha_life & (term > 10),
-            is_hanwha_life & (term <= 10),
-            is_other_life & (term > 10),
-            is_other_life & (term <= 10),
-        ],
-        [
-            250,
-            100,
-            100,
-            50,
-            150,
-            100,
-            100,
-            50,
-        ],
-        default=0,
-    ).astype(int)
-
-    # ✅ 실적보험료
     # 현재 기준: 보험료가 이미 쉐어율 반영된 값이라고 보고 그대로 사용
     df["실적보험료"] = df["보험료"]
-
-    # ✅ 컨벤션 환산금액
     df["컨벤션환산금액"] = df["실적보험료"] * df["컨벤션율"] / 100
-
-    # ✅ 썸머 환산금액
-    # 본인계약/7월/8월 구분 없이 업로드된 파일 전체를 해당 월 실적으로 계산
-    df["썸머환산금액"] = df["실적보험료"] * df["썸머율"] / 100
 
     return df
 
 
-# ── 조건 체크 ────────────────────────────────────────────────
 def check_convention_requirements(dfin: pd.DataFrame):
-    """
-    컨벤션 조건:
-    1. 환산보험료 180만원
-    2. 건수 5건
-    3. 한화생명 5만원 이상 1건
-    """
     if dfin.empty:
         return {
             "컨벤션환산금액": 0,
@@ -441,42 +387,7 @@ def check_convention_requirements(dfin: pd.DataFrame):
     }
 
 
-def check_summer_requirements(dfin: pd.DataFrame):
-    """
-    썸머 조건:
-    1. 업로드한 엑셀 기준 한화생명 5만원 이상 1건
-    2. 업로드한 엑셀 기준 썸머 환산업적 50만원 이상
-
-    7월/8월 구분은 하지 않음.
-    7월 파일, 8월 파일을 각각 따로 업로드해서 확인하는 방식.
-    """
-    if dfin.empty:
-        return {
-            "썸머환산금액": 0,
-            "한화생명5만": False,
-            "환산50만": False,
-            "전체달성": False,
-        }
-
-    summer_sum = dfin["썸머환산금액"].sum()
-
-    hanwha_ok = (
-        is_hanwha_life_series(dfin["보험사"])
-        & (pd.to_numeric(dfin["보험료"], errors="coerce").fillna(0) >= SUMMER_HANWHA_MIN_PREMIUM)
-    ).any()
-
-    amount_ok = summer_sum >= SUMMER_TARGET
-    total_ok = hanwha_ok and amount_ok
-
-    return {
-        "썸머환산금액": summer_sum,
-        "한화생명5만": hanwha_ok,
-        "환산50만": amount_ok,
-        "전체달성": total_ok,
-    }
-
-
-# ── 화면 표시용 데이터 ───────────────────────────────────────
+# ── 화면 표시 ────────────────────────────────────────────────
 def to_styled(dfin: pd.DataFrame) -> pd.DataFrame:
     df = dfin.copy()
 
@@ -489,12 +400,8 @@ def to_styled(dfin: pd.DataFrame) -> pd.DataFrame:
     df["보험료"] = df["보험료"].map(won)
     df["쉐어율"] = df["쉐어율"].apply(lambda x: pct(x) if pd.notnull(x) else "")
     df["실적보험료"] = df["실적보험료"].map(won)
-
     df["컨벤션율"] = df["컨벤션율"].map(pct)
     df["컨벤션환산금액"] = df["컨벤션환산금액"].map(won)
-
-    df["썸머율"] = df["썸머율"].map(pct)
-    df["썸머환산금액"] = df["썸머환산금액"].map(won)
 
     cols = [
         "수금자명",
@@ -507,13 +414,9 @@ def to_styled(dfin: pd.DataFrame) -> pd.DataFrame:
         "실적보험료",
         "컨벤션율",
         "컨벤션환산금액",
-        "썸머율",
-        "썸머환산금액",
     ]
 
-    available_cols = [c for c in cols if c in df.columns]
-
-    return df[available_cols]
+    return df[[c for c in cols if c in df.columns]]
 
 
 def money_box(title, value, color="#1f77b4"):
@@ -562,25 +465,18 @@ def make_group(df: pd.DataFrame) -> pd.DataFrame:
     rows = []
 
     for collector, sub in df.groupby("수금자명", dropna=False):
-        conv_req = check_convention_requirements(sub)
-        summer_req = check_summer_requirements(sub)
+        req = check_convention_requirements(sub)
 
-        row = {
+        rows.append({
             "수금자명": collector,
             "건수": len(sub),
             "실적보험료합계": sub["실적보험료"].sum(),
             "컨벤션환산합계": sub["컨벤션환산금액"].sum(),
-            "컨벤션_환산180만": mark(conv_req["환산180만"]),
-            "컨벤션_5건": mark(conv_req["건수5건"]),
-            "컨벤션_한화생명5만": mark(conv_req["한화생명5만"]),
-            "컨벤션_전체": mark(conv_req["전체달성"]),
-            "썸머환산합계": sub["썸머환산금액"].sum(),
-            "썸머_환산50만": mark(summer_req["환산50만"]),
-            "썸머_한화생명5만": mark(summer_req["한화생명5만"]),
-            "썸머_전체": mark(summer_req["전체달성"]),
-        }
-
-        rows.append(row)
+            "환산180만": mark(req["환산180만"]),
+            "5건": mark(req["건수5건"]),
+            "한화생명5만": mark(req["한화생명5만"]),
+            "전체달성": mark(req["전체달성"]),
+        })
 
     group = pd.DataFrame(rows)
 
@@ -590,14 +486,10 @@ def make_group(df: pd.DataFrame) -> pd.DataFrame:
             "건수",
             "실적보험료합계",
             "컨벤션환산합계",
-            "컨벤션_환산180만",
-            "컨벤션_5건",
-            "컨벤션_한화생명5만",
-            "컨벤션_전체",
-            "썸머환산합계",
-            "썸머_환산50만",
-            "썸머_한화생명5만",
-            "썸머_전체",
+            "환산180만",
+            "5건",
+            "한화생명5만",
+            "전체달성",
         ])
 
     return group
@@ -606,13 +498,7 @@ def make_group(df: pd.DataFrame) -> pd.DataFrame:
 def format_group_for_display(group: pd.DataFrame) -> pd.DataFrame:
     df = group.copy()
 
-    money_cols = [
-        "실적보험료합계",
-        "컨벤션환산합계",
-        "썸머환산합계",
-    ]
-
-    for col in money_cols:
+    for col in ["실적보험료합계", "컨벤션환산합계"]:
         if col in df.columns:
             df[col] = df[col].map(won)
 
@@ -651,7 +537,7 @@ def write_title(ws, row, title):
     cell.alignment = Alignment(horizontal="left", vertical="center")
 
 
-def write_convention_requirements_line(ws, base_row: int, dfin: pd.DataFrame):
+def write_requirements_line(ws, row, dfin: pd.DataFrame):
     req = check_convention_requirements(dfin)
 
     line = (
@@ -662,22 +548,7 @@ def write_convention_requirements_line(ws, base_row: int, dfin: pd.DataFrame):
         f"전체 {mark(req['전체달성'])}"
     )
 
-    cell = ws.cell(row=base_row, column=1, value=line)
-    cell.font = Font(bold=True)
-    cell.alignment = Alignment(horizontal="left", vertical="center")
-
-
-def write_summer_requirements_line(ws, base_row: int, dfin: pd.DataFrame):
-    req = check_summer_requirements(dfin)
-
-    line = (
-        f"썸머 조건: "
-        f"환산업적 {SUMMER_TARGET:,.0f}원 {mark(req['환산50만'])}  |  "
-        f"한화생명 {SUMMER_HANWHA_MIN_PREMIUM:,.0f}원 이상 1건 {mark(req['한화생명5만'])}  |  "
-        f"전체 {mark(req['전체달성'])}"
-    )
-
-    cell = ws.cell(row=base_row, column=1, value=line)
+    cell = ws.cell(row=row, column=1, value=line)
     cell.font = Font(bold=True)
     cell.alignment = Alignment(horizontal="left", vertical="center")
 
@@ -694,14 +565,11 @@ def write_totals_block(ws, dfin: pd.DataFrame, start_row: int):
 
     perf = dfin["실적보험료"].sum()
     conv = dfin["컨벤션환산금액"].sum()
-    summer = dfin["썸머환산금액"].sum()
 
     rows = [
         ["실적보험료 합계", won(perf)],
         ["컨벤션 환산 합계", won(conv)],
         ["컨벤션 목표 대비", f"{conv - CONVENTION_TARGET:,.0f} 원"],
-        ["썸머 환산 합계", won(summer)],
-        ["썸머 목표 대비", f"{summer - SUMMER_TARGET:,.0f} 원"],
     ]
 
     for i, row_data in enumerate(rows, start=start_row):
@@ -725,15 +593,11 @@ def build_workbook(df: pd.DataFrame, group: pd.DataFrame, excluded_disp_all: pd.
     ws_summary = wb.active
     ws_summary.title = "요약"
 
-    summary_fmt = format_group_for_display(group)
+    write_title(ws_summary, 1, "컨벤션 수금자별 요약")
+    next_row = write_table(ws_summary, format_group_for_display(group), start_row=2, name_suffix="SUMMARY")
 
-    write_title(ws_summary, 1, "수금자별 요약")
-    next_row = write_table(ws_summary, summary_fmt, start_row=2, name_suffix="SUMMARY")
-
-    write_convention_requirements_line(ws_summary, next_row + 2, df)
-    write_summer_requirements_line(ws_summary, next_row + 3, df)
-
-    total_next = write_totals_block(ws_summary, df, next_row + 5)
+    write_requirements_line(ws_summary, next_row + 2, df)
+    total_next = write_totals_block(ws_summary, df, next_row + 4)
 
     if not excluded_disp_all.empty:
         write_title(ws_summary, total_next + 2, "제외 계약 목록")
@@ -743,49 +607,32 @@ def build_workbook(df: pd.DataFrame, group: pd.DataFrame, excluded_disp_all: pd.
 
     for collector in collectors:
         sub = df[df["수금자명"].astype(str) == collector].copy()
-
         sheet_title = unique_sheet_name(wb, collector)
         ws = wb.create_sheet(title=sheet_title)
 
-        write_title(ws, 1, f"{collector} 환산 결과")
-
-        styled_sub = to_styled(sub)
-        table_last_row = write_table(ws, styled_sub, start_row=2, name_suffix="DETAIL")
+        write_title(ws, 1, f"{collector} 컨벤션 환산 결과")
+        table_last_row = write_table(ws, to_styled(sub), start_row=2, name_suffix="DETAIL")
 
         next_row = write_totals_block(ws, sub, table_last_row + 2)
-
-        write_convention_requirements_line(ws, next_row + 1, sub)
-        write_summer_requirements_line(ws, next_row + 2, sub)
+        write_requirements_line(ws, next_row + 1, sub)
 
         ex_sub = excluded_disp_all[
             excluded_disp_all["수금자명"].astype(str) == str(collector)
         ]
 
         if not ex_sub.empty:
-            write_title(ws, next_row + 4, "제외 계약")
-            write_table(ws, ex_sub, start_row=next_row + 5, name_suffix="EXCLUDED")
+            write_title(ws, next_row + 3, "제외 계약")
+            write_table(ws, ex_sub, start_row=next_row + 4, name_suffix="EXCLUDED")
 
     return wb
 
 
-# ── 메인 ────────────────────────────────────────────────────
+# ── 메인 실행 ────────────────────────────────────────────────
 def run():
-    st.set_page_config(page_title="보험 계약 환산기", layout="wide")
+    st.title("🏆 컨벤션 계산기")
+    st.caption("컨벤션 기준으로 보험 계약 실적을 환산합니다.")
 
     with st.sidebar:
-        st.header("🧭 사용 방법")
-        st.markdown(
-            """
-            **🖥️ 한화라이프랩 전산**  
-            **- 📂 계약관리**  
-            **- 📑 보유계약 장기**  
-            **- ⏱️ 기간 설정**  
-            **- 💾 엑셀 다운로드 후 파일 첨부**
-            """
-        )
-
-        st.divider()
-
         st.subheader("🏆 컨벤션 기준")
         st.markdown(
             f"""
@@ -795,27 +642,25 @@ def run():
             """
         )
 
-        st.subheader("🌞 썸머 기준")
         st.markdown(
-            f"""
-            - 업로드한 파일 기준 환산업적 **{SUMMER_TARGET:,.0f}원 이상**
-            - 업로드한 파일 기준 한화생명 **{SUMMER_HANWHA_MIN_PREMIUM:,.0f}원 이상 1건**
-            - 7월/8월 구분은 하지 않음
-            - 7월 파일, 8월 파일을 각각 따로 업로드해서 확인
+            """
+            **환산율**
+            - 한화생명: 150%
+            - 생명보험 10년납 미만: 50%
+            - 생명보험 10년납 이상: 100%
+            - 손해보험: 200%
+            - 흥국화재, KB손해, 한화손해, DB손해: 300%
             """
         )
 
-    st.title("📊 보험 계약 실적 환산기")
-    st.caption("컨벤션 기준과 썸머 기준을 분리 계산합니다.")
-
-    uploaded_file = st.file_uploader("📂 계약 목록 Excel 파일 업로드 (.xlsx)", type=["xlsx"])
+    uploaded_file = st.file_uploader("📂 컨벤션 계산용 Excel 파일 업로드 (.xlsx)", type=["xlsx"])
 
     if not uploaded_file:
         st.info("📤 계약 목록 Excel 파일(.xlsx)을 업로드해주세요.")
         return
 
     base_filename = os.path.splitext(uploaded_file.name)[0]
-    download_filename = f"{base_filename}_환산결과.xlsx"
+    download_filename = f"{base_filename}_컨벤션환산결과.xlsx"
 
     try:
         raw = load_df(uploaded_file)
@@ -826,22 +671,7 @@ def run():
     df_valid, excluded_df = exclude_contracts(raw)
     excluded_disp_all = build_excluded_with_reason(excluded_df)
 
-    if "계약일" in df_valid.columns and "계약일자" not in df_valid.columns:
-        df_valid.rename(columns={"계약일": "계약일자"}, inplace=True)
-
-    if "초회보험료" in df_valid.columns and "보험료" not in df_valid.columns:
-        df_valid.rename(columns={"초회보험료": "보험료"}, inplace=True)
-
-    required_columns = {
-        "수금자명",
-        "계약일자",
-        "보험사",
-        "상품명",
-        "납입기간",
-        "보험료",
-    }
-
-    missing = required_columns - set(df_valid.columns)
+    missing = check_required_columns(df_valid)
 
     if missing:
         st.error(
@@ -850,17 +680,13 @@ def run():
         )
         st.stop()
 
-    if "쉐어율" not in df_valid.columns:
-        df_valid["쉐어율"] = np.nan
-
-    df = compute_rates_and_amounts(df_valid)
+    df = compute_convention(df_valid)
 
     invalid_dates = df[df["계약일자_raw"].isna()]
 
     if not invalid_dates.empty:
         st.warning(
-            f"⚠️ {len(invalid_dates)}건의 계약일자가 날짜로 인식되지 않았습니다. "
-            "엑셀에서 `2026-07-23` 같은 날짜 형식으로 입력해주세요."
+            f"⚠️ {len(invalid_dates)}건의 계약일자가 날짜로 인식되지 않았습니다."
         )
 
     if not excluded_df.empty:
@@ -873,6 +699,7 @@ def run():
             st.dataframe(excluded_disp_all, use_container_width=True)
 
     collectors = ["전체"] + sorted(df["수금자명"].astype(str).unique().tolist())
+
     selected_collector = st.selectbox("👤 수금자명 선택", collectors, index=0)
 
     show_df = (
@@ -881,14 +708,13 @@ def run():
         else df[df["수금자명"].astype(str) == selected_collector].copy()
     )
 
-    st.subheader(f"📄 {'전체' if selected_collector == '전체' else selected_collector} 환산 결과")
+    st.subheader(f"📄 {'전체' if selected_collector == '전체' else selected_collector} 컨벤션 환산 결과")
     st.dataframe(to_styled(show_df), use_container_width=True)
 
-    # ── 컨벤션 결과 ─────────────────────────────────────────
-    st.subheader("🏆 컨벤션 결과")
+    req = check_convention_requirements(show_df)
+    conv_sum = req["컨벤션환산금액"]
 
-    conv_req = check_convention_requirements(show_df)
-    conv_sum = conv_req["컨벤션환산금액"]
+    st.subheader("🏆 컨벤션 달성 현황")
 
     st.markdown(
         money_box("컨벤션 환산보험료 합계", conv_sum),
@@ -904,74 +730,33 @@ def run():
     )
 
     st.markdown(
-        req_box(f"환산보험료 {CONVENTION_TARGET:,.0f}원 이상", conv_req["환산180만"]),
+        req_box(f"환산보험료 {CONVENTION_TARGET:,.0f}원 이상", req["환산180만"]),
         unsafe_allow_html=True,
     )
 
     st.markdown(
-        req_box(f"계약 건수 {CONVENTION_MIN_COUNT}건 이상", conv_req["건수5건"]),
+        req_box(f"계약 건수 {CONVENTION_MIN_COUNT}건 이상", req["건수5건"]),
         unsafe_allow_html=True,
     )
 
     st.markdown(
         req_box(
             f"한화생명 {CONVENTION_HANWHA_MIN_PREMIUM:,.0f}원 이상 1건",
-            conv_req["한화생명5만"],
+            req["한화생명5만"],
         ),
         unsafe_allow_html=True,
     )
 
     st.markdown(
-        req_box("컨벤션 전체 조건", conv_req["전체달성"]),
+        req_box("컨벤션 전체 조건", req["전체달성"]),
         unsafe_allow_html=True,
     )
 
-    # ── 썸머 결과 ───────────────────────────────────────────
-    st.subheader("🌞 썸머 결과")
-
-    summer_req = check_summer_requirements(show_df)
-    summer_sum = summer_req["썸머환산금액"]
-
-    st.markdown(
-        money_box("썸머 환산업적 합계", summer_sum),
-        unsafe_allow_html=True,
-    )
-
-    st.markdown(
-        gap_box(
-            f"썸머 목표 {SUMMER_TARGET:,.0f}원 대비",
-            summer_sum - SUMMER_TARGET,
-        ),
-        unsafe_allow_html=True,
-    )
-
-    st.markdown(
-        req_box(f"썸머 환산업적 {SUMMER_TARGET:,.0f}원 이상", summer_req["환산50만"]),
-        unsafe_allow_html=True,
-    )
-
-    st.markdown(
-        req_box(
-            f"한화생명 {SUMMER_HANWHA_MIN_PREMIUM:,.0f}원 이상 1건",
-            summer_req["한화생명5만"],
-        ),
-        unsafe_allow_html=True,
-    )
-
-    st.markdown(
-        req_box("썸머 전체 조건", summer_req["전체달성"]),
-        unsafe_allow_html=True,
-    )
-
-    # ── 수금자별 요약 ───────────────────────────────────────
     st.subheader("🧮 수금자명별 요약")
 
     group = make_group(df)
-    disp_group = format_group_for_display(group)
+    st.dataframe(format_group_for_display(group), use_container_width=True)
 
-    st.dataframe(disp_group, use_container_width=True)
-
-    # ── 엑셀 생성 및 다운로드 ───────────────────────────────
     wb = build_workbook(df, group, excluded_disp_all)
 
     excel_output = BytesIO()
@@ -979,12 +764,8 @@ def run():
     excel_output.seek(0)
 
     st.download_button(
-        label="📥 환산 결과 엑셀 다운로드",
+        label="📥 컨벤션 환산 결과 엑셀 다운로드",
         data=excel_output,
         file_name=download_filename,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
-
-
-if __name__ == "__main__":
-    run()
