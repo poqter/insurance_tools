@@ -25,18 +25,41 @@ def show_login_notice_popup():
     st.markdown(f"""
     ### {login_user}님, 로그인되었습니다.
 
-    화랑사업부 멀티 도우미를 사용하기 전 아래 내용을 확인해주세요.
+    보험컨설팅 멀티 도우미를 사용하기 전 아래 내용을 확인해주세요.
 
     ---
+    """)
+    
+    st.markdown(
+        """
+        <div style="
+            background-color:#fff1f1;
+            border:2px solid #ff4b4b;
+            border-radius:12px;
+            padding:16px;
+            margin-bottom:18px;
+        ">
+            <h4 style="color:#d00000; margin-top:0;">
+                🚨 중요 공지
+            </h4>
+            <p style="font-size:18px; color:#d00000; font-weight:700; margin-bottom:4px;">
+                8월 1일 내부 기능 업데이트 및 비밀번호 변경 예정입니다.
+            </p>
+            <p style="font-size:15px; color:#333333; margin-bottom:0;">
+                업데이트 이후 기존 비밀번호가 변경될 수 있으니 반드시 확인해주세요.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
+    st.markdown("""
     #### ✅ 사용 전 안내사항
 
-    1. 8월 1일 내부 기능 업데이트 및 비밀번호 변경 예정입니다. 꼭 확인 해주세요.
-
-    2. **컨벤션 계산기는 아직 테스트 중입니다.**  
+    1. **컨벤션 계산기는 아직 테스트 중입니다.**  
        이 도구는 상담과 계산을 돕기 위한 보조 도구입니다.
 
-    3. **썸머 계산기 사용 시 수금자와 보너스율을 정확히 선택해주세요.**  
+    2. **썸머 계산기 사용 시 수금자와 보너스율을 정확히 선택해주세요.**  
        보너스 반영 후 금액을 기준으로 등급이 판정됩니다.
 
     ---
