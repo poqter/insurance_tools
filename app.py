@@ -29,11 +29,10 @@ def show_login_notice_popup():
         </h3>
         <div style="
             text-align:right;
-            font-size:13px;
-            color:#777777;
-            margin-top:-6px;
+            font-size:14px;
+            color:#666666;
+            margin-top:-4px;
             margin-bottom:18px;
-            font-weight:600;
         ">
             제작 : 박병선 팀장
         </div>
