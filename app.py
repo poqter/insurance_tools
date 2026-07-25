@@ -9,6 +9,7 @@ from modules import (
     summer,
     manager_results,
     pdf_converter,
+    inheritance_tax,
 )
 
 # 페이지 설정
@@ -171,6 +172,7 @@ all_apps = {
     "🌞 썸머 계산기": summer.run,
     "📊 매니저 업적 환산": manager_results.run,
     "📄 PDF 표 엑셀 변환기": pdf_converter.run,
+    "🧾 상속세 계산기": inheritance_tax.run,
 }
 
 
@@ -188,6 +190,7 @@ user_permissions = {
         "🌞 썸머 계산기",
         "📄 PDF 표 엑셀 변환기",
         "📊 매니저 업적 환산",
+        "🧾 상속세 계산기",
     ],
 
     # team2용: 일부 기능 사용 가능
@@ -200,6 +203,7 @@ user_permissions = {
         "🌞 썸머 계산기",
         # "📄 PDF 표 엑셀 변환기",
         # "📊 매니저 업적 환산",
+        "🧾 상속세 계산기",
     ],
 
     # team3용: 일부 기능 사용 가능
@@ -212,6 +216,7 @@ user_permissions = {
         "🌞 썸머 계산기",
         # "📄 PDF 표 엑셀 변환기",
         "📊 매니저 업적 환산",
+        "🧾 상속세 계산기",
     ],
 
     # team4용: 일부 기능 사용 가능
@@ -224,6 +229,7 @@ user_permissions = {
         # "🌞 썸머 계산기",
         # "📄 PDF 표 엑셀 변환기",
         # "📊 매니저 업적 환산",
+        "🧾 상속세 계산기",
     ],
 
     # team5용: 일부 기능 사용 가능
@@ -236,6 +242,7 @@ user_permissions = {
         # "🌞 썸머 계산기",
         # "📄 PDF 표 엑셀 변환기",
         # "📊 매니저 업적 환산",
+        "🧾 상속세 계산기",
     ],
 }
 
