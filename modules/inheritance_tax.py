@@ -1,9 +1,18 @@
 import streamlit as st
 from dataclasses import dataclass
+from datetime import datetime
+from io import BytesIO
 from typing import Any, Dict, Tuple
 
+try:
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
+except ImportError:  # 엑셀 다운로드 기능은 openpyxl 설치 후 활성화됩니다.
+    Workbook = None
+
 EOK = 10_000  # 내부 계산 단위: 만원
-UI_VERSION = "2026-07-full-ui-v1"
+UI_VERSION = "2026-07-consulting-report-v2"
 
 
 # -----------------------------------------------------------------------------
@@ -470,6 +479,419 @@ def render_result_interpretation(tax_due: float, liquid_funds: float) -> None:
         )
 
 
+
+# -----------------------------------------------------------------------------
+# 결과 카드·엑셀 상담 보고서
+# -----------------------------------------------------------------------------
+NAVY = "17365D"
+BLUE = "DCE6F1"
+LIGHT_BLUE = "EEF4FA"
+GREEN = "2E7D32"
+LIGHT_GREEN = "EAF4EA"
+RED = "B42318"
+LIGHT_RED = "FDECEC"
+ORANGE = "B54708"
+LIGHT_ORANGE = "FFF4E5"
+GRAY = "667085"
+LIGHT_GRAY = "F2F4F7"
+WHITE = "FFFFFF"
+BORDER_GRAY = "D0D5DD"
+
+
+def result_card(title: str, value: str, caption: str, tone: str = "blue") -> None:
+    tones = {
+        "blue": ("#EEF4FA", "#17365D", "#B8CCE4"),
+        "green": ("#EAF4EA", "#2E7D32", "#A9D3AB"),
+        "red": ("#FDECEC", "#B42318", "#F0B4AE"),
+        "gray": ("#F2F4F7", "#344054", "#D0D5DD"),
+    }
+    bg, fg, border = tones.get(tone, tones["blue"])
+    st.markdown(
+        f"""
+        <div style="background:{bg};border:1px solid {border};border-radius:14px;
+                    padding:18px 18px 16px 18px;min-height:148px;">
+          <div style="font-size:0.93rem;color:#667085;font-weight:700;">{title}</div>
+          <div style="font-size:1.75rem;color:{fg};font-weight:800;line-height:1.25;margin-top:10px;">{value}</div>
+          <div style="font-size:0.84rem;color:#667085;margin-top:10px;line-height:1.45;">{caption}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def flow_card(title: str, value: str, subtitle: str = "") -> None:
+    st.markdown(
+        f"""
+        <div style="border:1px solid #D0D5DD;border-radius:12px;padding:13px 12px;background:#FFFFFF;text-align:center;min-height:112px;">
+          <div style="font-size:0.82rem;color:#667085;font-weight:700;">{title}</div>
+          <div style="font-size:1.22rem;color:#17365D;font-weight:800;margin-top:8px;">{value}</div>
+          <div style="font-size:0.75rem;color:#98A2B3;margin-top:6px;">{subtitle}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _excel_title(ws, title: str, subtitle: str, end_col: int = 8) -> None:
+    ws.sheet_view.showGridLines = False
+    ws.merge_cells(start_row=2, start_column=2, end_row=3, end_column=end_col)
+    cell = ws.cell(2, 2, title)
+    cell.font = Font(name="맑은 고딕", size=21, bold=True, color=NAVY)
+    cell.alignment = Alignment(horizontal="left", vertical="center")
+    ws.merge_cells(start_row=4, start_column=2, end_row=4, end_column=end_col)
+    sub = ws.cell(4, 2, subtitle)
+    sub.font = Font(name="맑은 고딕", size=9, color=GRAY)
+    sub.alignment = Alignment(horizontal="left")
+    ws.row_dimensions[2].height = 27
+    ws.row_dimensions[3].height = 10
+
+
+def _style_range(ws, cell_range: str, *, fill=None, font=None, border=None, alignment=None) -> None:
+    for row in ws[cell_range]:
+        for cell in row:
+            if fill is not None:
+                cell.fill = fill
+            if font is not None:
+                cell.font = font
+            if border is not None:
+                cell.border = border
+            if alignment is not None:
+                cell.alignment = alignment
+
+
+def _write_section_title(ws, row: int, title: str, start_col: int = 2, end_col: int = 8) -> None:
+    ws.merge_cells(start_row=row, start_column=start_col, end_row=row, end_column=end_col)
+    c = ws.cell(row, start_col, title)
+    c.font = Font(name="맑은 고딕", size=12, bold=True, color=WHITE)
+    c.fill = PatternFill("solid", fgColor=NAVY)
+    c.alignment = Alignment(horizontal="left", vertical="center")
+    ws.row_dimensions[row].height = 23
+
+
+def _write_table(ws, start_row: int, headers: list[str], rows: list[list[Any]], widths: list[float]) -> int:
+    thin = Side(style="thin", color=BORDER_GRAY)
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    for index, header in enumerate(headers, start=2):
+        c = ws.cell(start_row, index, header)
+        c.font = Font(name="맑은 고딕", size=10, bold=True, color=WHITE)
+        c.fill = PatternFill("solid", fgColor=NAVY)
+        c.alignment = Alignment(horizontal="center", vertical="center")
+        c.border = border
+    for r_offset, row_data in enumerate(rows, start=1):
+        for c_offset, value in enumerate(row_data, start=2):
+            c = ws.cell(start_row + r_offset, c_offset, value)
+            c.font = Font(name="맑은 고딕", size=10, color="344054")
+            c.fill = PatternFill("solid", fgColor=WHITE if r_offset % 2 else "F8FAFC")
+            c.alignment = Alignment(
+                horizontal="right" if c_offset == 4 and len(headers) >= 3 else "left",
+                vertical="center",
+                wrap_text=True,
+            )
+            c.border = border
+        ws.row_dimensions[start_row + r_offset].height = 22
+    for idx, width in enumerate(widths, start=2):
+        ws.column_dimensions[get_column_letter(idx)].width = width
+    return start_row + len(rows)
+
+
+def build_excel_report(
+    result: Result,
+    input_data: Dict[str, Any],
+    available_cash: float,
+    death_benefit: float,
+    other_liquidity: float,
+) -> bytes:
+    """현재 계산 결과를 서식이 적용된 4개 시트 엑셀 보고서로 만든다."""
+    if Workbook is None:
+        raise RuntimeError("openpyxl이 설치되어 있지 않습니다. 'pip install openpyxl'을 실행해 주세요.")
+
+    liquid_funds = max(0, available_cash) + max(0, death_benefit) + max(0, other_liquidity)
+    tax_due = result.estimated_tax_due
+    gap = liquid_funds - tax_due
+    ratio = liquid_funds / tax_due if tax_due > 0 else None
+    restricted = max(0, result.deduction_before_limit - result.allowed_deduction)
+
+    wb = Workbook()
+    wb.remove(wb.active)
+    thin = Side(style="thin", color=BORDER_GRAY)
+    medium = Side(style="medium", color=NAVY)
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    # 1. 한눈에 보는 결과
+    ws = wb.create_sheet("한눈에 보는 결과")
+    _excel_title(ws, "상속세 예상 계산 결과", "상담 및 사전 검토용 | 제작일 2026년 07월 | 제작자 박병선 팀장")
+    for col, width in {"A": 3, "B": 18, "C": 18, "D": 4, "E": 18, "F": 18, "G": 4, "H": 18, "I": 18}.items():
+        ws.column_dimensions[col].width = width
+
+    cards = [
+        (2, 5, 3, "예상 상속세", won_text(tax_due), LIGHT_BLUE, NAVY),
+        (5, 5, 6, "준비된 납부재원", won_text(liquid_funds), LIGHT_GREEN, GREEN),
+        (8, 5, 9, "예상 부족액" if gap < 0 else "예상 여유액", won_text(abs(gap)), LIGHT_RED if gap < 0 else LIGHT_GREEN, RED if gap < 0 else GREEN),
+    ]
+    for start_col, start_row, end_col, label, value, fill_color, font_color in cards:
+        ws.merge_cells(start_row=start_row, start_column=start_col, end_row=start_row, end_column=end_col)
+        ws.merge_cells(start_row=start_row + 1, start_column=start_col, end_row=start_row + 2, end_column=end_col)
+        label_cell = ws.cell(start_row, start_col, label)
+        label_cell.font = Font(name="맑은 고딕", size=10, bold=True, color=GRAY)
+        label_cell.fill = PatternFill("solid", fgColor=fill_color)
+        label_cell.alignment = Alignment(horizontal="center", vertical="center")
+        value_cell = ws.cell(start_row + 1, start_col, value)
+        value_cell.font = Font(name="맑은 고딕", size=19 if start_col < 8 else 21, bold=True, color=font_color)
+        value_cell.fill = PatternFill("solid", fgColor=fill_color)
+        value_cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        _style_range(ws, f"{get_column_letter(start_col)}{start_row}:{get_column_letter(end_col)}{start_row+2}", border=Border(left=medium, right=medium, top=medium, bottom=medium))
+    for r in range(5, 8):
+        ws.row_dimensions[r].height = 27
+
+    ws.merge_cells("B9:I10")
+    status = (
+        f"예상 상속세 대비 납부재원이 {won_text(abs(gap))} 부족합니다."
+        if gap < 0 else
+        f"예상 상속세 납부 후 {won_text(gap)}의 자금 여유가 예상됩니다."
+    )
+    if tax_due <= 0:
+        status = "현재 입력 기준 예상 상속세가 발생하지 않습니다."
+    c = ws["B9"]
+    c.value = status
+    c.font = Font(name="맑은 고딕", size=13, bold=True, color=RED if gap < 0 else GREEN)
+    c.fill = PatternFill("solid", fgColor=LIGHT_RED if gap < 0 else LIGHT_GREEN)
+    c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    c.border = border
+    ws.row_dimensions[9].height = 27
+    ws.row_dimensions[10].height = 14
+
+    _write_section_title(ws, 12, "계산 흐름", 2, 9)
+    flow = [
+        ("총상속재산", won_text(result.gross_estate)),
+        ("공제 전 과세대상 재산", won_text(result.taxable_estate)),
+        ("최종 적용 공제액", won_text(result.allowed_deduction)),
+        ("세율이 적용되는 금액", won_text(result.tax_base)),
+        ("예상 상속세", won_text(tax_due)),
+    ]
+    columns = [(2,3), (4,5), (6,7), (8,9), (10,11)]
+    for idx, (label, value) in enumerate(flow):
+        if idx >= 4:
+            sc, ec = 8, 9
+            row = 17
+        else:
+            sc, ec = columns[idx]
+            row = 13
+        ws.merge_cells(start_row=row, start_column=sc, end_row=row, end_column=ec)
+        ws.merge_cells(start_row=row+1, start_column=sc, end_row=row+2, end_column=ec)
+        ws.cell(row, sc, label).font = Font(name="맑은 고딕", size=9, bold=True, color=GRAY)
+        ws.cell(row, sc).alignment = Alignment(horizontal="center", vertical="center")
+        ws.cell(row+1, sc, value).font = Font(name="맑은 고딕", size=14, bold=True, color=NAVY)
+        ws.cell(row+1, sc).alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        _style_range(ws, f"{get_column_letter(sc)}{row}:{get_column_letter(ec)}{row+2}", fill=PatternFill("solid", fgColor=WHITE), border=border)
+    ws.merge_cells("B17:G19")
+    ws["B17"] = f"납부재원 충족률\n{ratio:.1%}" if ratio is not None else "납부재원 충족률\n해당 없음"
+    ws["B17"].font = Font(name="맑은 고딕", size=15, bold=True, color=GREEN if gap >= 0 else ORANGE)
+    ws["B17"].fill = PatternFill("solid", fgColor=LIGHT_GREEN if gap >= 0 else LIGHT_ORANGE)
+    ws["B17"].alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    ws["B17"].border = border
+
+    _write_section_title(ws, 21, "납부재원 구성", 2, 9)
+    funding_rows = [
+        ["현금·예금", won_text(available_cash)],
+        ["사망보험금", won_text(death_benefit)],
+        ["기타 즉시 사용 가능 자금", won_text(other_liquidity)],
+        ["총 납부재원", won_text(liquid_funds)],
+    ]
+    end = _write_table(ws, 22, ["납부재원 구분", "금액"], funding_rows, [34, 28])
+    for cell in ws[end][1:3]:
+        cell.font = Font(name="맑은 고딕", size=11, bold=True, color=NAVY)
+        cell.fill = PatternFill("solid", fgColor=LIGHT_BLUE)
+    ws.freeze_panes = "B5"
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 1
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.print_area = "B2:I27"
+    ws.sheet_view.zoomScale = 90
+
+    # 2. 상속공제 상세
+    ws = wb.create_sheet("상속공제 상세")
+    _excel_title(ws, "상속공제 상세", "현재 입력 기준 계산 반영 내역이며 실제 요건 충족 여부는 별도 확인이 필요합니다.")
+    _write_section_title(ws, 6, "공제 항목별 구성", 2, 8)
+    deduction_items = [
+        ("일괄·인적공제", result.personal_or_lump, "선택한 공제 방식에 따른 계산금액"),
+        ("배우자공제", result.spouse_deduction, "실제 상속금액과 법정상속지분 반영"),
+        ("금융재산공제", result.financial_deduction, "순금융재산 기준"),
+        ("동거주택공제", result.home_deduction, "입력한 공제대상 주택가액 기준"),
+        ("기타 공제", result.other_deduction, "가업·영농 등 입력금액"),
+    ]
+    deduction_rows = [[name, "계산 반영" if amount > 0 else "입력 없음", won_text(amount), desc] for name, amount, desc in deduction_items]
+    end = _write_table(ws, 7, ["공제 항목", "현재 계산 상태", "계산 금액", "설명"], deduction_rows, [24, 17, 22, 43])
+    for row in range(8, end + 1):
+        status_cell = ws.cell(row, 3)
+        if status_cell.value == "계산 반영":
+            status_cell.font = Font(name="맑은 고딕", size=10, bold=True, color=GREEN)
+            status_cell.fill = PatternFill("solid", fgColor=LIGHT_GREEN)
+        else:
+            status_cell.font = Font(name="맑은 고딕", size=10, color=GRAY)
+            status_cell.fill = PatternFill("solid", fgColor=LIGHT_GRAY)
+
+    summary_row = end + 3
+    _write_section_title(ws, summary_row, "공제한도 적용 결과", 2, 8)
+    summaries = [
+        ("한도 적용 전 공제 합계", result.deduction_before_limit, LIGHT_BLUE, NAVY),
+        ("실제 적용 가능한 공제 한도", result.deduction_limit, LIGHT_GRAY, "344054"),
+        ("최종 적용 공제액", result.allowed_deduction, LIGHT_GREEN, GREEN),
+        ("한도로 인해 제한된 금액", restricted, LIGHT_RED if restricted > 0 else LIGHT_GREEN, RED if restricted > 0 else GREEN),
+    ]
+    for i, (label, amount, fill_color, font_color) in enumerate(summaries):
+        row = summary_row + 2 + i * 2
+        ws.merge_cells(start_row=row, start_column=2, end_row=row, end_column=4)
+        ws.merge_cells(start_row=row, start_column=5, end_row=row, end_column=8)
+        ws.cell(row, 2, label).font = Font(name="맑은 고딕", size=10, bold=True, color=GRAY)
+        ws.cell(row, 2).fill = PatternFill("solid", fgColor=fill_color)
+        ws.cell(row, 2).alignment = Alignment(horizontal="left", vertical="center")
+        ws.cell(row, 5, won_text(amount)).font = Font(name="맑은 고딕", size=14 if i >= 2 else 12, bold=True, color=font_color)
+        ws.cell(row, 5).fill = PatternFill("solid", fgColor=fill_color)
+        ws.cell(row, 5).alignment = Alignment(horizontal="right", vertical="center")
+        _style_range(ws, f"B{row}:H{row}", border=border)
+        ws.row_dimensions[row].height = 26
+    note_row = summary_row + 11
+    ws.merge_cells(start_row=note_row, start_column=2, end_row=note_row+1, end_column=8)
+    note = (
+        f"계산된 공제 합계는 {won_text(result.deduction_before_limit)}이나, 공제 종합한도에 따라 "
+        f"{won_text(result.allowed_deduction)}이 최종 적용되었습니다."
+        if restricted > 0 else
+        f"계산된 공제 합계 {won_text(result.deduction_before_limit)}이 한도 내에서 전액 적용되었습니다."
+    )
+    ws.cell(note_row, 2, note).font = Font(name="맑은 고딕", size=10, bold=True, color=ORANGE if restricted > 0 else GREEN)
+    ws.cell(note_row, 2).fill = PatternFill("solid", fgColor=LIGHT_ORANGE if restricted > 0 else LIGHT_GREEN)
+    ws.cell(note_row, 2).alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    ws.cell(note_row, 2).border = border
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.fitToWidth = 1
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.print_area = f"B2:H{note_row+1}"
+
+    # 3. 세액 계산 상세
+    ws = wb.create_sheet("세액 계산 상세")
+    _excel_title(ws, "세액 계산 상세", "재산에서 예상 납부세액까지의 계산 흐름")
+    _write_section_title(ws, 6, "세액 계산 단계", 2, 7)
+    expenses = max(0, input_data["public_dues"]) + max(0, input_data["funeral_expense"]) + max(0, input_data["liabilities"])
+    gifts = max(0, input_data["prior_gifts_heirs"]) + max(0, input_data["prior_gifts_non_heirs"])
+    tax_rows = [
+        ["총상속재산", "기준", won_text(result.gross_estate), "상속재산 + 추정·간주상속재산"],
+        ["비과세 재산", "차감", won_text(input_data["non_taxable"]), "과세가액에서 제외"],
+        ["공과금·장례비용·채무", "차감", won_text(expenses), "과세가액에서 차감"],
+        ["사전증여재산", "가산", won_text(gifts), "상속인 10년·상속인 외 5년 내 증여"],
+        ["상속세 과세가액", "중간결과", won_text(result.taxable_estate), "공제 전 과세대상 재산"],
+        ["최종 적용 공제액", "차감", won_text(result.allowed_deduction), "공제 종합한도 반영"],
+        ["감정평가수수료", "차감", won_text(input_data["appraisal_fee"]), "과세표준 계산 시 차감"],
+        ["과세표준", "중간결과", won_text(result.tax_base), "세율이 적용되는 금액"],
+        ["적용세율", "세액계산", f"{result.rate:.0%}", "과세표준 구간별 누진세율"],
+        ["누진공제", "차감", won_text(result.progressive_deduction), "세율 적용 후 차감"],
+        ["산출세액", "중간결과", won_text(result.calculated_tax), "과세표준 × 세율 − 누진공제"],
+        ["세대생략 할증", "가산", won_text(result.generation_skip_surcharge), "해당되는 경우 가산"],
+        ["증여세액·기타 세액공제", "차감", won_text(result.tax_credits), "산출세액에서 차감"],
+        ["신고세액공제", "차감", won_text(result.filing_credit), "기한 내 신고 가정"],
+        ["예상 납부세액", "최종결과", won_text(result.estimated_tax_due), "현재 입력 기준 최종 예상치"],
+    ]
+    end = _write_table(ws, 7, ["계산 단계", "구분", "금액", "설명"], tax_rows, [28, 16, 25, 45])
+    color_map = {
+        "가산": (LIGHT_ORANGE, ORANGE),
+        "차감": (LIGHT_BLUE, NAVY),
+        "중간결과": (LIGHT_GRAY, "344054"),
+        "세액계산": (LIGHT_GREEN, GREEN),
+        "최종결과": (NAVY, WHITE),
+    }
+    for row in range(8, end + 1):
+        kind = ws.cell(row, 3).value
+        if kind in color_map:
+            fill_color, font_color = color_map[kind]
+            for col in range(2, 6):
+                ws.cell(row, col).fill = PatternFill("solid", fgColor=fill_color)
+                ws.cell(row, col).font = Font(name="맑은 고딕", size=11 if kind == "최종결과" else 10, bold=kind in {"중간결과", "최종결과"}, color=font_color)
+    ws.page_setup.orientation = "landscape"
+    ws.page_setup.fitToWidth = 1
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.print_area = f"B2:E{end}"
+
+    # 4. 입력 내역
+    ws = wb.create_sheet("입력 내역")
+    _excel_title(ws, "입력 내역", "계산 시 사용된 원본 입력값 기록")
+    sections = [
+        ("기본 재산", [
+            ("상속재산가액", input_data["gross_estate"]),
+            ("추정·간주상속재산", input_data["deemed_estate"]),
+            ("비과세·과세가액 불산입액", input_data["non_taxable"]),
+            ("공과금", input_data["public_dues"]),
+            ("공제대상 장례비용", input_data["funeral_expense"]),
+            ("피상속인 채무", input_data["liabilities"]),
+            ("10년 이내 상속인 증여재산", input_data["prior_gifts_heirs"]),
+            ("5년 이내 상속인 외 증여재산", input_data["prior_gifts_non_heirs"]),
+        ]),
+        ("상속인·공제", [
+            ("공제 방식", "일괄·인적 비교" if input_data["lump_mode"] else "기초공제 + 인적공제"),
+            ("자녀 수", input_data["children_count"]),
+            ("65세 이상 연로자 수", input_data["elderly_count"]),
+            ("배우자 생존 여부", "예" if input_data["spouse_exists"] else "아니오"),
+            ("배우자 실제 상속금액", input_data["spouse_actual_inheritance"]),
+            ("배우자 법정상속지분", input_data["spouse_share"]),
+            ("순금융재산가액", input_data["net_financial_assets"]),
+            ("공제대상 동거주택가액", input_data["cohabiting_home_value"]),
+            ("기타 공제", input_data["other_deduction"]),
+        ]),
+        ("고급 입력", [
+            ("감정평가수수료 공제액", input_data["appraisal_fee"]),
+            ("상속인 아닌 자에 대한 유증 등", input_data["non_heir_bequest"]),
+            ("상속포기로 다음 순위가 받은 재산", input_data["inheritance_waiver_next_rank"]),
+            ("공제한도 차감 사전증여 과세표준", input_data["prior_gift_tax_base_for_limit"]),
+            ("세대를 건너뛴 상속재산가액", input_data["generation_skip_amount"]),
+            ("증여세액공제", input_data["gift_tax_credit"]),
+            ("기타 세액공제", input_data["other_tax_credit"]),
+            ("신고세액공제 적용", "예" if input_data["apply_filing_credit"] else "아니오"),
+        ]),
+        ("납부재원", [
+            ("현금·예금", available_cash),
+            ("사망보험금", death_benefit),
+            ("기타 즉시 사용 가능 자금", other_liquidity),
+            ("총 납부재원", liquid_funds),
+        ]),
+    ]
+    current_row = 6
+    money_labels = {label for _, items in sections for label, value in items if isinstance(value, (int, float)) and "수" not in label and "지분" not in label}
+    for section, items in sections:
+        _write_section_title(ws, current_row, section, 2, 6)
+        current_row += 1
+        for label, value in items:
+            ws.merge_cells(start_row=current_row, start_column=2, end_row=current_row, end_column=3)
+            ws.merge_cells(start_row=current_row, start_column=4, end_row=current_row, end_column=6)
+            ws.cell(current_row, 2, label).font = Font(name="맑은 고딕", size=10, bold=True, color="344054")
+            ws.cell(current_row, 2).fill = PatternFill("solid", fgColor=LIGHT_GRAY)
+            display = won_text(value) if label in money_labels and isinstance(value, (int, float)) else value
+            ws.cell(current_row, 4, display).font = Font(name="맑은 고딕", size=10, color=NAVY)
+            ws.cell(current_row, 4).fill = PatternFill("solid", fgColor=WHITE)
+            ws.cell(current_row, 4).alignment = Alignment(horizontal="right", vertical="center")
+            _style_range(ws, f"B{current_row}:F{current_row}", border=border)
+            current_row += 1
+        current_row += 1
+    for col, width in {"A":3, "B":22, "C":12, "D":18, "E":12, "F":18}.items():
+        ws.column_dimensions[col].width = width
+    ws.page_setup.orientation = "portrait"
+    ws.page_setup.fitToWidth = 1
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.print_area = f"B2:F{current_row}"
+
+    for sheet in wb.worksheets:
+        sheet.sheet_properties.pageSetUpPr.fitToPage = True
+        sheet.page_margins.left = 0.25
+        sheet.page_margins.right = 0.25
+        sheet.page_margins.top = 0.4
+        sheet.page_margins.bottom = 0.4
+        sheet.oddFooter.center.text = "상담용 예상치이며 실제 신고 전 별도 검토가 필요합니다."
+        sheet.oddFooter.center.size = 8
+        sheet.oddFooter.center.color = GRAY
+
+    buffer = BytesIO()
+    wb.save(buffer)
+    return buffer.getvalue()
+
+
 # -----------------------------------------------------------------------------
 # Streamlit 화면
 # -----------------------------------------------------------------------------
@@ -695,125 +1117,188 @@ def run():
     funding_gap = liquid_funds - tax_due
 
     st.divider()
-    st.subheader("핵심 결과")
-    r1, r2, r3, r4 = st.columns(4)
-    r1.metric("총상속재산", won_text(result.gross_estate))
-    r2.metric("상속세 과세가액", won_text(result.taxable_estate))
-    r3.metric("실제 상속공제", won_text(result.allowed_deduction))
-    r4.metric("예상 납부세액", won_text(tax_due))
+    st.subheader("한눈에 보는 결과")
+    st.caption("먼저 결론을 확인하고, 필요한 경우 아래 상세 계산을 펼쳐보세요.")
 
-    st.markdown("### 납부재원 분석")
-    f1, f2, f3 = st.columns(3)
-    f1.metric("예상 상속세", won_text(tax_due))
-    f2.metric("준비된 납부재원", won_text(liquid_funds))
-    if funding_gap < 0:
-        f3.metric("예상 부족액", won_text(abs(funding_gap)))
-    else:
-        f3.metric("예상 여유액", won_text(funding_gap))
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        result_card("예상 상속세", won_text(tax_due), "현재 입력값을 기준으로 계산한 예상 납부세액입니다.", "blue")
+    with c2:
+        result_card("준비된 납부재원", won_text(liquid_funds), "현금·예금, 사망보험금과 기타 즉시 사용 가능 자금의 합계입니다.", "green")
+    with c3:
+        if tax_due <= 0:
+            result_card("납부재원 상태", "예상세액 없음", "현재 입력 기준 납부할 상속세가 계산되지 않았습니다.", "gray")
+        elif funding_gap < 0:
+            result_card("예상 부족액", won_text(abs(funding_gap)), "예상 상속세 대비 즉시 사용할 수 있는 납부재원이 부족합니다.", "red")
+        else:
+            result_card("예상 여유액", won_text(funding_gap), "예상 상속세를 납부한 뒤 남는 현금성 재원입니다.", "green")
 
     if tax_due > 0:
         funding_ratio = liquid_funds / tax_due
-        st.write(f"**납부재원 충족률: {funding_ratio:.1%}**")
+        shortage_ratio = max(0.0, 1.0 - funding_ratio)
+        st.markdown(f"**납부재원 충족률 {funding_ratio:.1%}**")
         st.progress(min(1.0, max(0.0, funding_ratio)))
+        if funding_gap < 0:
+            st.caption(f"예상 상속세의 약 **{shortage_ratio:.1%}가 부족**합니다.")
+        else:
+            st.caption("현재 입력 기준으로 예상 상속세 납부재원이 충족됩니다.")
     else:
-        st.write("**납부재원 충족률:** 예상 상속세가 없어 별도로 계산하지 않습니다.")
+        funding_ratio = None
+        st.caption("예상 상속세가 없어 납부재원 충족률을 계산하지 않습니다.")
 
     render_result_interpretation(tax_due, liquid_funds)
+
+    st.markdown("### 계산 흐름")
+    flow_cols = st.columns([1, 0.12, 1, 0.12, 1, 0.12, 1])
+    with flow_cols[0]:
+        flow_card("총상속재산", won_text(result.gross_estate), "상속재산 + 간주재산")
+    with flow_cols[1]:
+        st.markdown("<div style='text-align:center;padding-top:38px;font-size:1.5rem;color:#98A2B3;'>→</div>", unsafe_allow_html=True)
+    with flow_cols[2]:
+        flow_card("공제 전 과세대상 재산", won_text(result.taxable_estate), "상속세 과세가액")
+    with flow_cols[3]:
+        st.markdown("<div style='text-align:center;padding-top:38px;font-size:1.5rem;color:#98A2B3;'>→</div>", unsafe_allow_html=True)
+    with flow_cols[4]:
+        flow_card("최종 적용 공제액", won_text(result.allowed_deduction), "공제 종합한도 반영")
+    with flow_cols[5]:
+        st.markdown("<div style='text-align:center;padding-top:38px;font-size:1.5rem;color:#98A2B3;'>→</div>", unsafe_allow_html=True)
+    with flow_cols[6]:
+        flow_card("세율이 적용되는 금액", won_text(result.tax_base), "과세표준")
 
     if result.deduction_before_limit > result.allowed_deduction:
         restricted = result.deduction_before_limit - result.allowed_deduction
         st.warning(
-            "**상속공제 종합한도가 적용되었습니다.**  \n"
-            f"입력 공제 합계: {won_text(result.deduction_before_limit)}  \n"
-            f"실제 적용 공제액: {won_text(result.allowed_deduction)}  \n"
-            f"한도로 인해 제한된 금액: {won_text(restricted)}"
+            f"공제 합계 **{won_text(result.deduction_before_limit)}** 중 공제 종합한도에 따라 "
+            f"**{won_text(result.allowed_deduction)}**이 적용되었으며, **{won_text(restricted)}**은 제한되었습니다."
+        )
+    else:
+        restricted = 0.0
+        st.success(f"계산된 공제 합계 **{won_text(result.deduction_before_limit)}**이 한도 내에서 전액 적용되었습니다.")
+
+    with st.expander("상속공제 상세 · 어떤 공제가 얼마 반영됐는지 보기"):
+        st.markdown("#### 공제 항목별 구성")
+        deduction_items = [
+            ("일괄·인적공제", result.personal_or_lump, "선택한 공제 방식에 따른 계산금액"),
+            ("배우자공제", result.spouse_deduction, "실제 상속금액과 법정상속지분 반영"),
+            ("금융재산공제", result.financial_deduction, "순금융재산 기준"),
+            ("동거주택공제", result.home_deduction, "입력한 공제대상 주택가액 기준"),
+            ("기타 공제", result.other_deduction, "가업·영농 등 입력금액"),
+        ]
+        st.dataframe(
+            {
+                "공제 항목": [x[0] for x in deduction_items],
+                "현재 계산 상태": ["계산 반영" if x[1] > 0 else "입력 없음" for x in deduction_items],
+                "계산 금액": [won_text(x[1]) for x in deduction_items],
+                "쉽게 보는 설명": [x[2] for x in deduction_items],
+            },
+            hide_index=True,
+            use_container_width=True,
         )
 
-    with st.expander("세액 계산 상세"):
-        detail_left, detail_right = st.columns([1.2, 1])
-        with detail_left:
-            st.dataframe(
-                {
-                    "항목": [
-                        "총상속재산",
-                        "상속세 과세가액",
-                        "과세표준",
-                        "산출세액",
-                        "세대생략 할증",
-                        "세액공제",
-                        "신고세액공제",
-                        "예상 납부세액",
-                    ],
-                    "금액": [
-                        won_text(result.gross_estate),
-                        won_text(result.taxable_estate),
-                        won_text(result.tax_base),
-                        won_text(result.calculated_tax),
-                        won_text(result.generation_skip_surcharge),
-                        f"- {won_text(result.tax_credits)}",
-                        f"- {won_text(result.filing_credit)}",
-                        won_text(result.estimated_tax_due),
-                    ],
-                },
-                hide_index=True,
+        st.markdown("#### 공제한도 적용 결과")
+        d1, d2, d3, d4 = st.columns(4)
+        d1.metric("한도 적용 전 공제 합계", won_text(result.deduction_before_limit))
+        d2.metric("실제 적용 가능한 공제 한도", won_text(result.deduction_limit))
+        d3.metric("최종 적용 공제액", won_text(result.allowed_deduction))
+        d4.metric("제한된 금액", won_text(restricted))
+        if restricted > 0:
+            st.info(
+                f"계산된 공제 합계는 {won_text(result.deduction_before_limit)}이나, 공제 종합한도에 따라 "
+                f"{won_text(result.allowed_deduction)}이 최종 적용되었습니다."
+            )
+        else:
+            st.info("현재 계산된 공제 합계가 공제 종합한도 내에서 전액 적용되었습니다.")
+
+    with st.expander("세액 계산 상세 · 재산에서 납부세액까지 보기"):
+        expenses_total = public_dues + funeral_expense + liabilities
+        gifts_total = prior_gifts_heirs + prior_gifts_non_heirs
+        st.dataframe(
+            {
+                "계산 단계": [
+                    "총상속재산", "비과세 재산", "공과금·장례비용·채무", "사전증여재산",
+                    "상속세 과세가액", "최종 적용 공제액", "감정평가수수료", "과세표준",
+                    "적용세율", "누진공제", "산출세액", "세대생략 할증",
+                    "증여세액·기타 세액공제", "신고세액공제", "예상 납부세액",
+                ],
+                "구분": [
+                    "기준", "차감", "차감", "가산", "중간결과", "차감", "차감", "중간결과",
+                    "세액계산", "차감", "중간결과", "가산", "차감", "차감", "최종결과",
+                ],
+                "금액": [
+                    won_text(result.gross_estate), won_text(non_taxable), won_text(expenses_total), won_text(gifts_total),
+                    won_text(result.taxable_estate), won_text(result.allowed_deduction), won_text(appraisal_fee), won_text(result.tax_base),
+                    f"{result.rate:.0%}", won_text(result.progressive_deduction), won_text(result.calculated_tax),
+                    won_text(result.generation_skip_surcharge), won_text(result.tax_credits), won_text(result.filing_credit), won_text(tax_due),
+                ],
+                "쉽게 보는 설명": [
+                    "상속재산과 추정·간주상속재산 합계", "과세대상에서 제외", "과세가액에서 차감", "일정 기간 내 증여재산 합산",
+                    "공제 전 과세대상 재산", "공제 종합한도 반영", "과세표준 계산 시 차감", "세율이 적용되는 금액",
+                    "과세표준 구간별 누진세율", "세율 적용 후 차감", "과세표준 × 세율 − 누진공제", "해당되는 경우 가산",
+                    "산출세액에서 차감", "기한 내 신고 가정", "현재 입력 기준 최종 예상치",
+                ],
+            },
+            hide_index=True,
+            use_container_width=True,
+        )
+
+    with st.expander("납부재원 상세 · 준비된 현금성 자금 보기"):
+        st.dataframe(
+            {
+                "납부재원 구분": ["현금·예금", "사망보험금", "기타 즉시 사용 가능 자금", "총 납부재원", "예상 상속세", "부족액" if funding_gap < 0 else "여유액"],
+                "금액": [won_text(available_cash), won_text(death_benefit), won_text(other_liquidity), won_text(liquid_funds), won_text(tax_due), won_text(abs(funding_gap))],
+            },
+            hide_index=True,
+            use_container_width=True,
+        )
+
+    input_data = {
+        "gross_estate": gross_estate,
+        "deemed_estate": deemed_estate,
+        "non_taxable": non_taxable,
+        "public_dues": public_dues,
+        "funeral_expense": funeral_expense,
+        "liabilities": liabilities,
+        "prior_gifts_heirs": prior_gifts_heirs,
+        "prior_gifts_non_heirs": prior_gifts_non_heirs,
+        "lump_mode": lump_mode,
+        "children_count": children_count,
+        "elderly_count": elderly_count,
+        "minor_deduction": minor_deduction,
+        "disability_deduction": disability_deduction,
+        "spouse_exists": spouse_exists,
+        "spouse_actual_inheritance": spouse_actual_inheritance,
+        "spouse_share": spouse_share,
+        "net_financial_assets": net_financial_assets,
+        "cohabiting_home_value": cohabiting_home_value,
+        "other_deduction": other_deduction,
+        "appraisal_fee": appraisal_fee,
+        "non_heir_bequest": non_heir_bequest,
+        "inheritance_waiver_next_rank": inheritance_waiver_next_rank,
+        "prior_gift_tax_base_for_limit": prior_gift_tax_base_for_limit,
+        "generation_skip_amount": generation_skip_amount,
+        "generation_skip_minor_over_2b": generation_skip_minor_over_2b,
+        "gift_tax_credit": gift_tax_credit,
+        "other_tax_credit": other_tax_credit,
+        "apply_filing_credit": apply_filing_credit,
+    }
+
+    st.markdown("### 결과 보고서 다운로드")
+    st.caption("서식이 적용된 엑셀 파일에는 요약, 상속공제 상세, 세액 계산 상세, 입력 내역의 4개 시트가 포함됩니다.")
+    if Workbook is None:
+        st.error("엑셀 다운로드를 사용하려면 터미널에서 `pip install openpyxl`을 실행해 주세요.")
+    else:
+        try:
+            excel_bytes = build_excel_report(result, input_data, available_cash, death_benefit, other_liquidity)
+            file_name = f"상속세_예상계산_상담보고서_{datetime.now():%Y%m%d_%H%M%S}.xlsx"
+            st.download_button(
+                "📥 서식 적용 엑셀 보고서 다운로드",
+                data=excel_bytes,
+                file_name=file_name,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True,
             )
-        with detail_right:
-            st.write(f"**적용세율:** {result.rate:.0%}")
-            st.write(f"**누진공제:** {won_text(result.progressive_deduction)}")
-            st.success(f"예상 납부세액: {won_text(result.estimated_tax_due)}")
-
-    with st.expander("상속공제 상세"):
-        st.dataframe(
-            {
-                "항목": [
-                    "일괄·인적공제",
-                    "배우자공제",
-                    "금융재산공제",
-                    "동거주택공제",
-                    "기타 공제",
-                    "공제 입력 합계",
-                    "공제 종합한도",
-                    "실제 적용 공제액",
-                ],
-                "금액": [
-                    won_text(result.personal_or_lump),
-                    won_text(result.spouse_deduction),
-                    won_text(result.financial_deduction),
-                    won_text(result.home_deduction),
-                    won_text(result.other_deduction),
-                    won_text(result.deduction_before_limit),
-                    won_text(result.deduction_limit),
-                    won_text(result.allowed_deduction),
-                ],
-            },
-            hide_index=True,
-            use_container_width=True,
-        )
-
-    with st.expander("납부재원 상세"):
-        st.dataframe(
-            {
-                "항목": [
-                    "현금·예금",
-                    "사망보험금",
-                    "기타 자금",
-                    "총 납부재원",
-                    "예상 상속세",
-                    "부족액" if funding_gap < 0 else "여유액",
-                ],
-                "금액": [
-                    won_text(available_cash),
-                    won_text(death_benefit),
-                    won_text(other_liquidity),
-                    won_text(liquid_funds),
-                    won_text(tax_due),
-                    won_text(abs(funding_gap)),
-                ],
-            },
-            hide_index=True,
-            use_container_width=True,
-        )
+        except Exception as exc:
+            st.error(f"엑셀 보고서를 생성하지 못했습니다: {exc}")
 
     st.info(
         "상담용 예상치입니다. 실제 신고 시 상속관계, 재산평가, 사전증여 내역과 공제 요건을 별도로 확인해야 합니다."
