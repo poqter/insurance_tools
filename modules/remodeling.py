@@ -954,52 +954,79 @@ def render_plain_change_inputs(i: int) -> None:
             st.rerun()
 
 
-def render_new_plan_inputs(i: int) -> None:
-    """표 안에서 대표 보장 내용과 월납 보험료만 입력하고 저장한다."""
-    data_key = f"rv5_plan_data_{i}"
-    editor_key = f"rv5_plan_editor_{i}"
-    source = st.session_state.get(data_key)
-    if not isinstance(source, pd.DataFrame):
-        existing = st.session_state.get(f"rv2_additions_{i}")
-        source = clean_additions(existing) if isinstance(existing, pd.DataFrame) else default_additions_df()
-        if source.empty:
-            source = default_additions_df()
-        st.session_state[data_key] = source.copy()
+def _ensure_new_plan_row_state(i: int) -> int:
+    """신규 가입 보험 요약 입력값을 일반 위젯용 session_state에 준비한다."""
+    data_key = f"rv2_additions_{i}"
+    df = st.session_state.get(data_key)
+    if not isinstance(df, pd.DataFrame):
+        df = default_additions_df()
 
-    st.caption("1페이지에 표시할 대표 보장 내용과 월납 보험료만 입력합니다. 입력 후 아래 저장 버튼을 눌러 주세요.")
-    with st.form(f"rv5_plan_form_{i}", clear_on_submit=False):
-        edited = st.data_editor(
-            st.session_state[data_key],
-            key=editor_key,
-            num_rows="dynamic",
-            hide_index=True,
-            use_container_width=True,
-            row_height=44,
-            column_config={
-                "대표 보장 내용": st.column_config.TextColumn(
-                    "대표 보장 내용",
-                    width="large",
-                    help="예: 암·뇌·심장 진단비",
-                ),
-                "월납 보험료": st.column_config.TextColumn(
-                    "월납 보험료",
-                    width="medium",
-                    help="예: 128,589",
-                ),
-            },
+    count_key = f"rv6_plan_count_{i}"
+    st.session_state.setdefault(count_key, max(4, len(df)))
+    count = int(st.session_state[count_key])
+
+    for r in range(count):
+        row = df.iloc[r].to_dict() if r < len(df) else {}
+        st.session_state.setdefault(
+            f"rv6_plan_{i}_{r}_content",
+            normalize_text(row.get("대표 보장 내용", "")),
         )
-        saved = st.form_submit_button("가입 보험 내용 저장", type="primary", use_container_width=True)
-    if saved:
-        latest = edited[["대표 보장 내용", "월납 보험료"]].copy()
-        st.session_state[data_key] = latest
-        st.session_state[f"rv2_additions_{i}"] = latest.copy()
-        st.success("가입 보험 내용을 저장했습니다.")
+        st.session_state.setdefault(
+            f"rv6_plan_{i}_{r}_premium",
+            normalize_text(row.get("월납 보험료", "")),
+        )
+    return count
 
-    current = clean_additions(st.session_state.get(f"rv2_additions_{i}"))
-    total = sum(parse_money(v) for v in current.get("월납 보험료", pd.Series(dtype=object)))
-    if not current.empty:
-        st.caption(f"현재 저장된 월납 합계: **{total:,}원**")
 
+def render_new_plan_inputs(i: int) -> None:
+    """대표 보장 내용과 월납 보험료만 일반 입력칸으로 받는다."""
+    count = _ensure_new_plan_row_state(i)
+    st.caption("1페이지에 표시할 대표 보장 내용과 월납 보험료만 입력합니다. 입력 내용은 즉시 유지됩니다.")
+
+    rows = []
+    for r in range(count):
+        c_no, c_content, c_premium = st.columns([0.45, 4.2, 1.55], vertical_alignment="bottom")
+        with c_no:
+            st.markdown(f"**{r + 1}**")
+        with c_content:
+            content = st.text_input(
+                "대표 보장 내용",
+                key=f"rv6_plan_{i}_{r}_content",
+                placeholder="예: 암·뇌·심장 진단비",
+                label_visibility="collapsed",
+            )
+        with c_premium:
+            premium = st.text_input(
+                "월납 보험료",
+                key=f"rv6_plan_{i}_{r}_premium",
+                placeholder="예: 128,589",
+                label_visibility="collapsed",
+            )
+        rows.append({"대표 보장 내용": content, "월납 보험료": premium})
+
+    latest = pd.DataFrame(rows, columns=["대표 보장 내용", "월납 보험료"])
+    st.session_state[f"rv2_additions_{i}"] = latest.copy()
+
+    total = sum(parse_money(row["월납 보험료"]) for row in rows if normalize_text(row["대표 보장 내용"]))
+    st.markdown(f"**입력된 월납 보험료 합계: {total:,}원**")
+
+    add_col, remove_col = st.columns(2)
+    with add_col:
+        if st.button("＋ 가입 보험 항목 추가", key=f"rv6_add_plan_{i}", use_container_width=True):
+            st.session_state[f"rv6_plan_count_{i}"] = min(10, count + 1)
+            st.rerun()
+    with remove_col:
+        if st.button(
+            "－ 마지막 항목 삭제",
+            key=f"rv6_remove_plan_{i}",
+            use_container_width=True,
+            disabled=count <= 1,
+        ):
+            last = count - 1
+            st.session_state.pop(f"rv6_plan_{i}_{last}_content", None)
+            st.session_state.pop(f"rv6_plan_{i}_{last}_premium", None)
+            st.session_state[f"rv6_plan_count_{i}"] = max(1, count - 1)
+            st.rerun()
 
 def _ensure_contract_row_state(i: int) -> int:
     df = st.session_state.get(f"rv2_contracts_{i}")
