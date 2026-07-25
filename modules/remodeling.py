@@ -166,12 +166,12 @@ def default_contract_df() -> pd.DataFrame:
 
 
 def default_additions_df() -> pd.DataFrame:
-    """1페이지에 표시할 새롭게 가입하는 보험의 대표 구성."""
+    """1페이지에 표시할 신규 가입 보험 요약: 대표 보장 내용과 월납 금액만 입력."""
     return pd.DataFrame([
-        {
-            "보험회사": "", "상품명": "",
-            "대표 보장 내용": "", "월 보험료": ""
-        }
+        {"대표 보장 내용": "", "월납 보험료": ""},
+        {"대표 보장 내용": "", "월납 보험료": ""},
+        {"대표 보장 내용": "", "월납 보험료": ""},
+        {"대표 보장 내용": "", "월납 보험료": ""},
     ])
 
 
@@ -204,12 +204,15 @@ def clean_additions(df: pd.DataFrame | None) -> pd.DataFrame:
     if df is None or df.empty:
         return default_additions_df().iloc[0:0]
     result = df.copy()
-    for col in ["보험회사", "상품명", "대표 보장 내용", "월 보험료"]:
+    # 구버전 열 이름도 읽을 수 있게 호환 처리
+    if "월납 보험료" not in result.columns and "월 보험료" in result.columns:
+        result["월납 보험료"] = result["월 보험료"]
+    for col in ["대표 보장 내용", "월납 보험료"]:
         if col not in result.columns:
             result[col] = ""
         result[col] = result[col].map(normalize_text)
-    result = result[(result["대표 보장 내용"] != "") | (result["상품명"] != "")].reset_index(drop=True)
-    return result[["보험회사", "상품명", "대표 보장 내용", "월 보험료"]]
+    result = result[result["대표 보장 내용"] != ""].reset_index(drop=True)
+    return result[["대표 보장 내용", "월납 보험료"]]
 
 
 def detect_coverage_direction(changes: pd.DataFrame) -> str:
@@ -457,16 +460,11 @@ def render_customer_preview(customer: CustomerData, compact: bool) -> None:
         td = customer.analysis.total_delta
         d = "동일" if td == 0 or td is None else "감소" if td < 0 else "증가"
         st.markdown(metric_card_html("총 납입액", format_change(td), f"{format_compact_won(customer.old_total)} → {format_compact_won(customer.new_total)}", d, compact), unsafe_allow_html=True)
-    rows = prioritized_changes(customer.changes, customer.priorities, 3 if compact else 4)
-    if not rows.empty:
-        st.markdown("**핵심 보장 변화**")
-        columns_per_row = 1 if compact else 2
-        items = list(rows.iterrows())
-        for start in range(0, len(items), columns_per_row):
-            cols = st.columns(columns_per_row)
-            for col, (_, row) in zip(cols, items[start:start + columns_per_row]):
-                with col:
-                    st.markdown(change_card_html(row, compact), unsafe_allow_html=True)
+    if not customer.additions.empty:
+        st.markdown("**새롭게 가입하는 보험**")
+        preview_df = customer.additions.copy()
+        preview_df["월납 보험료"] = preview_df["월납 보험료"].map(lambda v: f"{parse_money(v):,}원" if parse_money(v) else "-")
+        st.dataframe(preview_df[["대표 보장 내용", "월납 보험료"]], hide_index=True, use_container_width=True)
     if not customer.contracts.empty:
         dirs = customer.contracts["처리 방향 [목록 선택]"].fillna("").astype(str)
         keep = int(dirs.str.contains("유지").sum())
@@ -589,40 +587,53 @@ def _write_premium_table(ws, start_col: int, end_col: int, top_row: int, custome
 
 
 def _write_new_insurance_list(ws, start_col: int, end_col: int, top_row: int, customer: CustomerData, max_items: int) -> int:
-    """Write page-1 summary of newly subscribed insurance plans."""
+    """1페이지에 대표 보장 내용과 월납 금액만 간결한 2열 표로 출력."""
     l1, l2 = get_column_letter(start_col), get_column_letter(end_col)
     merge_write(ws, f"{l1}{top_row}:{l2}{top_row}", "새롭게 가입하는 보험",
                 font=Font(name="맑은 고딕", size=11, bold=True, color=NAVY),
                 alignment=Alignment(horizontal="left", vertical="center"))
-    rows = list(customer.additions.head(max_items).iterrows())
-    if not rows:
-        rows = [(0, pd.Series({"보험회사":"", "상품명":"", "대표 보장 내용":"입력된 신규 가입 내용이 없습니다.", "월 보험료":""}))]
     cur = top_row + 1
     width = end_col - start_col + 1
-    company_end = start_col + max(1, int(width * 0.24)) - 1
-    content_end = start_col + max(3, int(width * 0.72)) - 1
-    company_end = min(company_end, end_col - 3)
-    content_end = min(max(content_end, company_end + 1), end_col - 2)
+    content_end = start_col + max(2, int(width * 0.68)) - 1
+    content_end = min(content_end, end_col - 2)
+    # 표 머리글
+    merge_write(ws, f"{l1}{cur}:{get_column_letter(content_end)}{cur}", "대표 보장 내용",
+                font=Font(name="맑은 고딕", size=9.5, bold=True, color=WHITE),
+                fill=PatternFill("solid", fgColor=NAVY),
+                alignment=Alignment(horizontal="center", vertical="center"), border=border_all())
+    merge_write(ws, f"{get_column_letter(content_end+1)}{cur}:{l2}{cur}", "월납 보험료",
+                font=Font(name="맑은 고딕", size=9.5, bold=True, color=WHITE),
+                fill=PatternFill("solid", fgColor=NAVY),
+                alignment=Alignment(horizontal="center", vertical="center"), border=border_all())
+    cur += 1
+    rows = list(customer.additions.head(max_items).iterrows())
+    if not rows:
+        rows = [(0, pd.Series({"대표 보장 내용":"입력된 신규 가입 내용이 없습니다.", "월납 보험료":""}))]
+    total = 0
     for _, item in rows:
-        company = normalize_text(item.get("보험회사"))
-        product = normalize_text(item.get("상품명"))
-        plan = " · ".join(x for x in [company, product] if x) or "신규 보험"
         content = normalize_text(item.get("대표 보장 내용")) or "-"
-        premium = parse_money(item.get("월 보험료"))
+        premium = parse_money(item.get("월납 보험료"))
+        total += premium
         premium_text = f"{premium:,}원" if premium else "-"
-        merge_write(ws, f"{l1}{cur}:{get_column_letter(company_end)}{cur}", plan,
-                    font=Font(name="맑은 고딕", size=9.5, bold=True, color=BLACK),
-                    fill=PatternFill("solid", fgColor=LIGHT_GRAY),
-                    alignment=Alignment(horizontal="center", vertical="center", wrap_text=True), border=border_all())
-        merge_write(ws, f"{get_column_letter(company_end+1)}{cur}:{get_column_letter(content_end)}{cur}", content,
+        merge_write(ws, f"{l1}{cur}:{get_column_letter(content_end)}{cur}", content,
                     font=Font(name="맑은 고딕", size=10, bold=True, color=NAVY),
                     fill=PatternFill("solid", fgColor=WHITE),
-                    alignment=Alignment(horizontal="center", vertical="center", wrap_text=True), border=border_all())
+                    alignment=Alignment(horizontal="left", vertical="center", wrap_text=True), border=border_all())
         merge_write(ws, f"{get_column_letter(content_end+1)}{cur}:{l2}{cur}", premium_text,
                     font=Font(name="맑은 고딕", size=10.5, bold=True, color=BLUE),
                     fill=PatternFill("solid", fgColor=WHITE),
-                    alignment=Alignment(horizontal="center", vertical="center", wrap_text=True), border=border_all())
+                    alignment=Alignment(horizontal="right", vertical="center"), border=border_all())
         ws.row_dimensions[cur].height = 28
+        cur += 1
+    if rows and customer.additions.shape[0] > 0:
+        merge_write(ws, f"{l1}{cur}:{get_column_letter(content_end)}{cur}", "합계",
+                    font=Font(name="맑은 고딕", size=10, bold=True, color=BLACK),
+                    fill=PatternFill("solid", fgColor=LIGHT_GREEN),
+                    alignment=Alignment(horizontal="center", vertical="center"), border=border_all())
+        merge_write(ws, f"{get_column_letter(content_end+1)}{cur}:{l2}{cur}", f"{total:,}원",
+                    font=Font(name="맑은 고딕", size=11, bold=True, color=GREEN),
+                    fill=PatternFill("solid", fgColor=LIGHT_GREEN),
+                    alignment=Alignment(horizontal="right", vertical="center"), border=border_all())
         cur += 1
     return cur
 
@@ -831,8 +842,10 @@ def load_example(person_count: int) -> None:
             {"보험회사":"기존보험사", "상품명":"실손의료보험", "처리 방향 [목록 선택]":"유지", "구체적인 변경 내용":"현재 가입 조건을 유지합니다."},
         ])
         st.session_state[f"rv2_additions_{i}"] = pd.DataFrame([
-            {"보험회사":"예시보험", "상품명":"건강보장플랜", "대표 보장 내용":"암·뇌·심장 진단비", "월 보험료":"128,589"},
-            {"보험회사":"예시보험", "상품명":"치료비보장플랜", "대표 보장 내용":"암 주요치료비", "월 보험료":"111,255"},
+            {"대표 보장 내용":"암·뇌·심장 진단비", "월납 보험료":"128,589"},
+            {"대표 보장 내용":"암 주요치료비", "월납 보험료":"111,255"},
+            {"대표 보장 내용":"운전자보험", "월납 보험료":"15,000"},
+            {"대표 보장 내용":"순환계 주요치료비", "월납 보험료":"112,863"},
         ])
     st.session_state["rv2_example"] = True
 
@@ -941,50 +954,51 @@ def render_plain_change_inputs(i: int) -> None:
             st.rerun()
 
 
-def _ensure_plan_row_state(i: int) -> int:
-    df = st.session_state.get(f"rv2_additions_{i}")
-    if not isinstance(df, pd.DataFrame):
-        df = default_additions_df()
-    key = f"rv4_plan_count_{i}"
-    st.session_state.setdefault(key, max(2, len(df)))
-    count = int(st.session_state[key])
-    for r in range(count):
-        row = df.iloc[r].to_dict() if r < len(df) else {}
-        for field, col in [("company","보험회사"),("product","상품명"),("content","대표 보장 내용"),("premium","월 보험료")]:
-            st.session_state.setdefault(f"rv4_plan_{i}_{r}_{field}", normalize_text(row.get(col, "")))
-    return count
-
-
 def render_new_plan_inputs(i: int) -> None:
-    count = _ensure_plan_row_state(i)
-    st.caption("1페이지에 표시할 새롭게 가입하는 보험의 대표 내용과 월납 보험료를 입력합니다.")
-    for r in range(count):
-        title = normalize_text(st.session_state.get(f"rv4_plan_{i}_{r}_content", "")) or f"신규 보험 {r+1}"
-        with st.expander(title, expanded=(r < 2)):
-            c1, c2 = st.columns(2)
-            with c1:
-                st.text_input("보험회사", key=f"rv4_plan_{i}_{r}_company", placeholder="예: 한화생명")
-                st.text_input("상품명", key=f"rv4_plan_{i}_{r}_product", placeholder="예: 건강보험")
-            with c2:
-                st.text_input("대표 보장 내용", key=f"rv4_plan_{i}_{r}_content", placeholder="예: 암·뇌·심장 진단비")
-                st.text_input("월 보험료", key=f"rv4_plan_{i}_{r}_premium", placeholder="예: 128,589원")
-    rows=[]
-    for r in range(count):
-        rows.append({"보험회사":st.session_state.get(f"rv4_plan_{i}_{r}_company",""),
-                     "상품명":st.session_state.get(f"rv4_plan_{i}_{r}_product",""),
-                     "대표 보장 내용":st.session_state.get(f"rv4_plan_{i}_{r}_content",""),
-                     "월 보험료":st.session_state.get(f"rv4_plan_{i}_{r}_premium","")})
-    st.session_state[f"rv2_additions_{i}"] = pd.DataFrame(rows)
-    a,b=st.columns(2)
-    with a:
-        if st.button("＋ 신규 보험 추가", key=f"rv4_add_plan_{i}", use_container_width=True):
-            st.session_state[f"rv4_plan_count_{i}"] = min(8, count+1); st.rerun()
-    with b:
-        if st.button("－ 마지막 신규 보험 삭제", key=f"rv4_remove_plan_{i}", use_container_width=True, disabled=count<=1):
-            last=count-1
-            for field in ("company","product","content","premium"):
-                st.session_state.pop(f"rv4_plan_{i}_{last}_{field}",None)
-            st.session_state[f"rv4_plan_count_{i}"] = max(1,count-1); st.rerun()
+    """표 안에서 대표 보장 내용과 월납 보험료만 입력하고 저장한다."""
+    data_key = f"rv5_plan_data_{i}"
+    editor_key = f"rv5_plan_editor_{i}"
+    source = st.session_state.get(data_key)
+    if not isinstance(source, pd.DataFrame):
+        existing = st.session_state.get(f"rv2_additions_{i}")
+        source = clean_additions(existing) if isinstance(existing, pd.DataFrame) else default_additions_df()
+        if source.empty:
+            source = default_additions_df()
+        st.session_state[data_key] = source.copy()
+
+    st.caption("1페이지에 표시할 대표 보장 내용과 월납 보험료만 입력합니다. 입력 후 아래 저장 버튼을 눌러 주세요.")
+    with st.form(f"rv5_plan_form_{i}", clear_on_submit=False):
+        edited = st.data_editor(
+            st.session_state[data_key],
+            key=editor_key,
+            num_rows="dynamic",
+            hide_index=True,
+            use_container_width=True,
+            row_height=44,
+            column_config={
+                "대표 보장 내용": st.column_config.TextColumn(
+                    "대표 보장 내용",
+                    width="large",
+                    help="예: 암·뇌·심장 진단비",
+                ),
+                "월납 보험료": st.column_config.TextColumn(
+                    "월납 보험료",
+                    width="medium",
+                    help="예: 128,589",
+                ),
+            },
+        )
+        saved = st.form_submit_button("가입 보험 내용 저장", type="primary", use_container_width=True)
+    if saved:
+        latest = edited[["대표 보장 내용", "월납 보험료"]].copy()
+        st.session_state[data_key] = latest
+        st.session_state[f"rv2_additions_{i}"] = latest.copy()
+        st.success("가입 보험 내용을 저장했습니다.")
+
+    current = clean_additions(st.session_state.get(f"rv2_additions_{i}"))
+    total = sum(parse_money(v) for v in current.get("월납 보험료", pd.Series(dtype=object)))
+    if not current.empty:
+        st.caption(f"현재 저장된 월납 합계: **{total:,}원**")
 
 
 def _ensure_contract_row_state(i: int) -> int:
@@ -1116,7 +1130,7 @@ def run() -> None:
             if i < person_count: st.divider()
 
     with tabs[2]:
-        st.info("1페이지에는 새롭게 가입하는 보험의 대표 구성과 월납 보험료가 표시되고, 2페이지에는 핵심 변경 내용과 기존 보험 변경 방향이 정리됩니다.")
+        st.info("1페이지에는 새롭게 가입하는 보험의 대표 보장 내용과 월납 보험료가 표시되고, 2페이지에는 핵심 변경 내용과 기존 보험 변경 방향이 정리됩니다.")
         for i in range(1, person_count + 1):
             name = normalize_text(st.session_state.get(f"rv2_name_{i}", "")) or f"고객 {i}"
             st.subheader(f"{name} 입력")
