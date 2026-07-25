@@ -21,6 +21,66 @@ def won_text(amount_manwon: float) -> str:
     return " ".join(parts) + "원"
 
 
+def parse_manwon(value: str) -> tuple[float, str | None]:
+    """사용자 입력 문자열을 만원 단위 숫자로 변환한다."""
+    raw = str(value or "").strip()
+    if not raw:
+        return 0.0, None
+
+    cleaned = raw.replace("만원", "").replace(",", "").replace(" ", "")
+    if not cleaned:
+        return 0.0, None
+
+    try:
+        amount = float(cleaned)
+    except ValueError:
+        return 0.0, "숫자, 쉼표, 공백, '만원'만 입력할 수 있습니다."
+
+    if amount < 0:
+        return 0.0, "금액은 0 이상으로 입력해 주세요."
+
+    return amount, None
+
+
+def format_manwon_input(amount: float) -> str:
+    amount = max(0.0, float(amount))
+    if amount.is_integer():
+        return f"{int(amount):,}"
+    return f"{amount:,.2f}".rstrip("0").rstrip(".")
+
+
+def amount_input(label: str, *, value: float = 0, key: str) -> float:
+    """만원 단위 금액 입력: 우측 단위, 쉼표 정리, 원화 해석을 함께 표시한다."""
+    display_key = f"{key}_display"
+    error_key = f"{key}_error"
+
+    if display_key not in st.session_state:
+        st.session_state[display_key] = format_manwon_input(float(value))
+    if error_key not in st.session_state:
+        st.session_state[error_key] = None
+
+    def normalize() -> None:
+        parsed, error = parse_manwon(st.session_state.get(display_key, ""))
+        st.session_state[error_key] = error
+        if error is None:
+            st.session_state[display_key] = format_manwon_input(parsed)
+
+    input_col, unit_col = st.columns([10, 1.35], vertical_alignment="bottom")
+    with input_col:
+        st.text_input(label, key=display_key, on_change=normalize)
+    with unit_col:
+        st.markdown("<div style='padding:0 0 0.55rem 0;font-weight:600;'>만원</div>", unsafe_allow_html=True)
+
+    amount, current_error = parse_manwon(st.session_state.get(display_key, ""))
+    error = st.session_state.get(error_key) or current_error
+    if error:
+        st.error(error, icon="⚠️")
+        return 0.0
+
+    st.caption(f"입력 금액 해석: {won_text(amount)}")
+    return amount
+
+
 def tax_rate_and_deduction(tax_base: float) -> Tuple[float, float]:
     if tax_base <= 1 * EOK:
         return 0.10, 0
@@ -141,8 +201,7 @@ def calculate(**v) -> Result:
 
 def run():
     st.title("🧾 상속세 예상 계산기")
-    st.caption("상담 및 사전 검토용 예상 계산기")
-    st.info("💡 모든 금액 입력란의 단위는 **만원**입니다. 예: 5억원 → `50,000`, 10억원 → `100,000`")
+    st.caption("금액 입력 단위: 만원 · 상담 및 사전 검토용 예상 계산기")
 
     with st.expander("계산 기준 및 유의사항"):
         st.markdown("""
@@ -156,18 +215,18 @@ def run():
     with tab1:
         c1, c2 = st.columns(2)
         with c1:
-            gross_estate = st.number_input("상속재산가액 (만원)", 0, value=100_000, step=1_000, key="it_gross")
-            deemed_estate = st.number_input("추정·간주상속재산 (만원)", 0, value=0, step=1_000, key="it_deemed")
-            non_taxable = st.number_input("비과세·과세가액 불산입액 (만원)", 0, value=0, step=1_000, key="it_nontax")
+            gross_estate = amount_input("상속재산가액", value=100_000, key="it_gross")
+            deemed_estate = amount_input("추정·간주상속재산", value=0, key="it_deemed")
+            non_taxable = amount_input("비과세·과세가액 불산입액", value=0, key="it_nontax")
         with c2:
-            public_dues = st.number_input("공과금 (만원)", 0, value=0, step=100, key="it_dues")
-            funeral_expense = st.number_input("공제대상 장례비용 (만원)", 0, value=1_000, step=100, key="it_funeral")
-            liabilities = st.number_input("피상속인 채무 (만원)", 0, value=0, step=1_000, key="it_liab")
+            public_dues = amount_input("공과금", value=0, key="it_dues")
+            funeral_expense = amount_input("공제대상 장례비용", value=1_000, key="it_funeral")
+            liabilities = amount_input("피상속인 채무", value=0, key="it_liab")
         c3, c4 = st.columns(2)
         with c3:
-            prior_gifts_heirs = st.number_input("10년 이내 상속인 증여재산 (만원)", 0, value=0, step=1_000, key="it_gift_h")
+            prior_gifts_heirs = amount_input("10년 이내 상속인 증여재산", value=0, key="it_gift_h")
         with c4:
-            prior_gifts_non_heirs = st.number_input("5년 이내 상속인 외 증여재산 (만원)", 0, value=0, step=1_000, key="it_gift_n")
+            prior_gifts_non_heirs = amount_input("5년 이내 상속인 외 증여재산", value=0, key="it_gift_n")
 
     with tab2:
         lump_mode = st.radio("공제 방식", ["일괄공제와 인적공제 중 큰 금액", "기초공제 + 인적공제"], horizontal=True, key="it_mode") == "일괄공제와 인적공제 중 큰 금액"
@@ -176,8 +235,8 @@ def run():
             children_count = st.number_input("자녀 수", 0, value=1, step=1, key="it_children")
             elderly_count = st.number_input("65세 이상 연로자 수", 0, value=0, step=1, key="it_elderly")
         with a2:
-            minor_deduction = st.number_input("미성년자공제 합계액 (만원)", 0, value=0, step=1_000, key="it_minor")
-            disability_deduction = st.number_input("장애인공제 합계액 (만원)", 0, value=0, step=1_000, key="it_disability")
+            minor_deduction = amount_input("미성년자공제 합계액", value=0, key="it_minor")
+            disability_deduction = amount_input("장애인공제 합계액", value=0, key="it_disability")
 
         spouse_exists = st.toggle("배우자가 생존해 있음", value=True, key="it_spouse_exists")
         spouse_actual_inheritance, spouse_share = 0, 0.0
@@ -187,32 +246,32 @@ def run():
                 group = st.selectbox("배우자와 공동상속하는 상속인", ["직계비속", "직계존속", "배우자 단독"], key="it_group")
                 count = 0 if group == "배우자 단독" else st.number_input(f"{group} 공동상속인 수", 1, value=1, step=1, key="it_count")
             with b2:
-                spouse_actual_inheritance = st.number_input("배우자가 실제 상속받는 금액 (만원)", 0, value=50_000, step=1_000, key="it_spouse_amount")
+                spouse_actual_inheritance = amount_input("배우자가 실제 상속받는 금액", value=50_000, key="it_spouse_amount")
                 spouse_share = st.number_input("배우자 법정상속지분", 0.0, 1.0, float(spouse_statutory_share(group, count)), 0.01, format="%.4f", key="it_share")
 
         d1, d2 = st.columns(2)
         with d1:
-            net_financial_assets = st.number_input("순금융재산가액 (만원)", 0, value=0, step=1_000, key="it_fin")
-            cohabiting_home_value = st.number_input("공제대상 동거주택가액 (만원)", 0, value=0, step=1_000, key="it_home")
+            net_financial_assets = amount_input("순금융재산가액", value=0, key="it_fin")
+            cohabiting_home_value = amount_input("공제대상 동거주택가액", value=0, key="it_home")
         with d2:
-            other_deduction = st.number_input("가업·영농 등 기타 공제 (만원)", 0, value=0, step=1_000, key="it_other_ded")
-            appraisal_fee = st.number_input("감정평가수수료 공제액 (만원)", 0, value=0, step=50, key="it_appraisal")
+            other_deduction = amount_input("가업·영농 등 기타 공제", value=0, key="it_other_ded")
+            appraisal_fee = amount_input("감정평가수수료 공제액", value=0, key="it_appraisal")
 
     with tab3:
         e1, e2, e3 = st.columns(3)
         with e1:
-            non_heir_bequest = st.number_input("상속인 아닌 자에 대한 유증 등 (만원)", 0, value=0, step=1_000, key="it_bequest")
+            non_heir_bequest = amount_input("상속인 아닌 자에 대한 유증 등", value=0, key="it_bequest")
         with e2:
-            inheritance_waiver_next_rank = st.number_input("상속포기로 다음 순위가 받은 재산 (만원)", 0, value=0, step=1_000, key="it_waiver")
+            inheritance_waiver_next_rank = amount_input("상속포기로 다음 순위가 받은 재산", value=0, key="it_waiver")
         with e3:
-            prior_gift_tax_base_for_limit = st.number_input("공제한도 차감 사전증여 과세표준 (만원)", 0, value=0, step=1_000, key="it_prior_base")
+            prior_gift_tax_base_for_limit = amount_input("공제한도 차감 사전증여 과세표준", value=0, key="it_prior_base")
         f1, f2 = st.columns(2)
         with f1:
-            generation_skip_amount = st.number_input("세대를 건너뛴 상속재산가액 (만원)", 0, value=0, step=1_000, key="it_gen")
+            generation_skip_amount = amount_input("세대를 건너뛴 상속재산가액", value=0, key="it_gen")
             generation_skip_minor_over_2b = st.checkbox("미성년자가 세대생략으로 20억원 초과 상속", key="it_gen_minor")
         with f2:
-            gift_tax_credit = st.number_input("사전증여 관련 증여세액공제 (만원)", 0, value=0, step=100, key="it_gift_credit")
-            other_tax_credit = st.number_input("기타 세액공제 (만원)", 0, value=0, step=100, key="it_other_credit")
+            gift_tax_credit = amount_input("사전증여 관련 증여세액공제", value=0, key="it_gift_credit")
+            other_tax_credit = amount_input("기타 세액공제", value=0, key="it_other_credit")
             apply_filing_credit = st.checkbox("기한 내 신고세액공제 3% 적용", value=True, key="it_filing")
 
     result = calculate(**locals())
