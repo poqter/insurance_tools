@@ -339,6 +339,12 @@ def compute_summer(df: pd.DataFrame) -> pd.DataFrame:
     else:
         df["쉐어율"] = np.nan
 
+    # 쉐어율이 입력된 계약만 건수로 인정합니다.
+    # 100% = 1건, 50% = 0.5건이며, 공란은 미입력으로 남겨 집계에서 제외합니다.
+    df["쉐어율미입력"] = df["쉐어율"].isna()
+    df["적용쉐어율"] = df["쉐어율"].clip(lower=0, upper=100)
+    df["쉐어건수"] = df["적용쉐어율"] / 100
+
     ins = df["보험사"].astype(str).str.strip()
     term = df["납입기간_num"]
 
@@ -404,13 +410,26 @@ def check_monthly_requirements(dfin: pd.DataFrame):
     summer_sum = dfin["썸머환산금액"].sum()
     amount_ok = summer_sum >= MONTHLY_TARGET
 
-    hanwha_ok = (
+    hanwha_target_mask = (
         is_hanwha_life_series(dfin["보험사"])
         & (
             pd.to_numeric(dfin["보험료"], errors="coerce").fillna(0)
             >= MONTHLY_HANWHA_MIN_PREMIUM
         )
-    ).any()
+    )
+
+    # 한화생명 5만원 이상 계약도 쉐어율만큼 건수로 인정합니다.
+    # 예: 50% 한 건은 0.5건, 50% 두 건은 합계 1건입니다.
+    # 쉐어율 공란은 0건으로 간주하여 필수조건 판정에서 제외합니다.
+    if "쉐어건수" in dfin.columns:
+        hanwha_count = pd.to_numeric(
+            dfin.loc[hanwha_target_mask, "쉐어건수"], errors="coerce"
+        ).fillna(0).sum()
+    else:
+        # 이전 형식 데이터가 들어오는 경우에는 행당 1건으로 안전하게 처리합니다.
+        hanwha_count = float(hanwha_target_mask.sum())
+
+    hanwha_ok = hanwha_count >= 1.0
 
     total_ok = amount_ok and hanwha_ok
 
@@ -520,7 +539,9 @@ def to_styled(dfin: pd.DataFrame) -> pd.DataFrame:
     )
 
     df["보험료"] = df["보험료"].map(won)
-    df["쉐어율"] = df["쉐어율"].apply(lambda x: pct(x) if pd.notnull(x) else "")
+    df["쉐어율"] = df["쉐어율"].apply(
+        lambda x: pct(x) if pd.notnull(x) else "⚠️ 미입력"
+    )
     df["실적보험료"] = df["실적보험료"].map(won)
     df["썸머율"] = df["썸머율"].map(pct)
     df["썸머환산금액"] = df["썸머환산금액"].map(won)
@@ -643,11 +664,13 @@ def make_collector_summary(july_df: pd.DataFrame, august_df: pd.DataFrame) -> pd
         return pd.DataFrame(columns=[
             "수금자명",
             "7월건수",
+            "7월쉐어미입력",
             "7월환산",
             "7월한화5만",
             "7월50만",
             "7월달성",
             "8월건수",
+            "8월쉐어미입력",
             "8월환산",
             "8월한화5만",
             "8월50만",
@@ -669,12 +692,14 @@ def make_collector_summary(july_df: pd.DataFrame, august_df: pd.DataFrame) -> pd
 
         rows.append({
             "수금자명": collector,
-            "7월건수": len(july_sub),
+            "7월건수": july_sub["쉐어건수"].sum(min_count=1),
+            "7월쉐어미입력": int(july_sub["쉐어율"].isna().sum()),
             "7월환산": result["7월"]["환산금액"],
             "7월한화5만": mark(result["7월"]["한화생명5만"]),
             "7월50만": mark(result["7월"]["환산50만"]),
             "7월달성": mark(result["7월"]["월달성"]),
-            "8월건수": len(august_sub),
+            "8월건수": august_sub["쉐어건수"].sum(min_count=1),
+            "8월쉐어미입력": int(august_sub["쉐어율"].isna().sum()),
             "8월환산": result["8월"]["환산금액"],
             "8월한화5만": mark(result["8월"]["한화생명5만"]),
             "8월50만": mark(result["8월"]["환산50만"]),
@@ -690,6 +715,26 @@ def make_collector_summary(july_df: pd.DataFrame, august_df: pd.DataFrame) -> pd
 
 def format_summary_for_display(summary: pd.DataFrame) -> pd.DataFrame:
     df = summary.copy()
+
+    for month in ["7월", "8월"]:
+        count_col = f"{month}건수"
+        missing_col = f"{month}쉐어미입력"
+
+        if count_col in df.columns:
+            def format_count(row):
+                value = row.get(count_col)
+                missing = int(row.get(missing_col, 0) or 0)
+                base = (
+                    f"{float(value):.2f}".rstrip("0").rstrip(".")
+                    if pd.notnull(value)
+                    else "0"
+                )
+                return f"{base}건 (⚠️ 미입력 {missing}건)" if missing else f"{base}건"
+
+            df[count_col] = df.apply(format_count, axis=1)
+
+        if missing_col in df.columns:
+            df.drop(columns=[missing_col], inplace=True)
 
     for col in ["7월환산", "8월환산", "기본합산환산"]:
         if col in df.columns:
@@ -973,6 +1018,14 @@ def run():
         st.stop()
 
     df = compute_summer(df_valid)
+
+    missing_share_df = df[df["쉐어율"].isna()]
+    if not missing_share_df.empty:
+        st.warning(
+            f"⚠️ 쉐어율이 입력되지 않은 계약 {len(missing_share_df)}건이 있습니다. "
+            "해당 계약은 건수 및 한화생명 1건 필수조건 계산에서 제외됩니다. "
+            "쉐어율에 100을 입력하면 1건으로 인정됩니다."
+        )
 
     invalid_dates = df[df["계약일자_raw"].isna()]
     if not invalid_dates.empty:

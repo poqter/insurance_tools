@@ -329,6 +329,13 @@ def compute_convention(df: pd.DataFrame) -> pd.DataFrame:
     else:
         df["쉐어율"] = np.nan
 
+    # 쉐어율에 따른 인정 건수
+    # - 100% = 1건
+    # - 50% = 0.5건
+    # - 공란 = 미입력으로 처리하며 건수 계산에서 제외
+    df["쉐어율미입력"] = df["쉐어율"].isna()
+    df["쉐어건수"] = (df["쉐어율"].clip(lower=0, upper=100) / 100).fillna(0)
+
     ins = df["보험사"].astype(str).str.strip()
     term = df["납입기간_num"]
 
@@ -411,6 +418,8 @@ def check_convention_requirements(dfin: pd.DataFrame):
             "일반달성": False,
             "더블달성": False,
             "트리플달성": False,
+            "인정건수": 0,
+            "쉐어율미입력건수": 0,
             "건수5건": False,
             "한화생명5만": False,
             "필수조건": False,
@@ -423,15 +432,20 @@ def check_convention_requirements(dfin: pd.DataFrame):
     double_amount_ok = conv_sum >= CONVENTION_DOUBLE_TARGET
     triple_amount_ok = conv_sum >= CONVENTION_TRIPLE_TARGET
 
-    count_ok = len(dfin) >= CONVENTION_MIN_COUNT
+    recognized_count = pd.to_numeric(dfin["쉐어건수"], errors="coerce").fillna(0).sum()
+    count_ok = recognized_count >= CONVENTION_MIN_COUNT
 
-    hanwha_ok = (
+    hanwha_mask = (
         is_hanwha_life_series(dfin["보험사"])
         & (
             pd.to_numeric(dfin["보험료"], errors="coerce").fillna(0)
             >= CONVENTION_HANWHA_MIN_PREMIUM
         )
-    ).any()
+    )
+    hanwha_count = pd.to_numeric(
+        dfin.loc[hanwha_mask, "쉐어건수"], errors="coerce"
+    ).fillna(0).sum()
+    hanwha_ok = hanwha_count >= 1.0
 
     required_ok = count_ok and hanwha_ok
 
@@ -450,6 +464,8 @@ def check_convention_requirements(dfin: pd.DataFrame):
         "일반달성": final_general_ok,
         "더블달성": final_double_ok,
         "트리플달성": final_triple_ok,
+        "인정건수": recognized_count,
+        "쉐어율미입력건수": int(dfin["쉐어율미입력"].sum()),
         "건수5건": count_ok,
         "한화생명5만": hanwha_ok,
         "필수조건": required_ok,
@@ -468,7 +484,12 @@ def to_styled(dfin: pd.DataFrame) -> pd.DataFrame:
     )
 
     df["보험료"] = df["보험료"].map(won)
-    df["쉐어율"] = df["쉐어율"].apply(lambda x: pct(x) if pd.notnull(x) else "")
+    df["쉐어율"] = df["쉐어율"].apply(
+        lambda x: pct(x) if pd.notnull(x) else "⚠️ 미입력"
+    )
+    df["쉐어건수"] = df["쉐어건수"].apply(
+        lambda x: f"{float(x):.2f}".rstrip("0").rstrip(".")
+    )
     df["실적보험료"] = df["실적보험료"].map(won)
     df["컨벤션율"] = df["컨벤션율"].map(pct)
     df["컨벤션환산금액"] = df["컨벤션환산금액"].map(won)
@@ -481,6 +502,7 @@ def to_styled(dfin: pd.DataFrame) -> pd.DataFrame:
         "납입기간",
         "보험료",
         "쉐어율",
+        "쉐어건수",
         "실적보험료",
         "컨벤션율",
         "컨벤션환산금액",
@@ -569,7 +591,8 @@ def make_group(df: pd.DataFrame) -> pd.DataFrame:
 
         rows.append({
             "수금자명": collector,
-            "건수": len(sub),
+            "건수": req["인정건수"],
+            "쉐어율미입력": req["쉐어율미입력건수"],
             "실적보험료합계": sub["실적보험료"].sum(),
             "컨벤션환산합계": sub["컨벤션환산금액"].sum(),
             "달성등급": req["달성등급"],
@@ -587,6 +610,7 @@ def make_group(df: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame(columns=[
             "수금자명",
             "건수",
+            "쉐어율미입력",
             "실적보험료합계",
             "컨벤션환산합계",
             "달성등급",
@@ -603,6 +627,16 @@ def make_group(df: pd.DataFrame) -> pd.DataFrame:
 
 def format_group_for_display(group: pd.DataFrame) -> pd.DataFrame:
     df = group.copy()
+
+    if "건수" in df.columns:
+        df["건수"] = df["건수"].apply(
+            lambda x: f"{float(x):.2f}".rstrip("0").rstrip(".")
+        )
+
+    if "쉐어율미입력" in df.columns:
+        df["쉐어율미입력"] = df["쉐어율미입력"].apply(
+            lambda x: f"⚠️ {int(x)}건" if int(x) > 0 else ""
+        )
 
     for col in ["실적보험료합계", "컨벤션환산합계"]:
         if col in df.columns:
@@ -683,6 +717,8 @@ def write_totals_block(ws, dfin: pd.DataFrame, start_row: int):
         ["일반 달성 목표 대비", f"{conv - CONVENTION_GENERAL_TARGET:,.0f} 원"],
         ["더블 달성 목표 대비", f"{conv - CONVENTION_DOUBLE_TARGET:,.0f} 원"],
         ["트리플 달성 목표 대비", f"{conv - CONVENTION_TRIPLE_TARGET:,.0f} 원"],
+        ["인정 계약 건수", f"{req['인정건수']:.2f}".rstrip("0").rstrip(".") + "건"],
+        ["쉐어율 미입력 계약", f"{req['쉐어율미입력건수']}건"],
         ["계약 5건 이상", mark(req["건수5건"])],
         ["한화생명 5만원 이상 1건", mark(req["한화생명5만"])],
         ["필수조건", mark(req["필수조건"])],
@@ -812,6 +848,14 @@ def run():
             f"⚠️ {len(invalid_dates)}건의 계약일자가 날짜로 인식되지 않았습니다."
         )
 
+    missing_share_df = df[df["쉐어율미입력"]].copy()
+    if not missing_share_df.empty:
+        st.warning(
+            f"⚠️ 쉐어율이 입력되지 않은 계약이 {len(missing_share_df)}건 있습니다. "
+            "해당 계약은 건수 및 필수조건 계산에서 제외됩니다. "
+            "단독 계약은 쉐어율에 100을 입력해주세요."
+        )
+
     if not excluded_df.empty:
         st.warning(
             f"⚠️ 제외된 계약 {len(excluded_df)}건이 있습니다. "
@@ -881,7 +925,11 @@ def run():
     )
 
     st.markdown(
-        req_box(f"계약 건수 {CONVENTION_MIN_COUNT}건 이상", req["건수5건"]),
+        req_box(
+            f"계약 건수 {CONVENTION_MIN_COUNT}건 이상 "
+            f"(현재 {req['인정건수']:.2f}".rstrip("0").rstrip(".") + "건)",
+            req["건수5건"],
+        ),
         unsafe_allow_html=True,
     )
 
