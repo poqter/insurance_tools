@@ -12,7 +12,7 @@ except ImportError:  # 엑셀 다운로드 기능은 openpyxl 설치 후 활성�
     Workbook = None
 
 EOK = 10_000  # 내부 계산 단위: 만원
-UI_VERSION = "2026-07-consulting-report-v2"
+UI_VERSION = "2026-07-consulting-report-v3-centered"
 
 
 # -----------------------------------------------------------------------------
@@ -619,7 +619,7 @@ def build_excel_report(
 
     # 1. 한눈에 보는 결과
     ws = wb.create_sheet("한눈에 보는 결과")
-    _excel_title(ws, "상속세 예상 계산 결과", "상담 및 사전 검토용 | 제작일 2026년 07월 | 제작자 박병선 팀장")
+    _excel_title(ws, "상속세 예상 계산 결과", "상담 및 사전 검토용")
     for col, width in {"A": 3, "B": 18, "C": 18, "D": 4, "E": 18, "F": 18, "G": 4, "H": 18, "I": 18}.items():
         ws.column_dimensions[col].width = width
 
@@ -698,6 +698,10 @@ def build_excel_report(
         ["총 납부재원", won_text(liquid_funds)],
     ]
     end = _write_table(ws, 22, ["납부재원 구분", "금액"], funding_rows, [34, 28])
+    # 납부재원 구성 표 전체 가운데 정렬
+    for row in range(22, end + 1):
+        for col in range(2, 4):
+            ws.cell(row, col).alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     for cell in ws[end][1:3]:
         cell.font = Font(name="맑은 고딕", size=11, bold=True, color=NAVY)
         cell.fill = PatternFill("solid", fgColor=LIGHT_BLUE)
@@ -722,6 +726,10 @@ def build_excel_report(
     ]
     deduction_rows = [[name, "계산 반영" if amount > 0 else "입력 없음", won_text(amount), desc] for name, amount, desc in deduction_items]
     end = _write_table(ws, 7, ["공제 항목", "현재 계산 상태", "계산 금액", "설명"], deduction_rows, [24, 17, 22, 43])
+    # 공제 항목별 구성 표 전체 가운데 정렬
+    for row in range(7, end + 1):
+        for col in range(2, 6):
+            ws.cell(row, col).alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     for row in range(8, end + 1):
         status_cell = ws.cell(row, 3)
         if status_cell.value == "계산 반영":
@@ -745,10 +753,10 @@ def build_excel_report(
         ws.merge_cells(start_row=row, start_column=5, end_row=row, end_column=8)
         ws.cell(row, 2, label).font = Font(name="맑은 고딕", size=10, bold=True, color=GRAY)
         ws.cell(row, 2).fill = PatternFill("solid", fgColor=fill_color)
-        ws.cell(row, 2).alignment = Alignment(horizontal="left", vertical="center")
+        ws.cell(row, 2).alignment = Alignment(horizontal="center", vertical="center")
         ws.cell(row, 5, won_text(amount)).font = Font(name="맑은 고딕", size=14 if i >= 2 else 12, bold=True, color=font_color)
         ws.cell(row, 5).fill = PatternFill("solid", fgColor=fill_color)
-        ws.cell(row, 5).alignment = Alignment(horizontal="right", vertical="center")
+        ws.cell(row, 5).alignment = Alignment(horizontal="center", vertical="center")
         _style_range(ws, f"B{row}:H{row}", border=border)
         ws.row_dimensions[row].height = 26
     note_row = summary_row + 11
@@ -761,7 +769,7 @@ def build_excel_report(
     )
     ws.cell(note_row, 2, note).font = Font(name="맑은 고딕", size=10, bold=True, color=ORANGE if restricted > 0 else GREEN)
     ws.cell(note_row, 2).fill = PatternFill("solid", fgColor=LIGHT_ORANGE if restricted > 0 else LIGHT_GREEN)
-    ws.cell(note_row, 2).alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+    ws.cell(note_row, 2).alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     ws.cell(note_row, 2).border = border
     ws.page_setup.orientation = "landscape"
     ws.page_setup.fitToWidth = 1
@@ -792,6 +800,10 @@ def build_excel_report(
         ["예상 납부세액", "최종결과", won_text(result.estimated_tax_due), "현재 입력 기준 최종 예상치"],
     ]
     end = _write_table(ws, 7, ["계산 단계", "구분", "금액", "설명"], tax_rows, [28, 16, 25, 45])
+    # 계산 단계·구분·설명 열 가운데 정렬 (금액 열은 가독성을 위해 오른쪽 정렬 유지)
+    for row in range(7, end + 1):
+        for col in (2, 3, 5):
+            ws.cell(row, col).alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     color_map = {
         "가산": (LIGHT_ORANGE, ORANGE),
         "차감": (LIGHT_BLUE, NAVY),
@@ -863,10 +875,11 @@ def build_excel_report(
             ws.merge_cells(start_row=current_row, start_column=4, end_row=current_row, end_column=6)
             ws.cell(current_row, 2, label).font = Font(name="맑은 고딕", size=10, bold=True, color="344054")
             ws.cell(current_row, 2).fill = PatternFill("solid", fgColor=LIGHT_GRAY)
+            ws.cell(current_row, 2).alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
             display = won_text(value) if label in money_labels and isinstance(value, (int, float)) else value
             ws.cell(current_row, 4, display).font = Font(name="맑은 고딕", size=10, color=NAVY)
             ws.cell(current_row, 4).fill = PatternFill("solid", fgColor=WHITE)
-            ws.cell(current_row, 4).alignment = Alignment(horizontal="right", vertical="center")
+            ws.cell(current_row, 4).alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
             _style_range(ws, f"B{current_row}:F{current_row}", border=border)
             current_row += 1
         current_row += 1
@@ -1139,9 +1152,42 @@ def run():
         st.markdown(f"**납부재원 충족률 {funding_ratio:.1%}**")
         st.progress(min(1.0, max(0.0, funding_ratio)))
         if funding_gap < 0:
-            st.caption(f"예상 상속세의 약 **{shortage_ratio:.1%}가 부족**합니다.")
+            st.markdown(
+                f"""
+                <div style="
+                    margin-top:0.65rem;
+                    padding:0.85rem 1rem;
+                    border-radius:0.75rem;
+                    background:#FEF3F2;
+                    color:#B42318;
+                    font-size:1.32rem;
+                    font-weight:800;
+                    text-align:center;
+                    line-height:1.45;
+                ">
+                    예상 상속세의 약 {shortage_ratio:.1%}가 부족합니다.
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
         else:
-            st.caption("현재 입력 기준으로 예상 상속세 납부재원이 충족됩니다.")
+            st.markdown(
+                """
+                <div style="
+                    margin-top:0.65rem;
+                    padding:0.85rem 1rem;
+                    border-radius:0.75rem;
+                    background:#ECFDF3;
+                    color:#027A48;
+                    font-size:1.18rem;
+                    font-weight:750;
+                    text-align:center;
+                ">
+                    현재 입력 기준으로 예상 상속세 납부재원이 충족됩니다.
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
     else:
         funding_ratio = None
         st.caption("예상 상속세가 없어 납부재원 충족률을 계산하지 않습니다.")
