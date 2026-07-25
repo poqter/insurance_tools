@@ -12,6 +12,7 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.page import PageMargins
+from openpyxl.worksheet.pagebreak import Break
 
 APP_TITLE = "보험 리모델링 비교 제안서"
 
@@ -89,6 +90,7 @@ class CustomerData:
     new_total: int | None
     changes: pd.DataFrame
     contracts: pd.DataFrame
+    additions: pd.DataFrame
     analysis: AnalysisResult
     headline: str
 
@@ -155,7 +157,20 @@ def default_changes_df() -> pd.DataFrame:
 
 def default_contract_df() -> pd.DataFrame:
     return pd.DataFrame([
-        {"기존 계약/보장": "", "처리 방향 [목록 선택]": "선택하세요 ▼", "판단 근거": "", "진행 조건": ""}
+        {
+            "기존 계약/보장": "", "기존 월 보험료": "", "변경 후 월 보험료": "",
+            "처리 방향 [목록 선택]": "선택하세요 ▼", "구체적인 변경 내용": "",
+            "판단 근거": "", "진행 조건": ""
+        }
+    ])
+
+
+def default_additions_df() -> pd.DataFrame:
+    return pd.DataFrame([
+        {
+            "보험회사": "", "상품명": "", "새로 추가되는 보장/특약": "",
+            "보장 내용": "", "월 보험료": "", "추가 이유": ""
+        }
     ])
 
 
@@ -178,6 +193,15 @@ def clean_contracts(df: pd.DataFrame | None) -> pd.DataFrame:
     result["기존 계약/보장"] = result["기존 계약/보장"].map(normalize_text)
     result = result[result["기존 계약/보장"] != ""].reset_index(drop=True)
     result["처리 방향 [목록 선택]"] = result["처리 방향 [목록 선택]"].replace("선택하세요 ▼", "")
+    return result
+
+
+def clean_additions(df: pd.DataFrame | None) -> pd.DataFrame:
+    if df is None or df.empty:
+        return default_additions_df().iloc[0:0]
+    result = df.copy()
+    result["새로 추가되는 보장/특약"] = result["새로 추가되는 보장/특약"].map(normalize_text)
+    result = result[result["새로 추가되는 보장/특약"] != ""].reset_index(drop=True)
     return result
 
 
@@ -528,117 +552,199 @@ def write_change_box(ws, start_col: int, end_col: int, row: int, item: pd.Series
                 fill=PatternFill("solid", fgColor=bg), alignment=Alignment(horizontal="center", vertical="center"), border=border_all())
 
 
+def _write_title(ws, title: str, max_col: int, subtitle: str) -> None:
+    last = get_column_letter(max_col)
+    merge_write(ws, f"A1:{last}2", title,
+                font=Font(name="맑은 고딕", size=19, bold=True, color=NAVY_DARK),
+                alignment=Alignment(horizontal="center", vertical="center"))
+    merge_write(ws, f"A3:{last}3", subtitle,
+                font=Font(name="맑은 고딕", size=10.5, bold=True, color=NAVY),
+                alignment=Alignment(horizontal="center", vertical="center", wrap_text=True))
+
+
+def _write_premium_table(ws, start_col: int, end_col: int, top_row: int, customer: CustomerData) -> None:
+    mid = (start_col + end_col) // 2
+    spans = [(start_col, start_col+1), (start_col+2, mid), (mid+1, mid+2), (mid+3, end_col)]
+    labels = ["기존 월 보험료", f"{customer.old_monthly:,}원", "리모델링 후", f"{customer.new_monthly:,}원"]
+    for idx, ((a,b), value) in enumerate(zip(spans, labels)):
+        merge_write(ws, f"{get_column_letter(a)}{top_row}:{get_column_letter(b)}{top_row}", value,
+                    font=Font(name="맑은 고딕", size=9.5 if idx%2==0 else 11, bold=True, color=BLUE if idx==3 else BLACK),
+                    fill=PatternFill("solid", fgColor=LIGHT_BLUE if idx%2==0 else WHITE),
+                    alignment=Alignment(horizontal="center", vertical="center"), border=border_all())
+    old_total = format_compact_won(customer.old_total)
+    new_total = format_compact_won(customer.new_total)
+    labels2 = ["기존 납입 총액", old_total, "변경 납입 총액", new_total]
+    for idx, ((a,b), value) in enumerate(zip(spans, labels2)):
+        merge_write(ws, f"{get_column_letter(a)}{top_row+1}:{get_column_letter(b)}{top_row+1}", value,
+                    font=Font(name="맑은 고딕", size=9.5 if idx%2==0 else 10.5, bold=True, color=BLUE if idx==3 else BLACK),
+                    fill=PatternFill("solid", fgColor=LIGHT_BLUE if idx%2==0 else WHITE),
+                    alignment=Alignment(horizontal="center", vertical="center"), border=border_all())
+
+
+def _write_coverage_list(ws, start_col: int, end_col: int, top_row: int, customer: CustomerData, max_items: int) -> int:
+    l1, l2 = get_column_letter(start_col), get_column_letter(end_col)
+    merge_write(ws, f"{l1}{top_row}:{l2}{top_row}", "보장 재구성 내역",
+                font=Font(name="맑은 고딕", size=11, bold=True, color=NAVY),
+                alignment=Alignment(horizontal="left", vertical="center"))
+    rows = list(prioritized_changes(customer.changes, customer.priorities, max_items).iterrows())
+    if not rows:
+        rows = [(0, pd.Series({"변경할 보장":"입력된 핵심 변경 내용이 없습니다.", "변경 후에는":"-", "변경 후 월 보험료":""}))]
+    cur = top_row + 1
+    split = start_col + int((end_col-start_col+1)*0.64)-1
+    for _, item in rows:
+        name = normalize_text(item.get("변경할 보장"))
+        after = normalize_text(item.get("변경 후에는")) or normalize_text(item.get("어떻게 달라지나요? [목록 선택]")) or "-"
+        premium = parse_money(item.get("변경 후 월 보험료"))
+        value = f"{after}"
+        if premium:
+            value += f" · {premium:,}원"
+        merge_write(ws, f"{l1}{cur}:{get_column_letter(split)}{cur}", name,
+                    font=Font(name="맑은 고딕", size=10.5, bold=True, color=BLACK),
+                    fill=PatternFill("solid", fgColor=LIGHT_GRAY),
+                    alignment=Alignment(horizontal="center", vertical="center", wrap_text=True), border=border_all())
+        merge_write(ws, f"{get_column_letter(split+1)}{cur}:{l2}{cur}", value,
+                    font=Font(name="맑은 고딕", size=10.5, bold=True, color=NAVY),
+                    fill=PatternFill("solid", fgColor=WHITE),
+                    alignment=Alignment(horizontal="center", vertical="center", wrap_text=True), border=border_all())
+        ws.row_dimensions[cur].height = 26
+        cur += 1
+    return cur
+
+
+def _write_saving_boxes(ws, start_col: int, end_col: int, top_row: int, customer: CustomerData) -> None:
+    mid = (start_col + end_col)//2
+    monthly = abs(customer.analysis.monthly_delta)
+    total = abs(customer.analysis.total_delta or 0)
+    direction = customer.analysis.price_direction
+    color, bg = excel_direction(direction)
+    merge_write(ws, f"{get_column_letter(start_col)}{top_row}:{get_column_letter(mid)}{top_row+1}",
+                f"월 {'절감' if direction=='감소' else '증가' if direction=='증가' else '변동'}금액\n{monthly:,}원",
+                font=Font(name="맑은 고딕", size=11, bold=True, color=color), fill=PatternFill("solid", fgColor=bg),
+                alignment=Alignment(horizontal="center", vertical="center", wrap_text=True), border=border_all())
+    total_label = "총 납입 절감액" if (customer.analysis.total_delta or 0) < 0 else "총 납입 변동액"
+    merge_write(ws, f"{get_column_letter(mid+1)}{top_row}:{get_column_letter(end_col)}{top_row+1}",
+                f"{total_label}\n{format_compact_won(total)}",
+                font=Font(name="맑은 고딕", size=11, bold=True, color=color), fill=PatternFill("solid", fgColor=bg),
+                alignment=Alignment(horizontal="center", vertical="center", wrap_text=True), border=border_all())
+
+
 def write_single_customer_sheet(ws, customer: CustomerData, title: str, consultation_date: date, consultant: str) -> None:
-    for col in range(1, 13):
-        ws.column_dimensions[get_column_letter(col)].width = 11.5
-    merge_write(ws, "A1:I3", title, font=Font(name="맑은 고딕", size=20, bold=True, color=NAVY_DARK), alignment=Alignment(horizontal="left", vertical="center"))
-    merge_write(ws, "J1:L3", customer.proposal_label, font=Font(name="맑은 고딕", size=12, bold=True, color=WHITE), fill=PatternFill("solid", fgColor=TEAL), alignment=Alignment(horizontal="center", vertical="center", wrap_text=True), border=border_all())
-    ws.row_dimensions[1].height = 24; ws.row_dimensions[2].height = 24; ws.row_dimensions[3].height = 24
-    if customer.priorities:
-        merge_write(ws, "A4:L4", f"고객 우선사항  |  {' · '.join(customer.priorities[:2])}", font=Font(name="맑은 고딕", size=10, bold=True, color=NAVY), fill=PatternFill("solid", fgColor=LIGHT_GOLD), alignment=Alignment(horizontal="left", vertical="center"), border=border_all())
-    write_metric_box(ws, 1, 4, 6, "월 보험료 변화", format_change(customer.analysis.monthly_delta), f"{customer.old_monthly:,}원 → {customer.new_monthly:,}원", customer.analysis.price_direction, False)
-    write_metric_box(ws, 5, 8, 6, "연간 보험료 변화", format_change(customer.analysis.annual_delta), "월 차액 × 12개월", customer.analysis.price_direction, False)
-    td = customer.analysis.total_delta
-    td_dir = "동일" if td is None or td == 0 else "감소" if td < 0 else "증가"
-    write_metric_box(ws, 9, 12, 6, "총 납입액 변화", format_change(td), f"{format_compact_won(customer.old_total)} → {format_compact_won(customer.new_total)}", td_dir, False)
-    for r, h in {6:20, 7:25, 8:25, 9:22}.items(): ws.row_dimensions[r].height = h
-    rows = list(prioritized_changes(customer.changes, customer.priorities, 4).iterrows())
-    start_rows = [11, 16]
-    for n, (_, item) in enumerate(rows):
-        row = start_rows[n // 2]
-        start_col = 1 if n % 2 == 0 else 7
-        end_col = 6 if n % 2 == 0 else 12
-        write_change_box(ws, start_col, end_col, row, item, False)
-    for r in range(11, 20): ws.row_dimensions[r].height = 23
-    dirs = customer.contracts["처리 방향 [목록 선택]"].fillna("").astype(str) if not customer.contracts.empty else pd.Series(dtype=str)
-    keep = int(dirs.str.contains("유지").sum()); adjust = int(dirs.str.contains("감액|조정|해지|결정").sum()); check = int(dirs.str.contains("확인").sum())
-    merge_write(ws, "A21:L21", f"계약 정리 요약   유지 {keep}건   |   조정·검토 {adjust}건   |   추가 확인 {check}건", font=Font(name="맑은 고딕", size=11, bold=True, color=NAVY), fill=PatternFill("solid", fgColor=LIGHT_BLUE), alignment=Alignment(horizontal="center", vertical="center"), border=border_all())
-    merge_write(ws, "A23:L24", customer.headline, font=Font(name="맑은 고딕", size=12, bold=True, color=NAVY_DARK), fill=PatternFill("solid", fgColor=LIGHT_GRAY), alignment=Alignment(horizontal="left", vertical="center", wrap_text=True), border=Border(left=MEDIUM_NAVY))
-    merge_write(ws, "A26:L26", f"상담일 {consultation_date:%Y.%m.%d}    담당자 {consultant or '-'}", font=Font(name="맑은 고딕", size=9.5, color=GRAY_DARK), alignment=Alignment(horizontal="right", vertical="center"))
-    ws.print_area = "A1:L26"
-    page_setup(ws, 1)
+    for col in range(1, 13): ws.column_dimensions[get_column_letter(col)].width = 11.5
+    _write_title(ws, title, 12, "필요한 진단비와 주요 치료비 중심으로 보장을 재구성하고, 월 보험료와 총 납입 부담을 함께 비교한 제안입니다.")
+    color, bg = excel_direction(customer.analysis.price_direction)
+    pct = abs(customer.analysis.monthly_delta) / customer.old_monthly * 100 if customer.old_monthly else 0
+    merge_write(ws, "A4:L5", f"월 {format_change(customer.analysis.monthly_delta)}   |   연간 {format_change(customer.analysis.annual_delta)}   |   월 보험료 약 {pct:.1f}% {'감소' if customer.analysis.monthly_delta<0 else '증가' if customer.analysis.monthly_delta>0 else '동일'}",
+                font=Font(name="맑은 고딕", size=12, bold=True, color=color), fill=PatternFill("solid", fgColor=bg),
+                alignment=Alignment(horizontal="center", vertical="center"), border=border_all())
+    merge_write(ws, "A7:L8", customer.name,
+                font=Font(name="맑은 고딕", size=17, bold=True, color=WHITE), fill=PatternFill("solid", fgColor=NAVY),
+                alignment=Alignment(horizontal="center", vertical="center"), border=border_all())
+    _write_premium_table(ws, 1, 12, 9, customer)
+    next_row = _write_coverage_list(ws, 1, 12, 12, customer, 4)
+    _write_saving_boxes(ws, 1, 12, max(next_row+1, 18), customer)
+    r = max(next_row+4, 22)
+    merge_write(ws, f"A{r}:L{r+1}", customer.headline,
+                font=Font(name="맑은 고딕", size=11, bold=True, color=NAVY_DARK), fill=PatternFill("solid", fgColor=LIGHT_GRAY),
+                alignment=Alignment(horizontal="center", vertical="center", wrap_text=True), border=border_all())
+    merge_write(ws, f"A{r+2}:L{r+2}", f"상담일 {consultation_date:%Y.%m.%d}    담당자 {consultant or '-'}",
+                font=Font(name="맑은 고딕", size=9, color=GRAY_DARK), alignment=Alignment(horizontal="right", vertical="center"))
+    page1_end = r+2
+    write_detail_page(ws, [customer], page1_end+3, 12, consultation_date, consultant)
+    ws.row_breaks.append(Break(id=page1_end+1))
+    ws.print_area = f"A1:L{ws.max_row}"
+    page_setup(ws, 2)
 
 
 def write_two_customer_sheet(ws, customers: list[CustomerData], title: str, consultation_date: date, consultant: str) -> None:
-    for col in range(1, 17):
-        ws.column_dimensions[get_column_letter(col)].width = 9.4
-    merge_write(ws, "A1:M3", title, font=Font(name="맑은 고딕", size=18, bold=True, color=NAVY_DARK), alignment=Alignment(horizontal="left", vertical="center"))
-    family_delta = sum(c.analysis.monthly_delta for c in customers)
-    family_direction = "감소" if family_delta < 0 else "증가" if family_delta > 0 else "동일"
-    color, bg = excel_direction(family_direction)
-    merge_write(ws, "N1:P3", f"가족 월 보험료\n{format_change(family_delta)}", font=Font(name="맑은 고딕", size=11, bold=True, color=color), fill=PatternFill("solid", fgColor=bg), alignment=Alignment(horizontal="center", vertical="center", wrap_text=True), border=border_all())
-    for i, customer in enumerate(customers):
-        start = 1 if i == 0 else 9
-        end = 8 if i == 0 else 16
-        l1, l2 = get_column_letter(start), get_column_letter(end)
-        merge_write(ws, f"{l1}5:{get_column_letter(end-3)}6", customer.name, font=Font(name="맑은 고딕", size=15, bold=True, color=NAVY), fill=PatternFill("solid", fgColor=WHITE), alignment=Alignment(horizontal="left", vertical="center"), border=border_all())
-        merge_write(ws, f"{get_column_letter(end-2)}5:{l2}6", customer.proposal_label, font=Font(name="맑은 고딕", size=9.5, bold=True, color=WHITE), fill=PatternFill("solid", fgColor=TEAL), alignment=Alignment(horizontal="center", vertical="center", wrap_text=True), border=border_all())
-        if customer.priorities:
-            merge_write(ws, f"{l1}7:{l2}7", f"우선사항  {' · '.join(customer.priorities[:2])}", font=Font(name="맑은 고딕", size=9.5, bold=True, color=NAVY), fill=PatternFill("solid", fgColor=LIGHT_GOLD), alignment=Alignment(horizontal="left", vertical="center"), border=border_all())
-        write_metric_box(ws, start, start+1, 9, "월 보험료", format_change(customer.analysis.monthly_delta), f"{customer.old_monthly:,} → {customer.new_monthly:,}", customer.analysis.price_direction, True)
-        write_metric_box(ws, start+2, start+4, 9, "연간 변화", format_change(customer.analysis.annual_delta), "월 차액 × 12", customer.analysis.price_direction, True)
-        td = customer.analysis.total_delta; td_dir = "동일" if td is None or td == 0 else "감소" if td < 0 else "증가"
-        write_metric_box(ws, start+5, end, 9, "총 납입액", format_change(td), f"{format_compact_won(customer.old_total)} → {format_compact_won(customer.new_total)}", td_dir, True)
-        rows = list(prioritized_changes(customer.changes, customer.priorities, 3).iterrows())
-        for n, (_, item) in enumerate(rows):
-            write_change_box(ws, start, end, 14 + n*4, item, True)
-        dirs = customer.contracts["처리 방향 [목록 선택]"].fillna("").astype(str) if not customer.contracts.empty else pd.Series(dtype=str)
-        keep = int(dirs.str.contains("유지").sum()); adjust = int(dirs.str.contains("감액|조정|해지|결정").sum()); check = int(dirs.str.contains("확인").sum())
-        merge_write(ws, f"{l1}27:{l2}27", f"계약 정리  유지 {keep}건 · 조정·검토 {adjust}건 · 확인 {check}건", font=Font(name="맑은 고딕", size=9.5, bold=True, color=NAVY), fill=PatternFill("solid", fgColor=LIGHT_BLUE), alignment=Alignment(horizontal="center", vertical="center"), border=border_all())
-        merge_write(ws, f"{l1}29:{l2}31", customer.headline, font=Font(name="맑은 고딕", size=10.5, bold=True, color=NAVY_DARK), fill=PatternFill("solid", fgColor=LIGHT_GRAY), alignment=Alignment(horizontal="left", vertical="center", wrap_text=True), border=Border(left=MEDIUM_NAVY))
-    merge_write(ws, "A33:P33", f"상담일 {consultation_date:%Y.%m.%d}    담당자 {consultant or '-'}", font=Font(name="맑은 고딕", size=9, color=GRAY_DARK), alignment=Alignment(horizontal="right", vertical="center"))
-    for r in range(1, 34):
-        if ws.row_dimensions[r].height is None:
-            ws.row_dimensions[r].height = 21
-    ws.print_area = "A1:P33"
-    page_setup(ws, 1)
+    for col in range(1, 17): ws.column_dimensions[get_column_letter(col)].width = 9.5
+    _write_title(ws, title, 16, "필요한 진단비와 주요 치료비 중심으로 보장을 재구성하고, 월 보험료와 총 납입 부담을 함께 낮추는 방향입니다.")
+    family_month = sum(c.analysis.monthly_delta for c in customers)
+    old_family = sum(c.old_monthly for c in customers)
+    family_total = sum((c.analysis.total_delta or 0) for c in customers)
+    pct = abs(family_month)/old_family*100 if old_family else 0
+    color,bg=excel_direction("감소" if family_month<0 else "증가" if family_month>0 else "동일")
+    merge_write(ws, "A4:P5", f"월 {format_change(family_month)}   |   총 납입예정액 {format_change(family_total)}   |   월 보험료 약 {pct:.1f}% {'감소' if family_month<0 else '증가' if family_month>0 else '동일'}",
+                font=Font(name="맑은 고딕", size=12, bold=True, color=color), fill=PatternFill("solid", fgColor=bg),
+                alignment=Alignment(horizontal="center", vertical="center"), border=border_all())
+    for i,c in enumerate(customers):
+        a,b=(1,8) if i==0 else (9,16)
+        merge_write(ws, f"{get_column_letter(a)}7:{get_column_letter(b)}8", c.name,
+                    font=Font(name="맑은 고딕", size=16, bold=True, color=WHITE), fill=PatternFill("solid", fgColor=NAVY),
+                    alignment=Alignment(horizontal="center", vertical="center"), border=border_all())
+        _write_premium_table(ws,a,b,9,c)
+        _write_coverage_list(ws,a,b,12,c,4)
+        _write_saving_boxes(ws,a,b,18,c)
+    r=22
+    headers=["부부 합산 비교","기존","리모델링 후","절감 효과"]
+    spans=[(1,3),(4,7),(8,11),(12,16)]
+    for (a,b),h in zip(spans,headers):
+        merge_write(ws,f"{get_column_letter(a)}{r}:{get_column_letter(b)}{r}",h,font=Font(name="맑은 고딕",size=11,bold=True,color=WHITE),fill=PatternFill("solid",fgColor=NAVY),alignment=Alignment(horizontal="center",vertical="center"),border=border_all())
+    old_total_month=sum(c.old_monthly for c in customers); new_total_month=sum(c.new_monthly for c in customers)
+    old_total_all=sum(c.old_total or 0 for c in customers); new_total_all=sum(c.new_total or 0 for c in customers)
+    rows=[("월 보험료",f"{old_total_month:,}원",f"{new_total_month:,}원",f"{abs(family_month):,}원 {'절감' if family_month<0 else '증가'} (약 {pct:.1f}%)"),
+          ("연간 보험료",f"{old_total_month*12:,}원",f"{new_total_month*12:,}원",format_change(family_month*12)),
+          ("납입예정 총액",format_compact_won(old_total_all),format_compact_won(new_total_all),format_change(family_total))]
+    for rr,row in enumerate(rows,r+1):
+        for (a,b),v in zip(spans,row):
+            merge_write(ws,f"{get_column_letter(a)}{rr}:{get_column_letter(b)}{rr}",v,font=Font(name="맑은 고딕",size=10.5,bold=(a==1 or a==12),color=GREEN if a==12 and family_month<0 else BLACK),fill=PatternFill("solid",fgColor=LIGHT_BLUE if a==1 else LIGHT_GOLD if a==12 else WHITE),alignment=Alignment(horizontal="center",vertical="center",wrap_text=True),border=border_all())
+    merge_write(ws,"A26:P27","단순한 보험료 축소가 아니라, 중복되거나 효율이 낮은 부담을 조정하고 핵심 보장 중심으로 재구성하는 제안입니다.",font=Font(name="맑은 고딕",size=10.5,bold=True,color=NAVY),alignment=Alignment(horizontal="center",vertical="center",wrap_text=True))
+    merge_write(ws,"A28:P28",f"상담일 {consultation_date:%Y.%m.%d}    담당자 {consultant or '-'}",font=Font(name="맑은 고딕",size=9,color=GRAY_DARK),alignment=Alignment(horizontal="right",vertical="center"))
+    page1_end=28
+    write_detail_page(ws,customers,31,16,consultation_date,consultant)
+    ws.row_breaks.append(Break(id=page1_end+1))
+    ws.print_area=f"A1:P{ws.max_row}"
+    page_setup(ws,2)
 
 
-def write_contract_sheet(ws, customer: CustomerData) -> None:
-    for col, width in {"A":22, "B":20, "C":42, "D":42}.items():
-        ws.column_dimensions[col].width = width
-    merge_write(ws, "A1:D3", f"{customer.name}님 기존 계약 정리 및 확인사항", font=Font(name="맑은 고딕", size=19, bold=True, color=NAVY_DARK), alignment=Alignment(horizontal="left", vertical="center"))
-    headers = ["기존 계약/보장", "처리 방향", "판단 근거", "진행 조건"]
-    for c, h in enumerate(headers, 1):
-        cell = ws.cell(5, c, h)
-        cell.font = Font(name="맑은 고딕", size=11.5, bold=True, color=WHITE)
-        cell.fill = PatternFill("solid", fgColor=NAVY)
-        cell.alignment = Alignment(horizontal="center", vertical="center")
-        cell.border = border_all()
-    row = 6
-    contracts = customer.contracts if not customer.contracts.empty else default_contract_df().iloc[0:0]
-    for _, item in contracts.iterrows():
-        values = [normalize_text(item.get("기존 계약/보장")), normalize_text(item.get("처리 방향 [목록 선택]")), normalize_text(item.get("판단 근거")), normalize_text(item.get("진행 조건"))]
-        for c, value in enumerate(values, 1):
-            cell = ws.cell(row, c, value)
-            cell.font = Font(name="맑은 고딕", size=11, bold=c == 2, color=NAVY if c == 2 else BLACK)
-            cell.fill = PatternFill("solid", fgColor=LIGHT_BLUE if c == 2 else WHITE)
-            cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
-            cell.border = border_all()
-        ws.row_dimensions[row].height = 42
-        row += 1
-    ws.print_area = f"A1:D{max(row, 7)}"
-    page_setup(ws, 1)
+def _table_header(ws,row:int,headers:list[str],spans:list[tuple[int,int]]) -> None:
+    for h,(a,b) in zip(headers,spans):
+        merge_write(ws,f"{get_column_letter(a)}{row}:{get_column_letter(b)}{row}",h,font=Font(name="맑은 고딕",size=9.5,bold=True,color=WHITE),fill=PatternFill("solid",fgColor=NAVY),alignment=Alignment(horizontal="center",vertical="center",wrap_text=True),border=border_all())
 
 
-def create_excel(customers: list[CustomerData], title: str, consultation_date: date, consultant: str, include_contract_sheets: bool) -> BytesIO:
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "가족_비교안" if len(customers) == 2 else f"{customers[0].name[:20]}_비교안"
-    if len(customers) == 1:
-        write_single_customer_sheet(ws, customers[0], title, consultation_date, consultant)
-    else:
-        write_two_customer_sheet(ws, customers, title, consultation_date, consultant)
-    if include_contract_sheets:
-        for customer in customers:
-            if not customer.contracts.empty:
-                sheet_name = f"{customer.name}_계약정리"[:31]
-                ws2 = wb.create_sheet(sheet_name)
-                write_contract_sheet(ws2, customer)
-    output = BytesIO()
-    wb.save(output)
-    output.seek(0)
-    return output
+def write_detail_page(ws, customers:list[CustomerData], start_row:int, max_col:int, consultation_date:date, consultant:str) -> None:
+    last=get_column_letter(max_col)
+    merge_write(ws,f"A{start_row}:{last}{start_row+1}","기존 보험 변경 및 신규 추가 내역",font=Font(name="맑은 고딕",size=18,bold=True,color=NAVY_DARK),alignment=Alignment(horizontal="left",vertical="center"))
+    row=start_row+3
+    spans_contract=[(1,3),(4,5),(6,7),(8,9),(10,12),(13,max_col)] if max_col==16 else [(1,2),(3,4),(5,6),(7,8),(9,10),(11,12)]
+    headers_contract=["기존 계약/보장","기존 월 보험료","변경 후 월 보험료","처리 방향","구체적인 변경 내용","판단 근거·진행 조건"]
+    spans_add=[(1,2),(3,4),(5,7),(8,10),(11,12),(13,max_col)] if max_col==16 else [(1,2),(3,4),(5,6),(7,8),(9,10),(11,12)]
+    headers_add=["보험회사","상품명","새로 추가되는 보장/특약","보장 내용","월 보험료","추가 이유"]
+    for c in customers:
+        merge_write(ws,f"A{row}:{last}{row}",f"{c.name}님",font=Font(name="맑은 고딕",size=13,bold=True,color=WHITE),fill=PatternFill("solid",fgColor=TEAL),alignment=Alignment(horizontal="left",vertical="center"),border=border_all())
+        row+=1
+        merge_write(ws,f"A{row}:{last}{row}","기존 보험의 변경 내용",font=Font(name="맑은 고딕",size=11,bold=True,color=NAVY),fill=PatternFill("solid",fgColor=LIGHT_BLUE),alignment=Alignment(horizontal="left",vertical="center"),border=border_all())
+        row+=1; _table_header(ws,row,headers_contract,spans_contract); row+=1
+        contracts=c.contracts if not c.contracts.empty else default_contract_df().iloc[0:0]
+        if contracts.empty:
+            merge_write(ws,f"A{row}:{last}{row}","입력된 기존 보험 변경 내용이 없습니다.",font=Font(name="맑은 고딕",size=10,color=GRAY_DARK),alignment=Alignment(horizontal="center",vertical="center"),border=border_all()); row+=1
+        else:
+            for _,item in contracts.head(4).iterrows():
+                vals=[normalize_text(item.get("기존 계약/보장")),normalize_text(item.get("기존 월 보험료")),normalize_text(item.get("변경 후 월 보험료")),normalize_text(item.get("처리 방향 [목록 선택]")),normalize_text(item.get("구체적인 변경 내용"))," / ".join(x for x in [normalize_text(item.get("판단 근거")),normalize_text(item.get("진행 조건"))] if x)]
+                for (a,b),v in zip(spans_contract,vals):
+                    merge_write(ws,f"{get_column_letter(a)}{row}:{get_column_letter(b)}{row}",v,font=Font(name="맑은 고딕",size=9.5,bold=(a==8),color=NAVY if a==8 else BLACK),fill=PatternFill("solid",fgColor=WHITE),alignment=Alignment(horizontal="center",vertical="center",wrap_text=True),border=border_all())
+                ws.row_dimensions[row].height=34; row+=1
+        row+=1
+        merge_write(ws,f"A{row}:{last}{row}","새롭게 추가되는 보험·보장",font=Font(name="맑은 고딕",size=11,bold=True,color=NAVY),fill=PatternFill("solid",fgColor=LIGHT_GREEN),alignment=Alignment(horizontal="left",vertical="center"),border=border_all())
+        row+=1; _table_header(ws,row,headers_add,spans_add); row+=1
+        additions=c.additions if not c.additions.empty else default_additions_df().iloc[0:0]
+        if additions.empty:
+            merge_write(ws,f"A{row}:{last}{row}","입력된 신규 추가 내용이 없습니다.",font=Font(name="맑은 고딕",size=10,color=GRAY_DARK),alignment=Alignment(horizontal="center",vertical="center"),border=border_all()); row+=1
+        else:
+            for _,item in additions.head(4).iterrows():
+                vals=[normalize_text(item.get("보험회사")),normalize_text(item.get("상품명")),normalize_text(item.get("새로 추가되는 보장/특약")),normalize_text(item.get("보장 내용")),normalize_text(item.get("월 보험료")),normalize_text(item.get("추가 이유"))]
+                for (a,b),v in zip(spans_add,vals):
+                    merge_write(ws,f"{get_column_letter(a)}{row}:{get_column_letter(b)}{row}",v,font=Font(name="맑은 고딕",size=9.5,bold=(a==5),color=NAVY if a==5 else BLACK),fill=PatternFill("solid",fgColor=WHITE),alignment=Alignment(horizontal="center",vertical="center",wrap_text=True),border=border_all())
+                ws.row_dimensions[row].height=34; row+=1
+        row+=2
+    merge_write(ws,f"A{row}:{last}{row}","※ 기존 계약의 감액·해지 등은 새로운 계약의 승인 조건과 보장 개시 여부를 확인한 후 결정해야 합니다.",font=Font(name="맑은 고딕",size=9,color=GRAY_DARK),alignment=Alignment(horizontal="left",vertical="center",wrap_text=True))
+
+
+def create_excel(customers: list[CustomerData], title: str, consultation_date: date, consultant: str) -> BytesIO:
+    wb=Workbook(); ws=wb.active
+    ws.title="가족_비교안" if len(customers)==2 else f"{customers[0].name[:20]}_비교안"
+    if len(customers)==1: write_single_customer_sheet(ws,customers[0],title,consultation_date,consultant)
+    else: write_two_customer_sheet(ws,customers,title,consultation_date,consultant)
+    output=BytesIO(); wb.save(output); output.seek(0); return output
 
 
 # ---------- example and UI ----------
@@ -658,8 +764,11 @@ def load_example(person_count: int) -> None:
             {"변경할 보장":"기존 실손보험", "기존에는":"가입 중", "변경 후에는":"유지", "어떻게 달라지나요? [목록 선택]":"그대로 유지", "왜 바꾸나요?":"기존 가입 조건 유지", "변경 후 월 보험료":"", "첫 장 표시 [목록 선택]":"상세에만 표시"},
         ])
         st.session_state[f"rv2_contracts_{i}"] = pd.DataFrame([
-            {"기존 계약/보장":"기존 실손보험", "처리 방향 [목록 선택]":"유지", "판단 근거":"기존 가입 조건 유지", "진행 조건":"계속 유지"},
-            {"기존 계약/보장":"기존 종합보험", "처리 방향 [목록 선택]":"신규 승인 후 결정", "판단 근거":"중복 및 부족 보장 재검토", "진행 조건":"신규 계약 승인 후"},
+            {"기존 계약/보장":"기존 실손보험", "기존 월 보험료":"35,000", "변경 후 월 보험료":"35,000", "처리 방향 [목록 선택]":"유지", "구체적인 변경 내용":"현재 계약 그대로 유지", "판단 근거":"기존 가입 조건 유지", "진행 조건":"계속 유지"},
+            {"기존 계약/보장":"기존 종합보험", "기존 월 보험료":"180,000", "변경 후 월 보험료":"60,000", "처리 방향 [목록 선택]":"일부 특약 조정", "구체적인 변경 내용":"중복 특약 감액 및 필요한 담보 유지", "판단 근거":"중복 및 부족 보장 재검토", "진행 조건":"신규 계약 승인 후"},
+        ])
+        st.session_state[f"rv2_additions_{i}"] = pd.DataFrame([
+            {"보험회사":"예시보험", "상품명":"건강보장플랜", "새로 추가되는 보장/특약":"암 주요치료비", "보장 내용":"약관상 주요 암 치료 시 보장", "월 보험료":"50,000", "추가 이유":"치료 과정의 비용 보완"}
         ])
     st.session_state["rv2_example"] = True
 
@@ -668,6 +777,7 @@ def init_state() -> None:
     for i in [1, 2]:
         st.session_state.setdefault(f"rv2_changes_{i}", default_changes_df())
         st.session_state.setdefault(f"rv2_contracts_{i}", default_contract_df())
+        st.session_state.setdefault(f"rv2_additions_{i}", default_additions_df())
 
 
 def collect_customer(i: int) -> CustomerData:
@@ -681,10 +791,11 @@ def collect_customer(i: int) -> CustomerData:
         old_total = new_total = None
     changes = clean_changes(st.session_state.get(f"rv2_changes_{i}"))
     contracts = clean_contracts(st.session_state.get(f"rv2_contracts_{i}"))
+    additions = clean_additions(st.session_state.get(f"rv2_additions_{i}"))
     priorities = list(st.session_state.get(f"rv2_priorities_{i}", []))[:2]
     analysis = analyze(old_monthly, new_monthly, old_total, new_total, changes)
     proposal = proposal_label_from_state(i, analysis, priorities)
-    temp = CustomerData(i, name, proposal, priorities, old_monthly, new_monthly, old_total, new_total, changes, contracts, analysis, "")
+    temp = CustomerData(i, name, proposal, priorities, old_monthly, new_monthly, old_total, new_total, changes, contracts, additions, analysis, "")
     candidates = headline_candidates(temp)
     selected_idx = int(st.session_state.get(f"rv2_headline_idx_{i}", 0))
     headline = normalize_text(st.session_state.get(f"rv2_headline_custom_{i}", "")) or candidates[min(selected_idx, len(candidates)-1)]
@@ -741,8 +852,7 @@ def run() -> None:
             consultation_date = st.date_input("상담일", value=date.today(), key="rv2_date")
             consultant = st.text_input("담당자", key="rv2_consultant", placeholder="예: 박병선 팀장")
         with common2:
-            include_contract = st.checkbox("계약 상세 시트 포함", value=False, key="rv2_include_contract")
-            st.caption("계약 처리 내용이 있을 때만 고객별 상세 시트가 추가됩니다.")
+            st.info("엑셀은 1페이지 요약안과 2페이지 기존 보험 변경·신규 추가 내역으로 자동 구성됩니다.")
         st.divider()
         for i in range(1, person_count + 1):
             render_customer_inputs(i, person_count)
@@ -774,51 +884,82 @@ def run() -> None:
             if i < person_count: st.divider()
 
     with tabs[2]:
-        st.info("고객에게 설명할 중요한 변경만 입력하세요. 모든 담보를 입력할 필요는 없습니다.")
-        st.markdown("**흰색 칸은 직접 입력**, 제목에 **[목록 선택] ▼**가 있는 칸은 목록에서 선택합니다.")
+        st.info("1페이지에는 핵심 요약이, 2페이지에는 기존 보험의 구체적인 변경 내용과 새롭게 추가되는 내용이 정리됩니다.")
+        st.markdown("**표 안의 흰색 칸을 클릭해 직접 입력하세요.** 입력 후 각 표 아래의 적용 버튼을 눌러 저장합니다.")
         for i in range(1, person_count + 1):
             name = normalize_text(st.session_state.get(f"rv2_name_{i}", "")) or f"고객 {i}"
             st.subheader(f"{name} 핵심 변경")
-            with st.form(f"rv2_changes_form_{i}", clear_on_submit=False):
-                edited = st.data_editor(
-                    st.session_state[f"rv2_changes_{i}"], num_rows="dynamic", use_container_width=True, hide_index=True,
-                    column_config={
-                        "변경할 보장": st.column_config.TextColumn("변경할 보장", required=True, width="medium", help="고객 자료에는 입력한 담보명을 그대로 사용합니다."),
-                        "기존에는": st.column_config.TextColumn("기존에는", width="medium", help="예: 2,000만원 / 없음 / 가입 중"),
-                        "변경 후에는": st.column_config.TextColumn("변경 후에는", width="medium", help="예: 5,000만원 / 신규 구성 / 유지"),
-                        "어떻게 달라지나요? [목록 선택]": st.column_config.SelectboxColumn("어떻게 달라지나요? [목록 선택] ▼", options=CHANGE_OPTIONS, required=True, width="medium"),
-                        "왜 바꾸나요?": st.column_config.TextColumn("왜 바꾸나요?", width="large"),
-                        "변경 후 월 보험료": st.column_config.TextColumn("변경 후 월 보험료", width="small"),
-                        "첫 장 표시 [목록 선택]": st.column_config.SelectboxColumn("첫 장 표시 [목록 선택] ▼", options=DISPLAY_OPTIONS, required=True, width="medium"),
-                    }, key=f"rv2_changes_editor_{i}",
-                )
-                submit = st.form_submit_button("핵심 변경 내용 적용", type="primary", use_container_width=True)
-            if submit:
-                st.session_state[f"rv2_changes_{i}"] = edited
+            edited = st.data_editor(
+                st.session_state[f"rv2_changes_{i}"].copy(),
+                num_rows="dynamic", use_container_width=True, hide_index=True, disabled=False,
+                column_config={
+                    "변경할 보장": st.column_config.TextColumn("변경할 보장", width="medium", help="고객 자료에는 입력한 담보명을 그대로 사용합니다."),
+                    "기존에는": st.column_config.TextColumn("기존에는", width="medium", help="예: 2,000만원 / 없음 / 가입 중"),
+                    "변경 후에는": st.column_config.TextColumn("변경 후에는", width="medium", help="예: 5,000만원 / 신규 구성 / 유지"),
+                    "어떻게 달라지나요? [목록 선택]": st.column_config.SelectboxColumn("어떻게 달라지나요? [목록 선택] ▼", options=CHANGE_OPTIONS, width="medium"),
+                    "왜 바꾸나요?": st.column_config.TextColumn("왜 바꾸나요?", width="large"),
+                    "변경 후 월 보험료": st.column_config.TextColumn("변경 후 월 보험료", width="small"),
+                    "첫 장 표시 [목록 선택]": st.column_config.SelectboxColumn("첫 장 표시 [목록 선택] ▼", options=DISPLAY_OPTIONS, width="medium"),
+                }, key=f"rv2_changes_editor_{i}",
+            )
+            if st.button("핵심 변경 내용 적용", key=f"rv2_apply_changes_{i}", type="primary", use_container_width=True):
+                st.session_state[f"rv2_changes_{i}"] = edited.copy()
+                st.session_state.pop(f"rv2_changes_editor_{i}", None)
+                st.session_state[f"rv2_changes_saved_{i}"] = True
+                st.rerun()
+            if st.session_state.pop(f"rv2_changes_saved_{i}", False):
                 st.success("핵심 변경 내용을 적용했습니다.")
-            with st.expander("기존 계약 처리 방향 입력 · 선택사항"):
-                with st.form(f"rv2_contract_form_{i}", clear_on_submit=False):
-                    cedit = st.data_editor(
-                        st.session_state[f"rv2_contracts_{i}"], num_rows="dynamic", use_container_width=True, hide_index=True,
-                        column_config={
-                            "기존 계약/보장": st.column_config.TextColumn("기존 계약/보장", required=True, width="large"),
-                            "처리 방향 [목록 선택]": st.column_config.SelectboxColumn("처리 방향 [목록 선택] ▼", options=CONTRACT_OPTIONS, required=True),
-                            "판단 근거": st.column_config.TextColumn("판단 근거", width="large"),
-                            "진행 조건": st.column_config.TextColumn("진행 조건", width="large"),
-                        }, key=f"rv2_contract_editor_{i}",
-                    )
-                    csubmit = st.form_submit_button("계약 처리 내용 적용", use_container_width=True)
-                if csubmit:
-                    st.session_state[f"rv2_contracts_{i}"] = cedit
-                    st.success("계약 처리 내용을 적용했습니다.")
-            if i < person_count: st.divider()
+
+            with st.expander("2페이지 · 기존 보험의 변경 내용 입력", expanded=True):
+                cedit = st.data_editor(
+                    st.session_state[f"rv2_contracts_{i}"].copy(),
+                    num_rows="dynamic", use_container_width=True, hide_index=True, disabled=False,
+                    column_config={
+                        "기존 계약/보장": st.column_config.TextColumn("기존 계약/보장", width="large"),
+                        "기존 월 보험료": st.column_config.TextColumn("기존 월 보험료", width="small"),
+                        "변경 후 월 보험료": st.column_config.TextColumn("변경 후 월 보험료", width="small"),
+                        "처리 방향 [목록 선택]": st.column_config.SelectboxColumn("처리 방향 [목록 선택] ▼", options=CONTRACT_OPTIONS, width="medium"),
+                        "구체적인 변경 내용": st.column_config.TextColumn("구체적인 변경 내용", width="large"),
+                        "판단 근거": st.column_config.TextColumn("판단 근거", width="large"),
+                        "진행 조건": st.column_config.TextColumn("진행 조건", width="large"),
+                    }, key=f"rv2_contract_editor_{i}",
+                )
+                if st.button("기존 보험 변경 내용 적용", key=f"rv2_apply_contract_{i}", use_container_width=True):
+                    st.session_state[f"rv2_contracts_{i}"] = cedit.copy()
+                    st.session_state.pop(f"rv2_contract_editor_{i}", None)
+                    st.session_state[f"rv2_contract_saved_{i}"] = True
+                    st.rerun()
+                if st.session_state.pop(f"rv2_contract_saved_{i}", False):
+                    st.success("기존 보험 변경 내용을 적용했습니다.")
+
+            with st.expander("2페이지 · 새롭게 추가되는 보험·보장 입력", expanded=True):
+                aedit = st.data_editor(
+                    st.session_state[f"rv2_additions_{i}"].copy(),
+                    num_rows="dynamic", use_container_width=True, hide_index=True, disabled=False,
+                    column_config={
+                        "보험회사": st.column_config.TextColumn("보험회사", width="medium"),
+                        "상품명": st.column_config.TextColumn("상품명", width="large"),
+                        "새로 추가되는 보장/특약": st.column_config.TextColumn("새로 추가되는 보장/특약", width="large"),
+                        "보장 내용": st.column_config.TextColumn("보장 내용", width="large"),
+                        "월 보험료": st.column_config.TextColumn("월 보험료", width="small"),
+                        "추가 이유": st.column_config.TextColumn("추가 이유", width="large"),
+                    }, key=f"rv2_additions_editor_{i}",
+                )
+                if st.button("새로운 추가 내용 적용", key=f"rv2_apply_additions_{i}", use_container_width=True):
+                    st.session_state[f"rv2_additions_{i}"] = aedit.copy()
+                    st.session_state.pop(f"rv2_additions_editor_{i}", None)
+                    st.session_state[f"rv2_additions_saved_{i}"] = True
+                    st.rerun()
+                if st.session_state.pop(f"rv2_additions_saved_{i}", False):
+                    st.success("새로운 추가 내용을 적용했습니다.")
+            if i < person_count:
+                st.divider()
 
     customers = [collect_customer(i) for i in range(1, person_count + 1)]
     names = [c.name for c in customers]
     title = normalize_text(st.session_state.get("rv2_title", "")) or auto_title(names)
     consultation_date = st.session_state.get("rv2_date", date.today())
     consultant = normalize_text(st.session_state.get("rv2_consultant", ""))
-    include_contract = bool(st.session_state.get("rv2_include_contract", False))
 
     with tabs[3]:
         st.subheader("고객 시점 미리보기")
@@ -850,7 +991,7 @@ def run() -> None:
         if person_count == 2 and any(not c.name for c in customers):
             st.error("2명 비교를 선택했으므로 고객 1과 고객 2의 이름을 모두 입력해 주세요.")
         else:
-            excel = create_excel(customers, title, consultation_date, consultant, include_contract)
+            excel = create_excel(customers, title, consultation_date, consultant)
             filename = safe_filename(f"{title}_{consultation_date:%Y%m%d}.xlsx")
             st.download_button("엑셀 다운로드", data=excel, file_name=filename, mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", type="primary", use_container_width=True)
 
