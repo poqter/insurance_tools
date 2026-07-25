@@ -12,7 +12,7 @@ except ImportError:  # 엑셀 다운로드 기능은 openpyxl 설치 후 활성�
     Workbook = None
 
 EOK = 10_000  # 내부 계산 단위: 만원
-UI_VERSION = "2026-07-consulting-report-v3-centered"
+UI_VERSION = "2026-07-consulting-report-v4-a4"
 
 
 # -----------------------------------------------------------------------------
@@ -891,6 +891,8 @@ def build_excel_report(
     ws.print_area = f"B2:F{current_row}"
 
     for sheet in wb.worksheets:
+        # 모든 다운로드 시트의 기본 인쇄 용지를 A4로 고정
+        sheet.page_setup.paperSize = sheet.PAPERSIZE_A4
         sheet.sheet_properties.pageSetUpPr.fitToPage = True
         sheet.page_margins.left = 0.25
         sheet.page_margins.right = 0.25
