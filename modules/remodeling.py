@@ -158,18 +158,19 @@ def default_changes_df() -> pd.DataFrame:
 def default_contract_df() -> pd.DataFrame:
     return pd.DataFrame([
         {
-            "기존 계약/보장": "", "기존 월 보험료": "", "변경 후 월 보험료": "",
-            "처리 방향 [목록 선택]": "선택하세요 ▼", "구체적인 변경 내용": "",
-            "판단 근거": "", "진행 조건": ""
+            "보험회사": "", "상품명": "",
+            "처리 방향 [목록 선택]": "선택하세요 ▼",
+            "구체적인 변경 내용": ""
         }
     ])
 
 
 def default_additions_df() -> pd.DataFrame:
+    """1페이지에 표시할 새롭게 가입하는 보험의 대표 구성."""
     return pd.DataFrame([
         {
-            "보험회사": "", "상품명": "", "새로 추가되는 보장/특약": "",
-            "보장 내용": "", "월 보험료": "", "추가 이유": ""
+            "보험회사": "", "상품명": "",
+            "대표 보장 내용": "", "월 보험료": ""
         }
     ])
 
@@ -190,19 +191,25 @@ def clean_contracts(df: pd.DataFrame | None) -> pd.DataFrame:
     if df is None or df.empty:
         return default_contract_df().iloc[0:0]
     result = df.copy()
-    result["기존 계약/보장"] = result["기존 계약/보장"].map(normalize_text)
-    result = result[result["기존 계약/보장"] != ""].reset_index(drop=True)
+    for col in ["보험회사", "상품명", "처리 방향 [목록 선택]", "구체적인 변경 내용"]:
+        if col not in result.columns:
+            result[col] = ""
+        result[col] = result[col].map(normalize_text)
+    result = result[(result["보험회사"] != "") | (result["상품명"] != "")].reset_index(drop=True)
     result["처리 방향 [목록 선택]"] = result["처리 방향 [목록 선택]"].replace("선택하세요 ▼", "")
-    return result
+    return result[["보험회사", "상품명", "처리 방향 [목록 선택]", "구체적인 변경 내용"]]
 
 
 def clean_additions(df: pd.DataFrame | None) -> pd.DataFrame:
     if df is None or df.empty:
         return default_additions_df().iloc[0:0]
     result = df.copy()
-    result["새로 추가되는 보장/특약"] = result["새로 추가되는 보장/특약"].map(normalize_text)
-    result = result[result["새로 추가되는 보장/특약"] != ""].reset_index(drop=True)
-    return result
+    for col in ["보험회사", "상품명", "대표 보장 내용", "월 보험료"]:
+        if col not in result.columns:
+            result[col] = ""
+        result[col] = result[col].map(normalize_text)
+    result = result[(result["대표 보장 내용"] != "") | (result["상품명"] != "")].reset_index(drop=True)
+    return result[["보험회사", "상품명", "대표 보장 내용", "월 보험료"]]
 
 
 def detect_coverage_direction(changes: pd.DataFrame) -> str:
@@ -581,34 +588,47 @@ def _write_premium_table(ws, start_col: int, end_col: int, top_row: int, custome
                     alignment=Alignment(horizontal="center", vertical="center"), border=border_all())
 
 
-def _write_coverage_list(ws, start_col: int, end_col: int, top_row: int, customer: CustomerData, max_items: int) -> int:
+def _write_new_insurance_list(ws, start_col: int, end_col: int, top_row: int, customer: CustomerData, max_items: int) -> int:
+    """Write page-1 summary of newly subscribed insurance plans."""
     l1, l2 = get_column_letter(start_col), get_column_letter(end_col)
-    merge_write(ws, f"{l1}{top_row}:{l2}{top_row}", "보장 재구성 내역",
+    merge_write(ws, f"{l1}{top_row}:{l2}{top_row}", "새롭게 가입하는 보험",
                 font=Font(name="맑은 고딕", size=11, bold=True, color=NAVY),
                 alignment=Alignment(horizontal="left", vertical="center"))
-    rows = list(prioritized_changes(customer.changes, customer.priorities, max_items).iterrows())
+    rows = list(customer.additions.head(max_items).iterrows())
     if not rows:
-        rows = [(0, pd.Series({"변경할 보장":"입력된 핵심 변경 내용이 없습니다.", "변경 후에는":"-", "변경 후 월 보험료":""}))]
+        rows = [(0, pd.Series({"보험회사":"", "상품명":"", "대표 보장 내용":"입력된 신규 가입 내용이 없습니다.", "월 보험료":""}))]
     cur = top_row + 1
-    split = start_col + int((end_col-start_col+1)*0.64)-1
+    width = end_col - start_col + 1
+    company_end = start_col + max(1, int(width * 0.24)) - 1
+    content_end = start_col + max(3, int(width * 0.72)) - 1
+    company_end = min(company_end, end_col - 3)
+    content_end = min(max(content_end, company_end + 1), end_col - 2)
     for _, item in rows:
-        name = normalize_text(item.get("변경할 보장"))
-        after = normalize_text(item.get("변경 후에는")) or normalize_text(item.get("어떻게 달라지나요? [목록 선택]")) or "-"
-        premium = parse_money(item.get("변경 후 월 보험료"))
-        value = f"{after}"
-        if premium:
-            value += f" · {premium:,}원"
-        merge_write(ws, f"{l1}{cur}:{get_column_letter(split)}{cur}", name,
-                    font=Font(name="맑은 고딕", size=10.5, bold=True, color=BLACK),
+        company = normalize_text(item.get("보험회사"))
+        product = normalize_text(item.get("상품명"))
+        plan = " · ".join(x for x in [company, product] if x) or "신규 보험"
+        content = normalize_text(item.get("대표 보장 내용")) or "-"
+        premium = parse_money(item.get("월 보험료"))
+        premium_text = f"{premium:,}원" if premium else "-"
+        merge_write(ws, f"{l1}{cur}:{get_column_letter(company_end)}{cur}", plan,
+                    font=Font(name="맑은 고딕", size=9.5, bold=True, color=BLACK),
                     fill=PatternFill("solid", fgColor=LIGHT_GRAY),
                     alignment=Alignment(horizontal="center", vertical="center", wrap_text=True), border=border_all())
-        merge_write(ws, f"{get_column_letter(split+1)}{cur}:{l2}{cur}", value,
-                    font=Font(name="맑은 고딕", size=10.5, bold=True, color=NAVY),
+        merge_write(ws, f"{get_column_letter(company_end+1)}{cur}:{get_column_letter(content_end)}{cur}", content,
+                    font=Font(name="맑은 고딕", size=10, bold=True, color=NAVY),
                     fill=PatternFill("solid", fgColor=WHITE),
                     alignment=Alignment(horizontal="center", vertical="center", wrap_text=True), border=border_all())
-        ws.row_dimensions[cur].height = 26
+        merge_write(ws, f"{get_column_letter(content_end+1)}{cur}:{l2}{cur}", premium_text,
+                    font=Font(name="맑은 고딕", size=10.5, bold=True, color=BLUE),
+                    fill=PatternFill("solid", fgColor=WHITE),
+                    alignment=Alignment(horizontal="center", vertical="center", wrap_text=True), border=border_all())
+        ws.row_dimensions[cur].height = 28
         cur += 1
     return cur
+
+
+def _write_coverage_list(ws, start_col: int, end_col: int, top_row: int, customer: CustomerData, max_items: int) -> int:
+    return _write_new_insurance_list(ws, start_col, end_col, top_row, customer, max_items)
 
 
 def _write_saving_boxes(ws, start_col: int, end_col: int, top_row: int, customer: CustomerData) -> None:
@@ -702,41 +722,84 @@ def _table_header(ws,row:int,headers:list[str],spans:list[tuple[int,int]]) -> No
 
 
 def write_detail_page(ws, customers:list[CustomerData], start_row:int, max_col:int, consultation_date:date, consultant:str) -> None:
-    last=get_column_letter(max_col)
-    merge_write(ws,f"A{start_row}:{last}{start_row+1}","기존 보험 변경 및 신규 추가 내역",font=Font(name="맑은 고딕",size=18,bold=True,color=NAVY_DARK),alignment=Alignment(horizontal="left",vertical="center"))
-    row=start_row+3
-    spans_contract=[(1,3),(4,5),(6,7),(8,9),(10,12),(13,max_col)] if max_col==16 else [(1,2),(3,4),(5,6),(7,8),(9,10),(11,12)]
-    headers_contract=["기존 계약/보장","기존 월 보험료","변경 후 월 보험료","처리 방향","구체적인 변경 내용","판단 근거·진행 조건"]
-    spans_add=[(1,2),(3,4),(5,7),(8,10),(11,12),(13,max_col)] if max_col==16 else [(1,2),(3,4),(5,6),(7,8),(9,10),(11,12)]
-    headers_add=["보험회사","상품명","새로 추가되는 보장/특약","보장 내용","월 보험료","추가 이유"]
+    last = get_column_letter(max_col)
+    merge_write(ws, f"A{start_row}:{last}{start_row+1}", "핵심 변경 내용 및 기존 보험 변경 방향",
+                font=Font(name="맑은 고딕", size=18, bold=True, color=NAVY_DARK),
+                alignment=Alignment(horizontal="left", vertical="center"))
+    row = start_row + 3
+
+    if max_col == 16:
+        change_spans = [(1,3),(4,6),(7,9),(10,12),(13,16)]
+        contract_spans = [(1,3),(4,6),(7,9),(10,16)]
+    else:
+        change_spans = [(1,2),(3,4),(5,7),(8,9),(10,12)]
+        contract_spans = [(1,3),(4,6),(7,8),(9,12)]
+
     for c in customers:
-        merge_write(ws,f"A{row}:{last}{row}",f"{c.name}님",font=Font(name="맑은 고딕",size=13,bold=True,color=WHITE),fill=PatternFill("solid",fgColor=TEAL),alignment=Alignment(horizontal="left",vertical="center"),border=border_all())
-        row+=1
-        merge_write(ws,f"A{row}:{last}{row}","기존 보험의 변경 내용",font=Font(name="맑은 고딕",size=11,bold=True,color=NAVY),fill=PatternFill("solid",fgColor=LIGHT_BLUE),alignment=Alignment(horizontal="left",vertical="center"),border=border_all())
-        row+=1; _table_header(ws,row,headers_contract,spans_contract); row+=1
-        contracts=c.contracts if not c.contracts.empty else default_contract_df().iloc[0:0]
+        merge_write(ws, f"A{row}:{last}{row}", f"{c.name}님",
+                    font=Font(name="맑은 고딕", size=13, bold=True, color=WHITE),
+                    fill=PatternFill("solid", fgColor=TEAL),
+                    alignment=Alignment(horizontal="left", vertical="center"), border=border_all())
+        row += 1
+
+        # 핵심 변경을 2페이지 상단에 배치
+        merge_write(ws, f"A{row}:{last}{row}", "핵심 변경 내용",
+                    font=Font(name="맑은 고딕", size=11, bold=True, color=NAVY),
+                    fill=PatternFill("solid", fgColor=LIGHT_GREEN),
+                    alignment=Alignment(horizontal="left", vertical="center"), border=border_all())
+        row += 1
+        _table_header(ws, row, ["보장·특약명","기존","변경 후","변화 유형","변경 이유"], change_spans)
+        row += 1
+        changes = c.changes if not c.changes.empty else default_changes_df().iloc[0:0]
+        if changes.empty:
+            merge_write(ws, f"A{row}:{last}{row}", "입력된 핵심 변경 내용이 없습니다.",
+                        font=Font(name="맑은 고딕", size=10, color=GRAY_DARK),
+                        alignment=Alignment(horizontal="center", vertical="center"), border=border_all())
+            row += 1
+        else:
+            for _, item in changes.head(8).iterrows():
+                vals = [normalize_text(item.get("변경할 보장")), normalize_text(item.get("기존에는")),
+                        normalize_text(item.get("변경 후에는")), normalize_text(item.get("어떻게 달라지나요? [목록 선택]")),
+                        normalize_text(item.get("왜 바꾸나요?"))]
+                for (a,b), value in zip(change_spans, vals):
+                    merge_write(ws, f"{get_column_letter(a)}{row}:{get_column_letter(b)}{row}", value,
+                                font=Font(name="맑은 고딕", size=9.5, bold=(a==1), color=NAVY if a==1 else BLACK),
+                                fill=PatternFill("solid", fgColor=WHITE),
+                                alignment=Alignment(horizontal="center", vertical="center", wrap_text=True), border=border_all())
+                ws.row_dimensions[row].height = 34
+                row += 1
+
+        row += 1
+        merge_write(ws, f"A{row}:{last}{row}", "기존 보험의 변경 방향",
+                    font=Font(name="맑은 고딕", size=11, bold=True, color=NAVY),
+                    fill=PatternFill("solid", fgColor=LIGHT_BLUE),
+                    alignment=Alignment(horizontal="left", vertical="center"), border=border_all())
+        row += 1
+        _table_header(ws, row, ["보험회사","상품명","처리 방향","구체적인 변경 내용"], contract_spans)
+        row += 1
+        contracts = c.contracts if not c.contracts.empty else default_contract_df().iloc[0:0]
         if contracts.empty:
-            merge_write(ws,f"A{row}:{last}{row}","입력된 기존 보험 변경 내용이 없습니다.",font=Font(name="맑은 고딕",size=10,color=GRAY_DARK),alignment=Alignment(horizontal="center",vertical="center"),border=border_all()); row+=1
+            merge_write(ws, f"A{row}:{last}{row}", "입력된 기존 보험 변경 방향이 없습니다.",
+                        font=Font(name="맑은 고딕", size=10, color=GRAY_DARK),
+                        alignment=Alignment(horizontal="center", vertical="center"), border=border_all())
+            row += 1
         else:
-            for _,item in contracts.head(4).iterrows():
-                vals=[normalize_text(item.get("기존 계약/보장")),normalize_text(item.get("기존 월 보험료")),normalize_text(item.get("변경 후 월 보험료")),normalize_text(item.get("처리 방향 [목록 선택]")),normalize_text(item.get("구체적인 변경 내용"))," / ".join(x for x in [normalize_text(item.get("판단 근거")),normalize_text(item.get("진행 조건"))] if x)]
-                for (a,b),v in zip(spans_contract,vals):
-                    merge_write(ws,f"{get_column_letter(a)}{row}:{get_column_letter(b)}{row}",v,font=Font(name="맑은 고딕",size=9.5,bold=(a==8),color=NAVY if a==8 else BLACK),fill=PatternFill("solid",fgColor=WHITE),alignment=Alignment(horizontal="center",vertical="center",wrap_text=True),border=border_all())
-                ws.row_dimensions[row].height=34; row+=1
-        row+=1
-        merge_write(ws,f"A{row}:{last}{row}","새롭게 추가되는 보험·보장",font=Font(name="맑은 고딕",size=11,bold=True,color=NAVY),fill=PatternFill("solid",fgColor=LIGHT_GREEN),alignment=Alignment(horizontal="left",vertical="center"),border=border_all())
-        row+=1; _table_header(ws,row,headers_add,spans_add); row+=1
-        additions=c.additions if not c.additions.empty else default_additions_df().iloc[0:0]
-        if additions.empty:
-            merge_write(ws,f"A{row}:{last}{row}","입력된 신규 추가 내용이 없습니다.",font=Font(name="맑은 고딕",size=10,color=GRAY_DARK),alignment=Alignment(horizontal="center",vertical="center"),border=border_all()); row+=1
-        else:
-            for _,item in additions.head(4).iterrows():
-                vals=[normalize_text(item.get("보험회사")),normalize_text(item.get("상품명")),normalize_text(item.get("새로 추가되는 보장/특약")),normalize_text(item.get("보장 내용")),normalize_text(item.get("월 보험료")),normalize_text(item.get("추가 이유"))]
-                for (a,b),v in zip(spans_add,vals):
-                    merge_write(ws,f"{get_column_letter(a)}{row}:{get_column_letter(b)}{row}",v,font=Font(name="맑은 고딕",size=9.5,bold=(a==5),color=NAVY if a==5 else BLACK),fill=PatternFill("solid",fgColor=WHITE),alignment=Alignment(horizontal="center",vertical="center",wrap_text=True),border=border_all())
-                ws.row_dimensions[row].height=34; row+=1
-        row+=2
-    merge_write(ws,f"A{row}:{last}{row}","※ 기존 계약의 감액·해지 등은 새로운 계약의 승인 조건과 보장 개시 여부를 확인한 후 결정해야 합니다.",font=Font(name="맑은 고딕",size=9,color=GRAY_DARK),alignment=Alignment(horizontal="left",vertical="center",wrap_text=True))
+            for _, item in contracts.head(8).iterrows():
+                vals = [normalize_text(item.get("보험회사")), normalize_text(item.get("상품명")),
+                        normalize_text(item.get("처리 방향 [목록 선택]")), normalize_text(item.get("구체적인 변경 내용"))]
+                for (a,b), value in zip(contract_spans, vals):
+                    merge_write(ws, f"{get_column_letter(a)}{row}:{get_column_letter(b)}{row}", value,
+                                font=Font(name="맑은 고딕", size=9.5, bold=(a==7), color=NAVY if a==7 else BLACK),
+                                fill=PatternFill("solid", fgColor=WHITE),
+                                alignment=Alignment(horizontal="center", vertical="center", wrap_text=True), border=border_all())
+                ws.row_dimensions[row].height = 36
+                row += 1
+        row += 2
+
+    merge_write(ws, f"A{row}:{last}{row}",
+                "※ 기존 계약의 감액·해지 등은 새로운 계약의 승인 조건과 보장 개시 여부를 확인한 후 결정해야 합니다.",
+                font=Font(name="맑은 고딕", size=9, color=GRAY_DARK),
+                alignment=Alignment(horizontal="left", vertical="center", wrap_text=True))
 
 
 def create_excel(customers: list[CustomerData], title: str, consultation_date: date, consultant: str) -> BytesIO:
@@ -764,11 +827,12 @@ def load_example(person_count: int) -> None:
             {"변경할 보장":"기존 실손보험", "기존에는":"가입 중", "변경 후에는":"유지", "어떻게 달라지나요? [목록 선택]":"그대로 유지", "왜 바꾸나요?":"기존 가입 조건 유지", "변경 후 월 보험료":"", "첫 장 표시 [목록 선택]":"상세에만 표시"},
         ])
         st.session_state[f"rv2_contracts_{i}"] = pd.DataFrame([
-            {"기존 계약/보장":"기존 실손보험", "기존 월 보험료":"35,000", "변경 후 월 보험료":"35,000", "처리 방향 [목록 선택]":"유지", "구체적인 변경 내용":"현재 계약 그대로 유지", "판단 근거":"기존 가입 조건 유지", "진행 조건":"계속 유지"},
-            {"기존 계약/보장":"기존 종합보험", "기존 월 보험료":"180,000", "변경 후 월 보험료":"60,000", "처리 방향 [목록 선택]":"일부 특약 조정", "구체적인 변경 내용":"중복 특약 감액 및 필요한 담보 유지", "판단 근거":"중복 및 부족 보장 재검토", "진행 조건":"신규 계약 승인 후"},
+            {"보험회사":"기존보험사", "상품명":"기존 종합보험", "처리 방향 [목록 선택]":"일부 특약 조정", "구체적인 변경 내용":"중복 특약은 조정하고 유지 가치가 있는 보장은 남깁니다."},
+            {"보험회사":"기존보험사", "상품명":"실손의료보험", "처리 방향 [목록 선택]":"유지", "구체적인 변경 내용":"현재 가입 조건을 유지합니다."},
         ])
         st.session_state[f"rv2_additions_{i}"] = pd.DataFrame([
-            {"보험회사":"예시보험", "상품명":"건강보장플랜", "새로 추가되는 보장/특약":"암 주요치료비", "보장 내용":"약관상 주요 암 치료 시 보장", "월 보험료":"50,000", "추가 이유":"치료 과정의 비용 보완"}
+            {"보험회사":"예시보험", "상품명":"건강보장플랜", "대표 보장 내용":"암·뇌·심장 진단비", "월 보험료":"128,589"},
+            {"보험회사":"예시보험", "상품명":"치료비보장플랜", "대표 보장 내용":"암 주요치료비", "월 보험료":"111,255"},
         ])
     st.session_state["rv2_example"] = True
 
@@ -803,6 +867,174 @@ def collect_customer(i: int) -> CustomerData:
     return temp
 
 
+
+def _ensure_change_row_state(i: int) -> int:
+    """Prepare plain Streamlit widget state for editable core-change rows."""
+    df = st.session_state.get(f"rv2_changes_{i}")
+    if not isinstance(df, pd.DataFrame):
+        df = default_changes_df()
+        st.session_state[f"rv2_changes_{i}"] = df
+    count_key = f"rv3_change_count_{i}"
+    if count_key not in st.session_state:
+        st.session_state[count_key] = max(2, len(df))
+    count = int(st.session_state[count_key])
+    for r in range(count):
+        row = df.iloc[r].to_dict() if r < len(df) else {}
+        defaults = {
+            "coverage": normalize_text(row.get("변경할 보장", "")),
+            "before": normalize_text(row.get("기존에는", "")),
+            "after": normalize_text(row.get("변경 후에는", "")),
+            "change": normalize_text(row.get("어떻게 달라지나요? [목록 선택]", "")) or "선택하세요 ▼",
+            "reason": normalize_text(row.get("왜 바꾸나요?", "")),
+            "premium": normalize_text(row.get("변경 후 월 보험료", "")),
+            "display": normalize_text(row.get("첫 장 표시 [목록 선택]", "")) or "핵심으로 표시",
+        }
+        for field, value in defaults.items():
+            st.session_state.setdefault(f"rv3_change_{i}_{r}_{field}", value)
+    return count
+
+
+def render_plain_change_inputs(i: int) -> None:
+    """Editable core-change inputs using ordinary widgets, not st.data_editor."""
+    count = _ensure_change_row_state(i)
+    st.caption("각 항목을 펼쳐 일반 입력칸에 작성하면 즉시 저장됩니다. 별도의 적용 버튼은 없습니다.")
+
+    for r in range(count):
+        coverage_now = normalize_text(st.session_state.get(f"rv3_change_{i}_{r}_coverage", ""))
+        label = coverage_now or f"핵심 변경 {r + 1}"
+        with st.expander(label, expanded=(r < 2)):
+            a, b = st.columns(2)
+            with a:
+                st.text_input("변경할 보장·특약명", key=f"rv3_change_{i}_{r}_coverage", placeholder="예: 암·뇌·심장 진단비")
+                st.text_input("기존에는", key=f"rv3_change_{i}_{r}_before", placeholder="예: 2,000만원 / 없음")
+                st.selectbox("어떻게 달라지나요? [목록 선택] ▼", CHANGE_OPTIONS, key=f"rv3_change_{i}_{r}_change")
+            with b:
+                st.text_input("변경 후에는", key=f"rv3_change_{i}_{r}_after", placeholder="예: 5,000만원 / 신규 구성")
+                st.text_input("변경 후 월 보험료", key=f"rv3_change_{i}_{r}_premium", placeholder="예: 128,589원")
+                st.selectbox("첫 장 표시 [목록 선택] ▼", DISPLAY_OPTIONS, key=f"rv3_change_{i}_{r}_display")
+            st.text_area("왜 바꾸나요?", key=f"rv3_change_{i}_{r}_reason", placeholder="예: 핵심 진단비를 보완하고 중복 보장은 조정", height=80)
+
+    rows = []
+    for r in range(count):
+        rows.append({
+            "변경할 보장": st.session_state.get(f"rv3_change_{i}_{r}_coverage", ""),
+            "기존에는": st.session_state.get(f"rv3_change_{i}_{r}_before", ""),
+            "변경 후에는": st.session_state.get(f"rv3_change_{i}_{r}_after", ""),
+            "어떻게 달라지나요? [목록 선택]": st.session_state.get(f"rv3_change_{i}_{r}_change", "선택하세요 ▼"),
+            "왜 바꾸나요?": st.session_state.get(f"rv3_change_{i}_{r}_reason", ""),
+            "변경 후 월 보험료": st.session_state.get(f"rv3_change_{i}_{r}_premium", ""),
+            "첫 장 표시 [목록 선택]": st.session_state.get(f"rv3_change_{i}_{r}_display", "핵심으로 표시"),
+        })
+    st.session_state[f"rv2_changes_{i}"] = pd.DataFrame(rows)
+
+    add_col, remove_col = st.columns(2)
+    with add_col:
+        if st.button("＋ 핵심 변경 항목 추가", key=f"rv3_add_change_{i}", use_container_width=True):
+            st.session_state[f"rv3_change_count_{i}"] = min(10, count + 1)
+            st.rerun()
+    with remove_col:
+        if st.button("－ 마지막 항목 삭제", key=f"rv3_remove_change_{i}", use_container_width=True, disabled=count <= 1):
+            last = count - 1
+            for field in ("coverage", "before", "after", "change", "reason", "premium", "display"):
+                st.session_state.pop(f"rv3_change_{i}_{last}_{field}", None)
+            st.session_state[f"rv3_change_count_{i}"] = max(1, count - 1)
+            st.rerun()
+
+
+def _ensure_plan_row_state(i: int) -> int:
+    df = st.session_state.get(f"rv2_additions_{i}")
+    if not isinstance(df, pd.DataFrame):
+        df = default_additions_df()
+    key = f"rv4_plan_count_{i}"
+    st.session_state.setdefault(key, max(2, len(df)))
+    count = int(st.session_state[key])
+    for r in range(count):
+        row = df.iloc[r].to_dict() if r < len(df) else {}
+        for field, col in [("company","보험회사"),("product","상품명"),("content","대표 보장 내용"),("premium","월 보험료")]:
+            st.session_state.setdefault(f"rv4_plan_{i}_{r}_{field}", normalize_text(row.get(col, "")))
+    return count
+
+
+def render_new_plan_inputs(i: int) -> None:
+    count = _ensure_plan_row_state(i)
+    st.caption("1페이지에 표시할 새롭게 가입하는 보험의 대표 내용과 월납 보험료를 입력합니다.")
+    for r in range(count):
+        title = normalize_text(st.session_state.get(f"rv4_plan_{i}_{r}_content", "")) or f"신규 보험 {r+1}"
+        with st.expander(title, expanded=(r < 2)):
+            c1, c2 = st.columns(2)
+            with c1:
+                st.text_input("보험회사", key=f"rv4_plan_{i}_{r}_company", placeholder="예: 한화생명")
+                st.text_input("상품명", key=f"rv4_plan_{i}_{r}_product", placeholder="예: 건강보험")
+            with c2:
+                st.text_input("대표 보장 내용", key=f"rv4_plan_{i}_{r}_content", placeholder="예: 암·뇌·심장 진단비")
+                st.text_input("월 보험료", key=f"rv4_plan_{i}_{r}_premium", placeholder="예: 128,589원")
+    rows=[]
+    for r in range(count):
+        rows.append({"보험회사":st.session_state.get(f"rv4_plan_{i}_{r}_company",""),
+                     "상품명":st.session_state.get(f"rv4_plan_{i}_{r}_product",""),
+                     "대표 보장 내용":st.session_state.get(f"rv4_plan_{i}_{r}_content",""),
+                     "월 보험료":st.session_state.get(f"rv4_plan_{i}_{r}_premium","")})
+    st.session_state[f"rv2_additions_{i}"] = pd.DataFrame(rows)
+    a,b=st.columns(2)
+    with a:
+        if st.button("＋ 신규 보험 추가", key=f"rv4_add_plan_{i}", use_container_width=True):
+            st.session_state[f"rv4_plan_count_{i}"] = min(8, count+1); st.rerun()
+    with b:
+        if st.button("－ 마지막 신규 보험 삭제", key=f"rv4_remove_plan_{i}", use_container_width=True, disabled=count<=1):
+            last=count-1
+            for field in ("company","product","content","premium"):
+                st.session_state.pop(f"rv4_plan_{i}_{last}_{field}",None)
+            st.session_state[f"rv4_plan_count_{i}"] = max(1,count-1); st.rerun()
+
+
+def _ensure_contract_row_state(i: int) -> int:
+    df = st.session_state.get(f"rv2_contracts_{i}")
+    if not isinstance(df, pd.DataFrame):
+        df = default_contract_df()
+    key=f"rv4_contract_count_{i}"
+    st.session_state.setdefault(key,max(2,len(df)))
+    count=int(st.session_state[key])
+    for r in range(count):
+        row=df.iloc[r].to_dict() if r < len(df) else {}
+        defaults={"company":normalize_text(row.get("보험회사","")),"product":normalize_text(row.get("상품명","")),
+                  "direction":normalize_text(row.get("처리 방향 [목록 선택]","")) or "선택하세요 ▼",
+                  "detail":normalize_text(row.get("구체적인 변경 내용",""))}
+        for field,value in defaults.items(): st.session_state.setdefault(f"rv4_contract_{i}_{r}_{field}",value)
+    return count
+
+
+def render_contract_inputs(i: int) -> None:
+    count=_ensure_contract_row_state(i)
+    st.caption("기존 보험별 보험회사·상품명·처리 방향·구체적인 변경 내용을 입력합니다.")
+    for r in range(count):
+        product=normalize_text(st.session_state.get(f"rv4_contract_{i}_{r}_product","")) or f"기존 보험 {r+1}"
+        with st.expander(product, expanded=(r<2)):
+            c1,c2=st.columns(2)
+            with c1:
+                st.text_input("보험회사",key=f"rv4_contract_{i}_{r}_company",placeholder="예: KB손해보험")
+                st.text_input("상품명",key=f"rv4_contract_{i}_{r}_product",placeholder="예: 종합건강보험")
+            with c2:
+                st.selectbox("처리 방향 [목록 선택] ▼",CONTRACT_OPTIONS,key=f"rv4_contract_{i}_{r}_direction")
+            st.text_area("구체적인 변경 내용",key=f"rv4_contract_{i}_{r}_detail",placeholder="예: 실손은 유지하고 중복된 입원일당 특약은 감액 검토",height=80)
+    rows=[]
+    for r in range(count):
+        rows.append({"보험회사":st.session_state.get(f"rv4_contract_{i}_{r}_company",""),
+                     "상품명":st.session_state.get(f"rv4_contract_{i}_{r}_product",""),
+                     "처리 방향 [목록 선택]":st.session_state.get(f"rv4_contract_{i}_{r}_direction","선택하세요 ▼"),
+                     "구체적인 변경 내용":st.session_state.get(f"rv4_contract_{i}_{r}_detail","")})
+    st.session_state[f"rv2_contracts_{i}"] = pd.DataFrame(rows)
+    a,b=st.columns(2)
+    with a:
+        if st.button("＋ 기존 보험 추가",key=f"rv4_add_contract_{i}",use_container_width=True):
+            st.session_state[f"rv4_contract_count_{i}"] = min(10,count+1); st.rerun()
+    with b:
+        if st.button("－ 마지막 기존 보험 삭제",key=f"rv4_remove_contract_{i}",use_container_width=True,disabled=count<=1):
+            last=count-1
+            for field in ("company","product","direction","detail"):
+                st.session_state.pop(f"rv4_contract_{i}_{last}_{field}",None)
+            st.session_state[f"rv4_contract_count_{i}"] = max(1,count-1); st.rerun()
+
+
 def render_customer_inputs(i: int, person_count: int) -> None:
     label = f"고객 {i}"
     st.markdown(f"### {label}")
@@ -830,7 +1062,7 @@ def render_customer_inputs(i: int, person_count: int) -> None:
 
 def run() -> None:
     st.title(f"🔁 {APP_TITLE}")
-    st.caption("고객정보 → 보험료 비교 → 핵심 변경 → 고객 시점 미리보기·엑셀")
+    st.caption("고객정보 → 보험료 비교 → 가입 보험·변경 내용 → 고객 시점 미리보기·엑셀")
     init_state()
 
     person_count = int(st.selectbox("비교 대상 인원 [목록 선택] ▼", [1, 2], format_func=lambda x: f"{x}명", key="rv2_person_count"))
@@ -843,7 +1075,7 @@ def run() -> None:
         if st.session_state.get("rv2_example"):
             st.info("예시 데이터가 입력되어 있습니다. 실제 고객 정보로 바꾸어 사용하세요.")
 
-    tabs = st.tabs(["1. 공통·고객정보", "2. 보험료 비교", "3. 핵심 변경 내용", "4. 미리보기·엑셀"])
+    tabs = st.tabs(["1. 공통·고객정보", "2. 보험료 비교", "3. 가입 보험·변경 내용", "4. 미리보기·엑셀"])
 
     with tabs[0]:
         st.subheader("공통 정보")
@@ -852,7 +1084,7 @@ def run() -> None:
             consultation_date = st.date_input("상담일", value=date.today(), key="rv2_date")
             consultant = st.text_input("담당자", key="rv2_consultant", placeholder="예: 박병선 팀장")
         with common2:
-            st.info("엑셀은 1페이지 요약안과 2페이지 기존 보험 변경·신규 추가 내역으로 자동 구성됩니다.")
+            st.info("엑셀은 1페이지 신규 가입 보험 요약과 2페이지 핵심 변경·기존 보험 변경 방향으로 구성됩니다.")
         st.divider()
         for i in range(1, person_count + 1):
             render_customer_inputs(i, person_count)
@@ -884,74 +1116,16 @@ def run() -> None:
             if i < person_count: st.divider()
 
     with tabs[2]:
-        st.info("1페이지에는 핵심 요약이, 2페이지에는 기존 보험의 구체적인 변경 내용과 새롭게 추가되는 내용이 정리됩니다.")
-        st.markdown("**표 안의 흰색 칸을 클릭해 직접 입력하세요.** 입력 후 각 표 아래의 적용 버튼을 눌러 저장합니다.")
+        st.info("1페이지에는 새롭게 가입하는 보험의 대표 구성과 월납 보험료가 표시되고, 2페이지에는 핵심 변경 내용과 기존 보험 변경 방향이 정리됩니다.")
         for i in range(1, person_count + 1):
             name = normalize_text(st.session_state.get(f"rv2_name_{i}", "")) or f"고객 {i}"
-            st.subheader(f"{name} 핵심 변경")
-            edited = st.data_editor(
-                st.session_state[f"rv2_changes_{i}"].copy(),
-                num_rows="dynamic", use_container_width=True, hide_index=True, disabled=False,
-                column_config={
-                    "변경할 보장": st.column_config.TextColumn("변경할 보장", width="medium", help="고객 자료에는 입력한 담보명을 그대로 사용합니다."),
-                    "기존에는": st.column_config.TextColumn("기존에는", width="medium", help="예: 2,000만원 / 없음 / 가입 중"),
-                    "변경 후에는": st.column_config.TextColumn("변경 후에는", width="medium", help="예: 5,000만원 / 신규 구성 / 유지"),
-                    "어떻게 달라지나요? [목록 선택]": st.column_config.SelectboxColumn("어떻게 달라지나요? [목록 선택] ▼", options=CHANGE_OPTIONS, width="medium"),
-                    "왜 바꾸나요?": st.column_config.TextColumn("왜 바꾸나요?", width="large"),
-                    "변경 후 월 보험료": st.column_config.TextColumn("변경 후 월 보험료", width="small"),
-                    "첫 장 표시 [목록 선택]": st.column_config.SelectboxColumn("첫 장 표시 [목록 선택] ▼", options=DISPLAY_OPTIONS, width="medium"),
-                }, key=f"rv2_changes_editor_{i}",
-            )
-            if st.button("핵심 변경 내용 적용", key=f"rv2_apply_changes_{i}", type="primary", use_container_width=True):
-                st.session_state[f"rv2_changes_{i}"] = edited.copy()
-                st.session_state.pop(f"rv2_changes_editor_{i}", None)
-                st.session_state[f"rv2_changes_saved_{i}"] = True
-                st.rerun()
-            if st.session_state.pop(f"rv2_changes_saved_{i}", False):
-                st.success("핵심 변경 내용을 적용했습니다.")
-
-            with st.expander("2페이지 · 기존 보험의 변경 내용 입력", expanded=True):
-                cedit = st.data_editor(
-                    st.session_state[f"rv2_contracts_{i}"].copy(),
-                    num_rows="dynamic", use_container_width=True, hide_index=True, disabled=False,
-                    column_config={
-                        "기존 계약/보장": st.column_config.TextColumn("기존 계약/보장", width="large"),
-                        "기존 월 보험료": st.column_config.TextColumn("기존 월 보험료", width="small"),
-                        "변경 후 월 보험료": st.column_config.TextColumn("변경 후 월 보험료", width="small"),
-                        "처리 방향 [목록 선택]": st.column_config.SelectboxColumn("처리 방향 [목록 선택] ▼", options=CONTRACT_OPTIONS, width="medium"),
-                        "구체적인 변경 내용": st.column_config.TextColumn("구체적인 변경 내용", width="large"),
-                        "판단 근거": st.column_config.TextColumn("판단 근거", width="large"),
-                        "진행 조건": st.column_config.TextColumn("진행 조건", width="large"),
-                    }, key=f"rv2_contract_editor_{i}",
-                )
-                if st.button("기존 보험 변경 내용 적용", key=f"rv2_apply_contract_{i}", use_container_width=True):
-                    st.session_state[f"rv2_contracts_{i}"] = cedit.copy()
-                    st.session_state.pop(f"rv2_contract_editor_{i}", None)
-                    st.session_state[f"rv2_contract_saved_{i}"] = True
-                    st.rerun()
-                if st.session_state.pop(f"rv2_contract_saved_{i}", False):
-                    st.success("기존 보험 변경 내용을 적용했습니다.")
-
-            with st.expander("2페이지 · 새롭게 추가되는 보험·보장 입력", expanded=True):
-                aedit = st.data_editor(
-                    st.session_state[f"rv2_additions_{i}"].copy(),
-                    num_rows="dynamic", use_container_width=True, hide_index=True, disabled=False,
-                    column_config={
-                        "보험회사": st.column_config.TextColumn("보험회사", width="medium"),
-                        "상품명": st.column_config.TextColumn("상품명", width="large"),
-                        "새로 추가되는 보장/특약": st.column_config.TextColumn("새로 추가되는 보장/특약", width="large"),
-                        "보장 내용": st.column_config.TextColumn("보장 내용", width="large"),
-                        "월 보험료": st.column_config.TextColumn("월 보험료", width="small"),
-                        "추가 이유": st.column_config.TextColumn("추가 이유", width="large"),
-                    }, key=f"rv2_additions_editor_{i}",
-                )
-                if st.button("새로운 추가 내용 적용", key=f"rv2_apply_additions_{i}", use_container_width=True):
-                    st.session_state[f"rv2_additions_{i}"] = aedit.copy()
-                    st.session_state.pop(f"rv2_additions_editor_{i}", None)
-                    st.session_state[f"rv2_additions_saved_{i}"] = True
-                    st.rerun()
-                if st.session_state.pop(f"rv2_additions_saved_{i}", False):
-                    st.success("새로운 추가 내용을 적용했습니다.")
+            st.subheader(f"{name} 입력")
+            with st.expander("1페이지 · 새롭게 가입하는 보험", expanded=True):
+                render_new_plan_inputs(i)
+            with st.expander("2페이지 상단 · 핵심 변경 내용", expanded=True):
+                render_plain_change_inputs(i)
+            with st.expander("2페이지 하단 · 기존 보험의 변경 방향", expanded=True):
+                render_contract_inputs(i)
             if i < person_count:
                 st.divider()
 
