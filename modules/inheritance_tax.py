@@ -12,7 +12,7 @@ except ImportError:  # 엑셀 다운로드 기능은 openpyxl 설치 후 활성�
     Workbook = None
 
 EOK = 10_000  # 내부 계산 단위: 만원
-UI_VERSION = "2026-07-consulting-report-v4-a4"
+UI_VERSION = "2026-07-consulting-report-v5-spouse-funeral"
 
 
 # -----------------------------------------------------------------------------
@@ -175,7 +175,7 @@ def calculate(**v) -> Result:
         + max(0, v["disability_deduction"])
     )
     personal_or_lump = max(50_000, personal) if v["lump_mode"] else personal
-    if v["spouse_exists"] and v["spouse_share"] >= 0.999:
+    if v["spouse_exists"] and v["spouse_solo"]:
         personal_or_lump = personal
 
     spouse_deduction = 0.0
@@ -191,7 +191,14 @@ def calculate(**v) -> Result:
                 - max(0, v["public_dues"])
                 - max(0, v["liabilities"]),
             )
-            spouse_limit = min(300_000, spouse_limit_base * min(1.0, max(0.0, v["spouse_share"])))
+            spouse_limit = min(
+                300_000,
+                max(
+                    0,
+                    spouse_limit_base * min(1.0, max(0.0, v["spouse_share"]))
+                    - max(0, v["spouse_prior_gift_tax_base"]),
+                ),
+            )
             spouse_deduction = min(max(0, v["spouse_actual_inheritance"]), spouse_limit)
 
     financial = financial_asset_deduction(v["net_financial_assets"])
@@ -235,13 +242,15 @@ AMOUNT_DEFAULTS: Dict[str, float] = {
     "it_deemed": 0,
     "it_nontax": 0,
     "it_dues": 0,
-    "it_funeral": 1_000,
+    "it_funeral_actual": 0,
+    "it_burial_actual": 0,
     "it_liab": 0,
     "it_gift_h": 0,
     "it_gift_n": 0,
     "it_minor": 0,
     "it_disability": 0,
     "it_spouse_amount": 50_000,
+    "it_spouse_prior_base": 0,
     "it_fin": 0,
     "it_home": 0,
     "it_other_ded": 0,
@@ -264,7 +273,6 @@ WIDGET_DEFAULTS: Dict[str, Any] = {
     "it_spouse_exists": True,
     "it_group": "직계비속",
     "it_count": 1,
-    "it_share": 0.6,
     "it_gen_minor": False,
     "it_filing": True,
 }
@@ -273,7 +281,7 @@ EXAMPLES: Dict[str, Dict[str, Any]] = {
     "기본형 · 10억원": {
         "description": "배우자 없이 10억원을 상속받는 기본 사례입니다.",
         "amounts": {"it_gross": 100_000, "it_cash": 3_000},
-        "widgets": {"it_spouse_exists": False, "it_children": 1, "it_share": 0.0},
+        "widgets": {"it_spouse_exists": False, "it_children": 1},
     },
     "배우자 공동상속 · 20억원": {
         "description": "배우자와 자녀 2명이 공동상속하고 금융재산과 납부재원이 있는 사례입니다.",
@@ -289,7 +297,6 @@ EXAMPLES: Dict[str, Dict[str, Any]] = {
             "it_children": 2,
             "it_group": "직계비속",
             "it_count": 2,
-            "it_share": 1.5 / 3.5,
         },
     },
     "부동산 중심 · 30억원": {
@@ -300,7 +307,7 @@ EXAMPLES: Dict[str, Dict[str, Any]] = {
             "it_cash": 5_000,
             "it_death_benefit": 0,
         },
-        "widgets": {"it_spouse_exists": False, "it_children": 1, "it_share": 0.0},
+        "widgets": {"it_spouse_exists": False, "it_children": 1},
     },
     "보험금 준비형 · 30억원": {
         "description": "부동산 중심 사례와 같은 조건에서 사망보험금 5억원을 준비한 사례입니다.",
@@ -310,7 +317,7 @@ EXAMPLES: Dict[str, Dict[str, Any]] = {
             "it_cash": 5_000,
             "it_death_benefit": 50_000,
         },
-        "widgets": {"it_spouse_exists": False, "it_children": 1, "it_share": 0.0},
+        "widgets": {"it_spouse_exists": False, "it_children": 1},
     },
 }
 
@@ -832,18 +839,23 @@ def build_excel_report(
             ("추정·간주상속재산", input_data["deemed_estate"]),
             ("비과세·과세가액 불산입액", input_data["non_taxable"]),
             ("공과금", input_data["public_dues"]),
-            ("공제대상 장례비용", input_data["funeral_expense"]),
+            ("실제 일반 장례비용", input_data["funeral_actual"]),
+            ("일반 장례비용 공제액", input_data["general_funeral_deduction"]),
+            ("봉안시설·자연장지 실제 비용", input_data["burial_actual"]),
+            ("봉안시설·자연장지 공제액", input_data["burial_deduction"]),
+            ("최종 장례비용 공제액", input_data["funeral_expense"]),
             ("피상속인 채무", input_data["liabilities"]),
             ("10년 이내 상속인 증여재산", input_data["prior_gifts_heirs"]),
             ("5년 이내 상속인 외 증여재산", input_data["prior_gifts_non_heirs"]),
         ]),
         ("상속인·공제", [
             ("공제 방식", "일괄·인적 비교" if input_data["lump_mode"] else "기초공제 + 인적공제"),
-            ("자녀 수", input_data["children_count"]),
+            ("자녀공제 대상 자녀 수", input_data["children_count"]),
             ("65세 이상 연로자 수", input_data["elderly_count"]),
             ("배우자 생존 여부", "예" if input_data["spouse_exists"] else "아니오"),
             ("배우자 실제 상속금액", input_data["spouse_actual_inheritance"]),
             ("배우자 법정상속지분", input_data["spouse_share"]),
+            ("배우자 사전증여재산 과세표준", input_data["spouse_prior_gift_tax_base"]),
             ("순금융재산가액", input_data["net_financial_assets"]),
             ("공제대상 동거주택가액", input_data["cohabiting_home_value"]),
             ("기타 공제", input_data["other_deduction"]),
@@ -945,11 +957,17 @@ def run():
             )
         with c2:
             public_dues = amount_input("공과금 · 선택", value=0, key="it_dues")
-            funeral_expense = amount_input(
-                "공제대상 장례비용 · 확인",
-                value=1_000,
-                key="it_funeral",
-                show_default_notice=True,
+            funeral_actual = amount_input(
+                "실제 일반 장례비용",
+                value=0,
+                key="it_funeral_actual",
+                help_text="피상속인의 사망일부터 장례일까지 직접 소요된 일반 장례비용입니다. 공제액은 최소 500만원, 최대 1,000만원으로 자동 계산합니다.",
+            )
+            burial_actual = amount_input(
+                "봉안시설·자연장지 실제 비용",
+                value=0,
+                key="it_burial_actual",
+                help_text="봉안시설 또는 자연장지 사용에 실제 소요된 비용입니다. 최대 500만원까지 자동 반영합니다.",
             )
             liabilities = amount_input(
                 "피상속인 채무 · 중요",
@@ -957,6 +975,14 @@ def run():
                 key="it_liab",
                 help_text="상속개시일 현재 피상속인이 부담하는 확정 채무를 입력합니다.",
             )
+        general_funeral_deduction = min(max(funeral_actual, 500), 1_000)
+        burial_deduction = min(max(0, burial_actual), 500)
+        funeral_expense = general_funeral_deduction + burial_deduction
+        st.info(
+            f"자동 계산된 장례비용 공제액: **{won_text(funeral_expense)}**  \n"
+            f"일반 장례비용 {won_text(general_funeral_deduction)}"
+            f" + 봉안시설·자연장지 {won_text(burial_deduction)}"
+        )
         c3, c4 = st.columns(2)
         with c3:
             prior_gifts_heirs = amount_input(
@@ -983,7 +1009,14 @@ def run():
 
         a1, a2 = st.columns(2)
         with a1:
-            children_count = st.number_input("자녀 수", min_value=0, value=1, step=1, key="it_children")
+            children_count = st.number_input(
+                "자녀공제 대상 자녀 수",
+                min_value=0,
+                value=1,
+                step=1,
+                key="it_children",
+                help="자녀공제 계산에 반영할 자녀 수입니다.",
+            )
             elderly_count = st.number_input("65세 이상 연로자 수", min_value=0, value=0, step=1, key="it_elderly")
         with a2:
             minor_deduction = amount_input("미성년자공제 합계액", value=0, key="it_minor")
@@ -1000,11 +1033,12 @@ def run():
                     key="it_group",
                 )
                 count = 0 if group == "배우자 단독" else st.number_input(
-                    f"{group} 공동상속인 수",
+                    f"배우자를 제외한 {group} 상속인 수",
                     min_value=1,
                     value=1,
                     step=1,
                     key="it_count",
+                    help=f"배우자와 함께 상속받는 {group} 인원만 입력하세요. 배우자는 포함하지 않습니다.",
                 )
             with b2:
                 spouse_actual_inheritance = amount_input(
@@ -1015,19 +1049,10 @@ def run():
                     show_default_notice=True,
                 )
                 calculated_share = float(spouse_statutory_share(group, count))
-                if "it_share" not in st.session_state:
-                    st.session_state["it_share"] = calculated_share
-                spouse_share = st.number_input(
-                    "배우자 법정상속지분",
-                    min_value=0.0,
-                    max_value=1.0,
-                    value=calculated_share,
-                    step=0.01,
-                    format="%.4f",
-                    key="it_share",
-                    help="공동상속인 구성에 따른 법정상속지분입니다. 필요한 경우 직접 수정할 수 있습니다.",
-                )
-                st.caption(f"현재 공동상속인 구성 기준 참고 지분: {calculated_share:.4f}")
+                spouse_share = calculated_share
+                st.metric("자동 계산된 배우자 법정상속지분", f"{spouse_share:.2%}")
+                if group == "배우자 단독":
+                    st.caption("배우자 단독상속으로 일괄공제를 제외하고 기초공제와 인적공제를 반영합니다.")
 
         d1, d2 = st.columns(2)
         with d1:
@@ -1051,6 +1076,12 @@ def run():
             inheritance_waiver_next_rank = amount_input("상속포기로 다음 순위가 받은 재산", value=0, key="it_waiver")
         with e3:
             prior_gift_tax_base_for_limit = amount_input("공제한도 차감 사전증여 과세표준", value=0, key="it_prior_base")
+            spouse_prior_gift_tax_base = amount_input(
+                "배우자의 사전증여재산 과세표준",
+                value=0,
+                key="it_spouse_prior_base",
+                help_text="배우자가 피상속인으로부터 사전에 증여받은 재산의 증여세 과세표준입니다. 해당 사항이 없으면 0으로 둡니다.",
+            )
         f1, f2 = st.columns(2)
         with f1:
             generation_skip_amount = amount_input("세대를 건너뛴 상속재산가액", value=0, key="it_gen")
@@ -1084,8 +1115,10 @@ def run():
         minor_deduction=minor_deduction,
         disability_deduction=disability_deduction,
         spouse_exists=spouse_exists,
+        spouse_solo=spouse_exists and group == "배우자 단독",
         spouse_actual_inheritance=spouse_actual_inheritance,
         spouse_share=spouse_share,
+        spouse_prior_gift_tax_base=spouse_prior_gift_tax_base,
         net_financial_assets=net_financial_assets,
         cohabiting_home_value=cohabiting_home_value,
         other_deduction=other_deduction,
@@ -1304,6 +1337,10 @@ def run():
         "deemed_estate": deemed_estate,
         "non_taxable": non_taxable,
         "public_dues": public_dues,
+        "funeral_actual": funeral_actual,
+        "general_funeral_deduction": general_funeral_deduction,
+        "burial_actual": burial_actual,
+        "burial_deduction": burial_deduction,
         "funeral_expense": funeral_expense,
         "liabilities": liabilities,
         "prior_gifts_heirs": prior_gifts_heirs,
@@ -1316,6 +1353,7 @@ def run():
         "spouse_exists": spouse_exists,
         "spouse_actual_inheritance": spouse_actual_inheritance,
         "spouse_share": spouse_share,
+        "spouse_prior_gift_tax_base": spouse_prior_gift_tax_base,
         "net_financial_assets": net_financial_assets,
         "cohabiting_home_value": cohabiting_home_value,
         "other_deduction": other_deduction,
