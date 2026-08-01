@@ -102,27 +102,62 @@ APP_DEFINITIONS = {
 }
 
 
+# --------------------------------------------------
+# 계정별 기능 권한
+# True  = 사용 가능
+# False = 홈에서 잠금 표시, 사이드바에서 숨김
+# --------------------------------------------------
 USER_PERMISSIONS = {
-    "team1": list(APP_DEFINITIONS.keys()),
-    "team2": [
-        "analyzer",
-        "deposit_vs_shortpay",
-        "renewal_vs_nonrenewal",
-        "inheritance_tax",
-        "convention",
-        "summer",
-    ],
-    "team3": [
-        "analyzer",
-        "deposit_vs_shortpay",
-        "renewal_vs_nonrenewal",
-        "inheritance_tax",
-        "convention",
-        "summer",
-        "manager_results",
-    ],
-    "team4": ["analyzer", "deposit_vs_shortpay"],
-    "team5": ["analyzer", "deposit_vs_shortpay"],
+    "team1": {
+        "analyzer": True,                  # 보장 분석 도우미
+        "remodeling": True,                # 보험 리모델링
+        "deposit_vs_shortpay": True,       # 적금 vs 단기납
+        "renewal_vs_nonrenewal": True,     # 갱신 vs 비갱신
+        "inheritance_tax": True,           # 상속세 계산기
+        "convention": True,                # 컨벤션 계산기
+        "summer": True,                    # 썸머 계산기
+        "manager_results": True,           # 매니저 업적 환산
+    },
+    "team2": {
+        "analyzer": True,                  # 보장 분석 도우미
+        "remodeling": False,              # 보험 리모델링
+        "deposit_vs_shortpay": True,       # 적금 vs 단기납
+        "renewal_vs_nonrenewal": True,     # 갱신 vs 비갱신
+        "inheritance_tax": True,           # 상속세 계산기
+        "convention": True,                # 컨벤션 계산기
+        "summer": True,                    # 썸머 계산기
+        "manager_results": False,          # 매니저 업적 환산
+    },
+    "team3": {
+        "analyzer": True,                  # 보장 분석 도우미
+        "remodeling": False,              # 보험 리모델링
+        "deposit_vs_shortpay": True,       # 적금 vs 단기납
+        "renewal_vs_nonrenewal": True,     # 갱신 vs 비갱신
+        "inheritance_tax": True,           # 상속세 계산기
+        "convention": True,                # 컨벤션 계산기
+        "summer": True,                    # 썸머 계산기
+        "manager_results": True,           # 매니저 업적 환산
+    },
+    "team4": {
+        "analyzer": True,                  # 보장 분석 도우미
+        "remodeling": False,              # 보험 리모델링
+        "deposit_vs_shortpay": True,       # 적금 vs 단기납
+        "renewal_vs_nonrenewal": False,    # 갱신 vs 비갱신
+        "inheritance_tax": False,          # 상속세 계산기
+        "convention": False,               # 컨벤션 계산기
+        "summer": False,                   # 썸머 계산기
+        "manager_results": False,          # 매니저 업적 환산
+    },
+    "team5": {
+        "analyzer": True,                  # 보장 분석 도우미
+        "remodeling": False,              # 보험 리모델링
+        "deposit_vs_shortpay": True,       # 적금 vs 단기납
+        "renewal_vs_nonrenewal": False,    # 갱신 vs 비갱신
+        "inheritance_tax": False,          # 상속세 계산기
+        "convention": False,               # 컨벤션 계산기
+        "summer": False,                   # 썸머 계산기
+        "manager_results": False,          # 매니저 업적 환산
+    },
 }
 
 
@@ -180,7 +215,12 @@ def render_login() -> bool:
 
 def allowed_app_ids() -> list[str]:
     user = st.session_state.get("login_user")
-    return [app_id for app_id in USER_PERMISSIONS.get(user, []) if app_id in APP_DEFINITIONS]
+    permissions = USER_PERMISSIONS.get(user, {})
+    return [
+        app_id
+        for app_id in APP_DEFINITIONS
+        if permissions.get(app_id, False)
+    ]
 
 
 def navigate(app_id: str) -> None:
