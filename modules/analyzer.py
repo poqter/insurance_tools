@@ -211,6 +211,7 @@ def run():
     st.markdown("### 3. 분석 실행")
     if st.button(
         "보장 분석 시작",
+        type="primary",
         disabled=not ready_to_analyze,
         use_container_width=True,
         key="analyzer_run",
@@ -272,6 +273,7 @@ def run():
             data=result["bytes"],
             file_name=result["filename"],
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            type="primary",
             use_container_width=True,
             key="analyzer_download_result",
         )
