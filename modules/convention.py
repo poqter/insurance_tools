@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import os
 import re
+import hashlib
 from io import BytesIO
 
 from openpyxl import Workbook
@@ -242,6 +243,71 @@ def exclude_contracts(df: pd.DataFrame):
     return df.copy(), excluded_df
 
 
+def find_data_issues(df: pd.DataFrame, require_valid_date: bool = False):
+    """환산 계산 보류 사유와 쉐어율 조건 확인 사유를 행별로 반환합니다."""
+    blocking = pd.Series("", index=df.index, dtype="object")
+    condition = pd.Series("", index=df.index, dtype="object")
+
+    def add_issue(target, mask, message):
+        mask = pd.Series(mask, index=df.index).fillna(False)
+        target.loc[mask] = target.loc[mask].apply(
+            lambda current: f"{current} / {message}" if current else message
+        )
+
+    def blank_mask(column):
+        text = df[column].astype("string").str.strip().str.lower()
+        return df[column].isna() | text.isin(["", "nan", "none", "<na>"])
+
+    for column in ["수금자명", "보험사", "납입방법", "상품군2", "계약상태"]:
+        add_issue(blocking, blank_mask(column), f"{column} 누락")
+
+    period = pd.to_numeric(df["납입기간"], errors="coerce")
+    add_issue(blocking, period.isna() | (period <= 0), "납입기간 확인 필요")
+
+    premium = pd.to_numeric(df["보험료"], errors="coerce")
+    add_issue(blocking, premium.isna() | (premium <= 0), "보험료 확인 필요")
+
+    if require_valid_date:
+        dates = pd.to_datetime(df["계약일자"], errors="coerce")
+        add_issue(blocking, dates.isna(), "계약일자 확인 필요")
+
+    share_text = (
+        df["쉐어율"].astype("string").str.replace("%", "", regex=False).str.strip()
+    )
+    share_numeric = pd.to_numeric(share_text, errors="coerce")
+    add_issue(
+        condition,
+        share_numeric.isna() | (share_numeric <= 0) | (share_numeric > 100),
+        "쉐어율 확인 필요",
+    )
+
+    return blocking, condition, share_numeric
+
+
+def build_review_display(review_df: pd.DataFrame) -> pd.DataFrame:
+    columns = [
+        "원본행",
+        "수금자명",
+        "계약일자",
+        "보험사",
+        "상품명",
+        "납입기간",
+        "보험료",
+        "쉐어율",
+        "확인사항",
+        "반영상태",
+    ]
+    if review_df is None or review_df.empty:
+        return pd.DataFrame(columns=columns)
+
+    out = review_df.copy()
+    out.rename(columns={"_원본행번호": "원본행"}, inplace=True)
+    for column in columns:
+        if column not in out.columns:
+            out[column] = ""
+    return out[columns]
+
+
 def build_excluded_with_reason(exdf: pd.DataFrame) -> pd.DataFrame:
     base_cols = [
         "수금자명",
@@ -307,6 +373,10 @@ def check_required_columns(df: pd.DataFrame):
         "상품명",
         "납입기간",
         "보험료",
+        "쉐어율",
+        "납입방법",
+        "상품군2",
+        "계약상태",
     }
 
     return required_columns - set(df.columns)
@@ -321,10 +391,12 @@ def compute_convention(df: pd.DataFrame) -> pd.DataFrame:
     df["납입기간_num"] = pd.to_numeric(df["납입기간"], errors="coerce").fillna(0).astype(int)
 
     if "쉐어율" in df.columns:
-        df["쉐어율"] = df["쉐어율"].apply(
-            lambda x: float(str(x).replace("%", "").strip())
-            if pd.notnull(x) and str(x).strip() != ""
-            else np.nan
+        df["쉐어율"] = pd.to_numeric(
+            df["쉐어율"]
+            .astype("string")
+            .str.replace("%", "", regex=False)
+            .str.strip(),
+            errors="coerce",
         )
     else:
         df["쉐어율"] = np.nan
@@ -739,7 +811,12 @@ def write_totals_block(ws, dfin: pd.DataFrame, start_row: int):
     return start_row + len(rows)
 
 
-def build_workbook(df: pd.DataFrame, group: pd.DataFrame, excluded_disp_all: pd.DataFrame):
+def build_workbook(
+    df: pd.DataFrame,
+    group: pd.DataFrame,
+    excluded_disp_all: pd.DataFrame,
+    review_disp_all: pd.DataFrame | None = None,
+):
     wb = Workbook()
 
     ws_summary = wb.active
@@ -775,6 +852,11 @@ def build_workbook(df: pd.DataFrame, group: pd.DataFrame, excluded_disp_all: pd.
         if not ex_sub.empty:
             write_title(ws, next_row + 3, "제외 계약")
             write_table(ws, ex_sub, start_row=next_row + 4, name_suffix="EXCLUDED")
+
+    if review_disp_all is not None and not review_disp_all.empty:
+        ws_review = wb.create_sheet(title="확인필요계약")
+        write_title(ws_review, 1, "입력값 확인이 필요한 계약")
+        write_table(ws_review, review_disp_all, start_row=2, name_suffix="REVIEW")
 
     return wb
 
@@ -843,23 +925,112 @@ def run():
     base_filename = os.path.splitext(uploaded_file.name)[0]
     download_filename = f"{base_filename}_컨벤션환산결과.xlsx"
 
+    file_bytes = uploaded_file.getvalue()
+
     try:
-        raw = load_df(uploaded_file)
+        raw = load_df(BytesIO(file_bytes)).copy()
     except Exception as e:
         st.error(f"❌ 엑셀 파일을 읽는 중 오류가 발생했습니다: {e}")
-        st.stop()
+        return
 
-    df_valid, excluded_df = exclude_contracts(raw)
-    excluded_disp_all = build_excluded_with_reason(excluded_df)
-
-    missing = check_required_columns(df_valid)
+    missing = check_required_columns(raw)
 
     if missing:
         st.error(
             "❌ 업로드된 파일에 다음 항목이 필요합니다:\n\n"
             + ", ".join(sorted(missing))
         )
-        st.stop()
+        return
+
+    raw["_원본행번호"] = raw.index + 2
+    candidate_df, excluded_df = exclude_contracts(raw)
+    blocking_issues, condition_issues, _ = find_data_issues(candidate_df)
+    initial_review_mask = blocking_issues.ne("") | condition_issues.ne("")
+    initial_review = candidate_df[initial_review_mask].copy()
+
+    if not initial_review.empty:
+        initial_review["확인사항"] = blocking_issues.loc[initial_review.index]
+        condition_only = condition_issues.loc[initial_review.index]
+        initial_review["확인사항"] = initial_review.apply(
+            lambda row: " / ".join(
+                part for part in [row["확인사항"], condition_only.loc[row.name]] if part
+            ),
+            axis=1,
+        )
+        editor_columns = [
+            "_원본행번호", "수금자명", "계약일자", "보험사", "상품명",
+            "납입기간", "보험료", "쉐어율", "납입방법", "상품군2",
+            "계약상태", "확인사항",
+        ]
+
+        st.warning(
+            f"입력값을 확인해야 하는 계약이 {len(initial_review):,}건 있습니다. "
+            "표에서 직접 수정한 뒤 적용할 수 있습니다."
+        )
+        with st.expander("📝 확인 필요 계약 수정", expanded=True):
+            with st.form("convention_review_editor_form"):
+                edited_review = st.data_editor(
+                    initial_review[editor_columns].reset_index(drop=True),
+                    use_container_width=True,
+                    hide_index=True,
+                    disabled=["_원본행번호", "상품명", "확인사항"],
+                    key=f"convention_review_{hashlib.sha256(file_bytes).hexdigest()[:16]}",
+                )
+                corrections_submitted = st.form_submit_button(
+                    "수정값 적용", type="primary", use_container_width=True
+                )
+
+        editable_columns = [
+            "수금자명", "계약일자", "보험사", "납입기간", "보험료",
+            "쉐어율", "납입방법", "상품군2", "계약상태",
+        ]
+        for _, edited_row in edited_review.iterrows():
+            row_mask = candidate_df["_원본행번호"] == edited_row["_원본행번호"]
+            for column in editable_columns:
+                candidate_df.loc[row_mask, column] = edited_row[column]
+
+        if corrections_submitted:
+            st.success("입력한 수정값을 다시 검증하여 반영했습니다.")
+
+    candidate_df, newly_excluded_df = exclude_contracts(candidate_df)
+    if not newly_excluded_df.empty:
+        excluded_df = pd.concat([excluded_df, newly_excluded_df]).sort_index()
+
+    blocking_issues, condition_issues, share_numeric = find_data_issues(candidate_df)
+    blocked_df = candidate_df[blocking_issues.ne("")].copy()
+    if not blocked_df.empty:
+        blocked_df["확인사항"] = blocking_issues.loc[blocked_df.index]
+        blocked_df["반영상태"] = "계산 보류"
+
+    condition_mask = blocking_issues.eq("") & condition_issues.ne("")
+    condition_df = candidate_df[condition_mask].copy()
+    if not condition_df.empty:
+        condition_df["확인사항"] = condition_issues.loc[condition_df.index]
+        condition_df["반영상태"] = "금액 반영 · 건수/필수조건 보류"
+
+    review_df = pd.concat([blocked_df, condition_df]).sort_index()
+    review_disp_all = build_review_display(review_df)
+
+    df_valid = candidate_df[blocking_issues.eq("")].copy()
+    df_valid.loc[:, "쉐어율"] = share_numeric.loc[df_valid.index]
+    excluded_disp_all = build_excluded_with_reason(excluded_df)
+
+    if not blocked_df.empty:
+        st.warning(
+            f"중요 항목을 확인할 수 없는 계약 {len(blocked_df):,}건은 계산에서 제외했습니다."
+        )
+    if not condition_df.empty:
+        st.info(
+            f"쉐어율 확인이 필요한 계약 {len(condition_df):,}건은 환산금액에는 포함하고 "
+            "인정 건수와 필수조건에서는 제외했습니다."
+        )
+    if not review_disp_all.empty:
+        with st.expander("⚠️ 아직 확인이 필요한 계약", expanded=False):
+            st.dataframe(review_disp_all, use_container_width=True, hide_index=True)
+
+    if df_valid.empty:
+        st.warning("계산에 포함할 수 있는 정상 계약이 없습니다. 확인 필요 계약을 수정해 주세요.")
+        return
 
     df = compute_convention(df_valid)
 
@@ -868,14 +1039,6 @@ def run():
     if not invalid_dates.empty:
         st.warning(
             f"⚠️ {len(invalid_dates)}건의 계약일자가 날짜로 인식되지 않았습니다."
-        )
-
-    missing_share_df = df[df["쉐어율미입력"]].copy()
-    if not missing_share_df.empty:
-        st.warning(
-            f"⚠️ 쉐어율이 입력되지 않은 계약이 {len(missing_share_df)}건 있습니다. "
-            "해당 계약은 건수 및 필수조건 계산에서 제외됩니다. "
-            "단독 계약은 쉐어율에 100을 입력해주세요."
         )
 
     if not excluded_df.empty:
@@ -988,7 +1151,7 @@ def run():
     group = make_group(df)
     st.dataframe(format_group_for_display(group), use_container_width=True)
 
-    wb = build_workbook(df, group, excluded_disp_all)
+    wb = build_workbook(df, group, excluded_disp_all, review_disp_all)
 
     excel_output = BytesIO()
     wb.save(excel_output)
