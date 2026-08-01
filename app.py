@@ -240,7 +240,8 @@ def render_sidebar(allowed_ids: list[str]) -> None:
 
 def render_app_card(app_id: str, is_allowed: bool) -> None:
     app = APP_DEFINITIONS[app_id]
-    with st.container(border=True):
+    card_key = f"available_card_{app_id}" if is_allowed else f"locked_card_{app_id}"
+    with st.container(border=True, key=card_key):
         st.markdown(f"### {app['icon']} {app['name']}")
         if app.get("status"):
             st.caption(f"🛠️ {app['status']}")
@@ -249,7 +250,6 @@ def render_app_card(app_id: str, is_allowed: bool) -> None:
         if st.button(
             button_label,
             key=f"home_{app_id}",
-            type="primary" if is_allowed else "secondary",
             disabled=not is_allowed,
             use_container_width=True,
         ):
@@ -260,6 +260,20 @@ def render_home(allowed_ids: list[str]) -> None:
     user = st.session_state["login_user"]
     st.title("화랑사업부 업무 도우미")
     st.caption(f"{user} 계정의 업무 도구입니다. 잠금 표시된 기능은 현재 계정에서 사용할 수 없습니다.")
+
+    # 잠긴 카드에만 연한 회색 배경과 점선 테두리를 적용합니다.
+    st.markdown(
+        """
+        <style>
+        [class*="st-key-locked_card_"] {
+            background-color: #F5F6F7 !important;
+            border: 1px dashed #B8BEC5 !important;
+            border-radius: 0.5rem !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
     with st.container(border=True):
         st.markdown("**상담자료 제작부터 실적 환산까지 필요한 업무를 빠르게 시작하세요.**")
