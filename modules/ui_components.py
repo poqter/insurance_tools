@@ -44,7 +44,7 @@ def inject_global_styles() -> None:
         .stMainBlockContainer,
         main .block-container {
             max-width: 1280px;
-            padding-top: 6rem !important;
+            padding-top: 4.5rem !important;
             padding-bottom: 5rem !important;
         }
         /* app.py의 홈 히어로 음수 상단 여백도 안전하게 무효화합니다. */
@@ -124,7 +124,7 @@ def inject_global_styles() -> None:
             [data-testid="stMainBlockContainer"],
             .stMainBlockContainer,
             main .block-container {
-                padding: 3rem 1rem 4rem !important;
+                padding: 5.5rem 1rem 4rem !important;
             }
             .hw-page-title { font-size:1.65rem; }
             .hw-page-icon { width:2.9rem; height:2.9rem; }
