@@ -949,7 +949,9 @@ def run():
             **- 💾 엑셀 다운로드 후 파일 첨부**
             """
         )
-        
+
+        st.divider()
+
         st.subheader("🌞 월별 필수조건")
         st.markdown(
             f"""
