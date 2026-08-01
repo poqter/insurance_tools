@@ -33,10 +33,19 @@ def inject_global_styles() -> None:
         }
         #MainMenu { visibility: hidden; }
         [data-testid="stDecoration"] { display: none; }
-        .block-container {
+        .block-container { max-width: 1280px; padding-bottom: 5rem; }
+        /*
+         * Streamlit 버전별 본문 컨테이너 이름을 모두 지원합니다.
+         * 배포 화면에서는 기존 .block-container 선택자만으로는 상단 여백이 적용되지 않았습니다.
+         */
+        [data-testid="stAppViewContainer"] .main .block-container,
+        [data-testid="stAppViewBlockContainer"],
+        [data-testid="stMainBlockContainer"],
+        .stMainBlockContainer,
+        main .block-container {
             max-width: 1280px;
-            padding-top: 20rem !important;
-            padding-bottom: 5rem;
+            padding-top: 6rem !important;
+            padding-bottom: 5rem !important;
         }
         /* app.py의 홈 히어로 음수 상단 여백도 안전하게 무효화합니다. */
         .hw-home-hero { margin-top: 0 !important; }
@@ -110,7 +119,13 @@ def inject_global_styles() -> None:
         [data-testid="stSidebar"] .stButton>button[kind="primary"] { background:#EAF3FF !important; color:#1769DC !important; border-color:#CFE1F4 !important; }
         @media (max-width: 768px) {
             /* 모바일 상단바 아래에도 약 16px의 안전 여백을 둡니다. */
-            .block-container { padding: 5rem 1rem 4rem !important; }
+            [data-testid="stAppViewContainer"] .main .block-container,
+            [data-testid="stAppViewBlockContainer"],
+            [data-testid="stMainBlockContainer"],
+            .stMainBlockContainer,
+            main .block-container {
+                padding: 5.5rem 1rem 4rem !important;
+            }
             .hw-page-title { font-size:1.65rem; }
             .hw-page-icon { width:2.9rem; height:2.9rem; }
             .hw-login-hero { padding:2rem 1.4rem; }
