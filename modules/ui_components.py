@@ -22,14 +22,31 @@ def inject_global_styles() -> None:
         }
         html, body, [class*="css"] { font-family: Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", sans-serif; }
         .stApp { background: var(--hw-bg); color: var(--hw-ink); }
-        .block-container { max-width: 1280px; padding-top: 2.15rem; padding-bottom: 5rem; }
+        /*
+         * Streamlit Community Cloud의 고정 상단바는 약 64~66px입니다.
+         * 88px(5.5rem)의 상단 여백으로 상단바와 20px 이상의 안전 간격을 확보합니다.
+         */
+        header[data-testid="stHeader"] {
+            background: rgba(247, 250, 252, 0.90);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        #MainMenu { visibility: hidden; }
+        [data-testid="stDecoration"] { display: none; }
+        .block-container {
+            max-width: 1280px;
+            padding-top: 5.5rem !important;
+            padding-bottom: 5rem;
+        }
+        /* app.py의 홈 히어로 음수 상단 여백도 안전하게 무효화합니다. */
+        .hw-home-hero { margin-top: 0 !important; }
         h1, h2, h3, h4 { color: var(--hw-ink); letter-spacing: -0.035em; }
         h1 a, h2 a, h3 a, h4 a { display: none !important; }
         h2 { margin-top: 2.5rem !important; }
         h3 { margin-top: 1.6rem !important; }
         [data-testid="stCaptionContainer"] { color: var(--hw-muted); }
         [data-testid="stSidebar"] { background: #FFFFFF; border-right: 1px solid var(--hw-line); }
-        [data-testid="stSidebar"] .block-container { padding-top: 1.4rem; }
+        [data-testid="stSidebar"] .block-container { padding-top: 1.4rem !important; }
         [data-testid="stSidebar"] hr { border-color: #E8EEF3; }
         .stButton > button, .stDownloadButton > button, [data-testid="stFormSubmitButton"] > button {
             min-height: 2.75rem; border-radius: 10px; font-weight: 700;
@@ -92,7 +109,8 @@ def inject_global_styles() -> None:
         .hw-login-hero p { margin:0; color:#5F7486; font-size:.96rem; line-height:1.65; }
         [data-testid="stSidebar"] .stButton>button[kind="primary"] { background:#EAF3FF !important; color:#1769DC !important; border-color:#CFE1F4 !important; }
         @media (max-width: 768px) {
-            .block-container { padding: 1.35rem 1rem 4rem; }
+            /* 모바일 상단바 아래에도 약 16px의 안전 여백을 둡니다. */
+            .block-container { padding: 5rem 1rem 4rem !important; }
             .hw-page-title { font-size:1.65rem; }
             .hw-page-icon { width:2.9rem; height:2.9rem; }
             .hw-login-hero { padding:2rem 1.4rem; }
