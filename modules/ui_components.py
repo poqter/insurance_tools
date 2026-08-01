@@ -124,7 +124,7 @@ def inject_global_styles() -> None:
             [data-testid="stMainBlockContainer"],
             .stMainBlockContainer,
             main .block-container {
-                padding: 5.5rem 1rem 4rem !important;
+                padding: 3rem 1rem 4rem !important;
             }
             .hw-page-title { font-size:1.65rem; }
             .hw-page-icon { width:2.9rem; height:2.9rem; }
