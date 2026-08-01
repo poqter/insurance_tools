@@ -218,17 +218,20 @@ def render_home(allowed_ids: list[str]) -> None:
         """
         <style>
         .hw-home-intro { display:flex; justify-content:space-between; align-items:flex-end; gap:1.5rem;
-            margin:0 0 1.25rem; padding:0 0 1.15rem; border-bottom:1px solid #DFE9F1; }
-        .hw-home-intro span { color:#1769DC; font-size:.78rem; font-weight:850; letter-spacing:.12em; }
-        .hw-home-intro h1 { margin:.3rem 0 .18rem !important; color:#10283D; font-size:clamp(2.1rem,3vw,2.7rem);
-            line-height:1.2; letter-spacing:-.045em; }
-        .hw-home-intro p { margin:0; color:#647789; font-size:1rem; }
+            margin:0 0 .75rem !important; padding:0 0 .9rem !important; border-bottom:1px solid #DFE9F1; }
+        .hw-home-intro h1 { margin:0 0 .3rem !important; padding:0 !important; color:#10283D !important;
+            font-size:clamp(2.15rem,3vw,2.7rem) !important; line-height:1.15 !important;
+            font-weight:800 !important; letter-spacing:-.045em !important; }
+        .hw-home-intro p { margin:0 !important; padding:0 !important; color:#5F7486;
+            font-size:1.05rem !important; line-height:1.5 !important; }
         .hw-home-user { flex:none; padding:.55rem .85rem; border:1px solid #DCE6EE; border-radius:999px;
-            background:#FFFFFF; color:#617789; font-size:.85rem; }
-        .hw-category-head { margin:1.35rem 0 .85rem; }
-        .hw-category-head span { color:#1769DC; font-size:.72rem; font-weight:850; letter-spacing:.11em; }
-        .hw-category-head h2 { margin:.22rem 0 .18rem !important; font-size:1.65rem; }
-        .hw-category-head p { margin:0; color:#647789; font-size:.9rem; }
+            background:#FFFFFF; color:#536D80; font-size:.92rem !important; font-weight:600; }
+        .hw-category-head { margin:1.15rem 0 .8rem !important; padding:0 !important; }
+        .hw-category-head h2 { margin:0 0 .3rem !important; padding:0 !important; color:#10283D !important;
+            font-size:1.65rem !important; line-height:1.25 !important; font-weight:800 !important;
+            letter-spacing:-.035em !important; }
+        .hw-category-head p { margin:0 !important; padding:0 !important; color:#5F7486;
+            font-size:1rem !important; line-height:1.5 !important; }
         [class*="st-key-locked_card_"] { background-color:#F2F5F7 !important; opacity:.72;
             border:1px dashed #B8C7D2 !important; border-radius:1rem !important; }
         [class*="st-key-available_card_"] { min-height:13.2rem; background:#FFFFFF; border:1px solid #DCE6EE !important;
@@ -252,7 +255,7 @@ def render_home(allowed_ids: list[str]) -> None:
     st.markdown(
         f"""
         <div class="hw-home-intro">
-          <div><span>WORKSPACE</span><h1>업무 도구</h1><p>필요한 프로그램을 선택하세요.</p></div>
+          <div><h1>업무 도구</h1><p>필요한 프로그램을 선택하세요.</p></div>
           <div class="hw-home-user">{user} 계정으로 접속 중</div>
         </div>
         """,
@@ -262,7 +265,7 @@ def render_home(allowed_ids: list[str]) -> None:
     for category in ("고객 상담", "실적 관리"):
         category_apps = [app_id for app_id in APP_DEFINITIONS if APP_DEFINITIONS[app_id]["category"] == category]
         description = "고객 설명과 상담자료 제작에 필요한 도구입니다." if category == "고객 상담" else "개인·조직 실적과 행사 달성 현황을 확인합니다."
-        st.markdown(f'<div class="hw-category-head"><span>WORK SOLUTIONS</span><h2>{category}</h2><p>{description}</p></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="hw-category-head"><h2>{category}</h2><p>{description}</p></div>', unsafe_allow_html=True)
         for start in range(0, len(category_apps), 3):
             row_apps = category_apps[start:start + 3]
             columns = st.columns(3, gap="medium")
