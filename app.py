@@ -238,34 +238,36 @@ def render_sidebar(allowed_ids: list[str]) -> None:
             logout()
 
 
-def render_app_card(app_id: str) -> None:
+def render_app_card(app_id: str, is_allowed: bool) -> None:
     app = APP_DEFINITIONS[app_id]
     with st.container(border=True):
         st.markdown(f"### {app['icon']} {app['name']}")
         if app.get("status"):
             st.caption(f"🛠️ {app['status']}")
         st.write(app["description"])
-        if st.button(app["action"], key=f"home_{app_id}", use_container_width=True):
+        button_label = app["action"] if is_allowed else "🔒 사용 권한 없음"
+        if st.button(
+            button_label,
+            key=f"home_{app_id}",
+            disabled=not is_allowed,
+            use_container_width=True,
+        ):
             navigate(app_id)
 
 
 def render_home(allowed_ids: list[str]) -> None:
     user = st.session_state["login_user"]
     st.title("화랑사업부 업무 도우미")
-    st.caption(f"{user} 계정에서 사용할 수 있는 업무 도구입니다.")
+    st.caption(f"{user} 계정의 업무 도구입니다. 잠금 표시된 기능은 현재 계정에서 사용할 수 없습니다.")
 
     with st.container(border=True):
         st.markdown("**상담자료 제작부터 실적 환산까지 필요한 업무를 빠르게 시작하세요.**")
         st.caption("왼쪽 메뉴 또는 아래 업무 카드를 선택하면 해당 프로그램으로 이동합니다.")
 
-    if not allowed_ids:
-        st.warning("현재 계정으로 접근 가능한 메뉴가 없습니다.")
-        return
-
     for category in ("고객 상담", "실적 관리"):
         category_apps = [
             app_id
-            for app_id in allowed_ids
+            for app_id in APP_DEFINITIONS
             if APP_DEFINITIONS[app_id]["category"] == category
         ]
         if not category_apps:
@@ -277,7 +279,7 @@ def render_home(allowed_ids: list[str]) -> None:
             columns = st.columns(3, gap="medium")
             for column, app_id in zip(columns, row_apps):
                 with column:
-                    render_app_card(app_id)
+                    render_app_card(app_id, app_id in allowed_ids)
 
     st.divider()
     st.caption("제작 · 박병선 팀장")
