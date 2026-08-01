@@ -35,7 +35,7 @@ def inject_global_styles() -> None:
         [data-testid="stDecoration"] { display: none; }
         .block-container {
             max-width: 1280px;
-            padding-top: 7rem !important;
+            padding-top: 12rem !important;
             padding-bottom: 5rem;
         }
         /* app.py의 홈 히어로 음수 상단 여백도 안전하게 무효화합니다. */
