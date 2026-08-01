@@ -249,6 +249,7 @@ def render_app_card(app_id: str, is_allowed: bool) -> None:
         if st.button(
             button_label,
             key=f"home_{app_id}",
+            type="primary" if is_allowed else "secondary",
             disabled=not is_allowed,
             use_container_width=True,
         ):
