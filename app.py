@@ -116,7 +116,7 @@ def render_login() -> bool:
 
     st.markdown(
         """
-        <div class="hw-login-brand"><span class="hw-logo">H</span><strong>화랑 <b>WORKS</b></strong></div>
+        <div class="hw-login-brand"><span class="hw-logo">H</span><strong>화랑 <b>WORKSPACE</b></strong></div>
         <div class="hw-login-hero">
           <span>HWARANG BUSINESS WORKSPACE</span>
           <h1>보험 업무의 복잡함을,<br><em>더 간단하게.</em></h1>
@@ -167,7 +167,7 @@ def logout() -> None:
 
 def render_sidebar(allowed_ids: list[str]) -> None:
     with st.sidebar:
-        st.markdown('<div class="hw-side-brand"><span>H</span><strong>화랑 WORKSACE</strong></div>', unsafe_allow_html=True)
+        st.markdown('<div class="hw-side-brand"><span>H</span><strong>화랑 WORKSPACE</strong></div>', unsafe_allow_html=True)
         st.caption("필요한 업무를 선택하세요.")
 
         home_active = st.session_state["active_app"] == "home"

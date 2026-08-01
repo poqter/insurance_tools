@@ -1,4 +1,4 @@
-"""화랑 WORKS 공통 화면 구성요소와 디자인 시스템."""
+"""화랑 WORKSPACE 공통 화면 구성요소와 디자인 시스템."""
 
 from __future__ import annotations
 
@@ -106,16 +106,20 @@ def inject_global_styles() -> None:
         .hw-side-brand span,.hw-login-brand .hw-logo { width:2.25rem; height:2.25rem; display:grid; place-items:center; border-radius:.7rem;
             background:linear-gradient(145deg,#1769DC,#119B98); color:white; font-weight:900; box-shadow:0 8px 18px rgba(23,105,220,.18); }
         .hw-side-brand strong { font-size:1.05rem; letter-spacing:-.035em; }
-        .hw-login-brand { display:flex; align-items:center; gap:.75rem; margin:.2rem 0 1.5rem; }
+        .hw-login-brand { display:flex; align-items:center; gap:.75rem; margin:0 0 1.25rem !important; }
         .hw-login-brand strong { color:#10283D; font-size:1.2rem; letter-spacing:-.04em; }
         .hw-login-brand b { font-weight:800; }
-        .hw-login-hero { margin-bottom:1.5rem; padding:2rem 2.4rem; border:1px solid #DFE9F1; border-radius:18px;
+        .hw-login-hero { min-height:0 !important; height:auto !important; margin-bottom:1.5rem !important;
+            padding:1.8rem 2.4rem !important; border:1px solid #DFE9F1; border-radius:18px;
             background:radial-gradient(circle at 88% 25%,rgba(23,105,220,.13),transparent 28%),radial-gradient(circle at 75% 80%,rgba(17,155,152,.12),transparent 26%),linear-gradient(120deg,#FFFFFF,#F5F9FF);
             box-shadow:0 18px 45px rgba(30,70,100,.07); }
-        .hw-login-hero>span { color:#3F7197; font-size:.65rem; font-weight:850; letter-spacing:.13em; }
-        .hw-login-hero h1 { margin:.55rem 0 7rem; font-size:clamp(2.1rem,3.5vw,3.35rem); line-height:1.12; letter-spacing:-.06em; }
+        .hw-login-hero>span { display:block; margin:0 !important; padding:0 !important; color:#3F7197;
+            font-size:.65rem !important; font-weight:850; letter-spacing:.13em; }
+        .hw-login-hero h1 { margin:.55rem 0 .65rem !important; padding:0 !important;
+            font-size:clamp(2.1rem,3.5vw,3.35rem) !important; line-height:1.12 !important; letter-spacing:-.06em; }
         .hw-login-hero h1 em { color:#1769DC; font-style:normal; }
-        .hw-login-hero p { margin:0; color:#5F7486; font-size:.92rem; line-height:1.55; }
+        .hw-login-hero p { margin:0 !important; padding:0 !important; color:#5F7486;
+            font-size:.92rem !important; line-height:1.55 !important; }
         [data-testid="stSidebar"] .stButton>button[kind="primary"] { background:#EAF3FF !important; color:#1769DC !important; border-color:#CFE1F4 !important; }
         @media (max-width: 768px) {
             /* 모바일 상단바 아래에도 약 16px의 안전 여백을 둡니다. */
@@ -128,7 +132,7 @@ def inject_global_styles() -> None:
             }
             .hw-page-title { font-size:1.65rem; }
             .hw-page-icon { width:2.9rem; height:2.9rem; }
-            .hw-login-hero { padding:2rem 1.4rem; }
+            .hw-login-hero { padding:1.55rem 1.4rem !important; }
             [data-testid="stHorizontalBlock"] { gap:.8rem; }
         }
         @media print {
