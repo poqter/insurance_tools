@@ -1,7 +1,4 @@
-streamlit
-matplotlib
-pandas
-openpyxl
-pyautogui
-pyperclip
-pdfplumber
+streamlit>=1.40
+pandas>=2.0
+numpy>=1.26
+openpyxl>=3.1

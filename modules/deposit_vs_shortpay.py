@@ -1,6 +1,7 @@
 
 import streamlit as st
 import time
+from .ui_components import page_header
 
 def run():
     # 강조 박스 함수
@@ -45,7 +46,7 @@ def run():
     </style>
     """, unsafe_allow_html=True)
 
-    st.title("💰 적금 vs 단기납 비교")
+    page_header("고객 상담", "적금 vs 단기납", "10년 기준 적금과 단기납의 예상 결과를 한눈에 비교합니다.", "DS")
 
     col1, col2 = st.columns(2)
 

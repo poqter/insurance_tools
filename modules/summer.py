@@ -10,6 +10,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, Border, Side, PatternFill
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.worksheet.table import Table, TableStyleInfo
+from .ui_components import page_header
 
 
 # ── 썸머 기준 ────────────────────────────────────────────────
@@ -1005,8 +1006,7 @@ def render_result_tabs(summary_df, july_df, august_df, other_month_df):
 
 # ── 메인 실행 ────────────────────────────────────────────────
 def run():
-    st.title("🌞 썸머 계산기")
-    st.caption("엑셀 파일 하나를 업로드하면 계약일 기준으로 7월과 8월을 자동 분리하여 계산합니다.")
+    page_header("실적 관리", "썸머 계산기", "계약일 기준으로 7월과 8월을 분리해 썸머 업적과 최종 등급을 계산합니다.", "SU")
 
     with st.expander("월별 필수조건·보너스·등급·환산율 보기"):
         st.header("🧭 사용 방법")

@@ -6,6 +6,7 @@ from io import BytesIO
 import openpyxl
 import streamlit as st
 from openpyxl.utils import get_column_letter
+from .ui_components import page_header
 
 
 def make_input_signature(
@@ -100,8 +101,7 @@ def build_analysis_file(
 
 
 def run():
-    st.title("📊 보장 분석 도우미")
-    st.caption("보험사 보장분석 자료를 고객용 엑셀 양식으로 변환합니다.")
+    page_header("고객 상담", "보장 분석 도우미", "보험사 보장분석 자료를 고객용 엑셀 양식으로 변환합니다.", "▤")
 
     with st.expander("사용 방법 안내"):
         st.markdown(
