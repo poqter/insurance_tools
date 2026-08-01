@@ -81,19 +81,24 @@ def autosize_columns_fast(ws, df: pd.DataFrame, padding=5, max_width=45):
             letter = ws.cell(row=1, column=j).column_letter
             ws.column_dimensions[letter].width = min(
                 max(len(str(col)) + padding, 10),
-                max_width
+                max_width,
             )
         return
 
-    sample = df.head(30).astype(str)
+    sample = df.head(30).fillna("").astype(str)
 
     for j, col in enumerate(df.columns, 1):
         header_len = len(str(col))
-        sample_max = sample[col].map(len).max() if col in sample.columns else 0
+
+        if col in sample.columns:
+            lengths = sample[col].fillna("").astype(str).str.len()
+            sample_max = int(lengths.max()) if not lengths.empty else 0
+        else:
+            sample_max = 0
 
         width = min(
             max(header_len, sample_max) + padding,
-            max_width
+            max_width,
         )
 
         letter = ws.cell(row=1, column=j).column_letter
