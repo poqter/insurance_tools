@@ -662,7 +662,7 @@ def build_workbook(
 
 # ── 메인 실행 함수 ───────────────────────────────────────────
 def run():
-    with st.sidebar:
+    with st.expander("사용 방법 및 환산 기준 보기"):
         st.header("🧭 사용 방법")
         st.markdown(
             """

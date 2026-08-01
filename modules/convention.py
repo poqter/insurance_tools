@@ -784,7 +784,7 @@ def run():
     st.title("🏆 컨벤션 계산기")
     st.caption("컨벤션 기준으로 보험 계약 실적을 환산합니다.")
 
-    with st.sidebar:
+    with st.expander("컨벤션 달성 기준 및 환산율 보기"):
         st.subheader("🏆 컨벤션 기준")
         st.markdown(
             f"""

@@ -10,9 +10,9 @@ def run():
     with open("print.xlsx", "rb") as f:
         default_template_data = f.read()
 
-    # ✅ 사이드바 안내문 + 다운로드 버튼 + 제작자 정보
-    st.sidebar.markdown("### 📘 사용 방법 안내")
-    st.sidebar.markdown("""
+    # 통합 사이드바와 분리된 본문 안내
+    with st.expander("사용 방법 및 기본 양식 안내"):
+        st.markdown("""
 1. 컨설팅보장분석.xlsx 업로드  
 2. (선택) 개인용 보장분석 폼.xlsx 업로드  
 3. 분석 후 **결과 파일 다운로드**
@@ -21,17 +21,15 @@ def run():
 - print.xlsx 미첨부 시, **기본 폼 자동 사용**  
 - 지원 파일: .xlsx (엑셀 전용)
 """)
-    st.sidebar.markdown("📝 **기본 폼을 수정하려면 아래 파일을 받아 수정 후 업로드하세요.**")
-    st.sidebar.download_button(
-        label="📥 기본 폼(print.xlsx) 다운로드",
-        data=default_template_data,
-        file_name="print.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("👨‍💻 **제작자:** 비전본부 드림지점 박병선 팀장")  
-    st.sidebar.markdown("🗓️ **버전:** v1.2.0")  
-    st.sidebar.markdown("📅 **최종 업데이트:** 2026-05-17")
+        st.markdown("기본 폼을 수정하려면 아래 파일을 받아 수정 후 업로드하세요.")
+        st.download_button(
+            label="기본 폼(print.xlsx) 다운로드",
+            data=default_template_data,
+            file_name="print.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+        )
+        st.caption("버전 v1.2.0 · 최종 업데이트 2026-05-17 · 제작 박병선 팀장")
 
     # ✅ 제목 및 설명
     st.title("📊 보장 분석 도우미")

@@ -16,8 +16,8 @@ def run():
         else:
             return f"{won:,}원"
 
-    # 사이드바 인쇄 안내
-    with st.sidebar:
+    # 통합 사이드바와 분리된 본문 안내
+    with st.expander("인쇄 방법 및 계산기 정보"):
         st.markdown("""
         📄 **인쇄 안내**
 
@@ -58,7 +58,7 @@ def run():
         st.header("📌 단기납")
         insurance_monthly = st.number_input("월 납입액 (만원)", min_value=0, step=1, value=None, format="%d", placeholder="예: 100", key="ins_monthly")
         pay_years = st.selectbox("납입 기간 (년)", [5, 7], index=0)
-        return_rate = st.number_input("10년 시점 해지환환급률 (%)", min_value=0.0, step=0.1, value=None, placeholder="예: 123.0")
+        return_rate = st.number_input("10년 시점 해지환급률 (%)", min_value=0.0, step=0.1, value=None, placeholder="예: 123.0")
 
     if st.button("결과 보기"):
         if deposit_monthly in (None, 0) or deposit_rate in (None, 0.0) or insurance_monthly in (None, 0) or return_rate in (None, 0.0):

@@ -938,7 +938,7 @@ def run():
     st.title("🌞 썸머 계산기")
     st.caption("엑셀 파일 하나를 업로드하면 계약일 기준으로 7월과 8월을 자동 분리하여 계산합니다.")
 
-    with st.sidebar:
+    with st.expander("월별 필수조건·보너스·등급·환산율 보기"):
         st.subheader("🌞 월별 필수조건")
         st.markdown(
             f"""

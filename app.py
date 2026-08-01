@@ -1,278 +1,304 @@
 import streamlit as st
 
 from modules import (
-    deposit_vs_shortpay,
-    renewal_vs_nonrenewal,
     analyzer,
-    remodeling,
     convention,
-    summer,
-    manager_results,
+    deposit_vs_shortpay,
     inheritance_tax,
+    manager_results,
+    remodeling,
+    renewal_vs_nonrenewal,
+    summer,
 )
 
-# 페이지 설정
-st.set_page_config(page_title="화랑사업부 멀티 도우미", layout="wide")
+
+st.set_page_config(
+    page_title="화랑사업부 업무 도우미",
+    page_icon="🧰",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
 
-# -----------------------------
-# 🔔 로그인 후 공지 팝업
-# -----------------------------
-@st.dialog("📌 화랑사업부 멀티 도우미 공지사항")
-def show_login_notice_popup():
-    login_user = st.session_state.get("login_user", "사용자")
-
-    st.markdown(
-        f"""
-        <h3 style="margin-bottom:0;">
-            {login_user}님, 로그인되었습니다.
-        </h3>
-        <div style="
-            text-align:right;
-            font-size:15px;
-            color:#777777;
-            margin-top:-6px;
-            margin-bottom:18px;
-            font-weight:600;
-        ">
-            제작 : 박병선 팀장
-        </div>
-
-        <p style="margin-top:0;">
-            멀티 도우미를 사용하기 전 아래 내용을 확인해주세요.<br>
-            아래 "확인했습니다."를 눌러주세요.
-        </p>
-
-        <hr>
-        """,
-        unsafe_allow_html=True
-    )
-    
-    st.markdown(
-        """
-        <div style="
-            background-color:#fff1f1;
-            border:2px solid #ff4b4b;
-            border-radius:12px;
-            padding:16px;
-            margin-bottom:18px;
-        ">
-            <h4 style="color:#d00000; margin-top:0;">
-                🚨 중요 공지
-            </h4>
-            <p style="font-size:18px; color:#d00000; font-weight:700; margin-bottom:4px;">
-                8월 1일 기능 업데이트 및 비밀번호 변경 예정입니다.
-            </p>
-            <p style="font-size:15px; color:#333333; margin-bottom:0;">
-                업데이트 이후 기존 비밀번호로는 접속이 제한됩니다.<br>
-                변경 비밀번호는 박병선 팀장에게 편하게 문의해주세요.
-            </p>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-    st.markdown("""
-    #### ✅ 사용 전 안내사항
-                
-    1. **사용중 오류, 개선이 필요다면 박병선 팀장에게 전달해주세요.**  
-       확인 후 필요한 부분은 순차적으로 반영하겠습니다.
-
-    2. **컨벤션 계산기는 현재 테스트 운영 중입니다.**  
-       일부 계산 결과 또는 표시 방식이 추후 변경될 수 있습니다.
-
-    3. **썸머 계산기 이용 시 수금자와 보너스율을 정확히 선택해주세요.**  
-       선택한 수금자와 보너스율에 따라 최종 환산 결과가 달라질 수 있습니다.
+# 공지는 이 목록만 수정하면 로그인 화면에 반영됩니다.
+NOTICE = {
+    "date": "2026.08.01",
+    "title": "업무 도우미 화면이 새롭게 정리되었습니다.",
+    "items": [
+        "로그인 후 통합 홈에서 필요한 업무를 선택할 수 있습니다.",
+        "고객 상담과 실적 관리 메뉴가 업무 목적별로 구분되었습니다.",
+        "계산 기준과 계산 로직은 기존과 동일하게 유지됩니다.",
+    ],
+    "important": "비밀번호가 변경되었습니다. 변경된 비밀번호는 박병선 팀장에게 문의해 주세요.",
+}
 
 
+APP_DEFINITIONS = {
+    "analyzer": {
+        "name": "보장 분석 도우미",
+        "icon": "📑",
+        "category": "고객 상담",
+        "description": "보험사 보장분석 자료를 고객용 양식으로 변환합니다.",
+        "action": "보장 분석 시작",
+        "run": analyzer.run,
+    },
+    "remodeling": {
+        "name": "보험 리모델링",
+        "icon": "🔁",
+        "category": "고객 상담",
+        "description": "기존 보험과 변경안을 비교하고 고객용 엑셀 자료를 만듭니다.",
+        "action": "리모델링 시작",
+        "run": remodeling.run,
+    },
+    "deposit_vs_shortpay": {
+        "name": "적금 vs 단기납",
+        "icon": "💰",
+        "category": "고객 상담",
+        "description": "10년 기준 적금과 단기납의 예상 결과를 비교합니다.",
+        "action": "비교 계산 시작",
+        "run": deposit_vs_shortpay.run,
+    },
+    "renewal_vs_nonrenewal": {
+        "name": "갱신 vs 비갱신",
+        "icon": "📊",
+        "category": "고객 상담",
+        "description": "보험료 변동을 반영해 장기 총납입액을 비교합니다.",
+        "action": "보험료 비교 시작",
+        "run": renewal_vs_nonrenewal.run,
+    },
+    "inheritance_tax": {
+        "name": "상속세 계산기",
+        "icon": "🧾",
+        "category": "고객 상담",
+        "description": "예상 상속세와 부족한 현금성 납부재원을 계산합니다.",
+        "action": "상속세 계산 시작",
+        "run": inheritance_tax.run,
+    },
+    "convention": {
+        "name": "컨벤션 계산기",
+        "icon": "🏆",
+        "category": "실적 관리",
+        "description": "계약 실적을 환산하고 컨벤션 달성 여부를 확인합니다.",
+        "action": "컨벤션 계산 시작",
+        "run": convention.run,
+    },
+    "summer": {
+        "name": "썸머 계산기",
+        "icon": "🌞",
+        "category": "실적 관리",
+        "description": "7·8월 실적과 보너스를 반영해 최종 등급을 계산합니다.",
+        "action": "썸머 실적 계산",
+        "run": summer.run,
+    },
+    "manager_results": {
+        "name": "매니저 업적 환산",
+        "icon": "📈",
+        "category": "실적 관리",
+        "description": "여러 수금자의 실적·순위·환산금액을 집계합니다.",
+        "action": "매니저 실적 확인",
+        "run": manager_results.run,
+    },
+}
 
-    ---
-    """)
 
-    st.info("확인 버튼을 누르면 메인 화면으로 이동합니다.")
+USER_PERMISSIONS = {
+    "team1": list(APP_DEFINITIONS.keys()),
+    "team2": [
+        "analyzer",
+        "deposit_vs_shortpay",
+        "renewal_vs_nonrenewal",
+        "inheritance_tax",
+        "convention",
+        "summer",
+    ],
+    "team3": [
+        "analyzer",
+        "deposit_vs_shortpay",
+        "renewal_vs_nonrenewal",
+        "inheritance_tax",
+        "convention",
+        "summer",
+        "manager_results",
+    ],
+    "team4": ["analyzer", "deposit_vs_shortpay"],
+    "team5": ["analyzer", "deposit_vs_shortpay"],
+}
 
-    if st.button("확인했습니다", type="primary", use_container_width=True):
-        st.session_state["notice_confirmed"] = True
-        st.rerun()
+
+def initialize_state() -> None:
+    st.session_state.setdefault("password_correct", False)
+    st.session_state.setdefault("login_user", None)
+    st.session_state.setdefault("active_app", "home")
 
 
-# -----------------------------
-# 🔐 여러 비밀번호 인증 + 사용자 구분
-# -----------------------------
-def check_password():
-    if "password_correct" not in st.session_state:
-        st.session_state["password_correct"] = False
+def render_notice() -> None:
+    st.markdown("### 공지사항")
+    st.caption(f"최근 업데이트 · {NOTICE['date']}")
+    with st.container(border=True):
+        st.markdown(f"**{NOTICE['title']}**")
+        for item in NOTICE["items"]:
+            st.markdown(f"- {item}")
+    st.info(NOTICE["important"], icon="ℹ️")
 
-    if "login_user" not in st.session_state:
-        st.session_state["login_user"] = None
 
-    if "notice_confirmed" not in st.session_state:
-        st.session_state["notice_confirmed"] = False
-
+def render_login() -> bool:
     if st.session_state["password_correct"]:
         return True
 
-    st.title("🔐 화랑사업부 멀티 도우미")
-    st.caption("접근 권한 확인을 위해 비밀번호를 입력해주세요.")
+    st.markdown("# 화랑사업부 업무 도우미")
+    st.caption("보험 상담자료 제작과 실적 관리에 필요한 기능을 한곳에서 이용하세요.")
+    st.divider()
 
-    password = st.text_input("비밀번호", type="password")
+    login_col, notice_col = st.columns([1, 1.15], gap="large")
+    with login_col:
+        st.markdown("### 로그인")
+        st.write("발급받은 비밀번호를 입력해 주세요.")
+        with st.form("login_form", clear_on_submit=False):
+            password = st.text_input("비밀번호", type="password", placeholder="비밀번호 입력")
+            submitted = st.form_submit_button("로그인", type="primary", use_container_width=True)
 
-    if st.button("로그인"):
-        passwords = dict(st.secrets["passwords"])
+        if submitted:
+            passwords = dict(st.secrets["passwords"])
+            matched_user = next(
+                (user_name for user_name, saved_password in passwords.items() if password == saved_password),
+                None,
+            )
+            if matched_user:
+                st.session_state["password_correct"] = True
+                st.session_state["login_user"] = matched_user
+                st.session_state["active_app"] = "home"
+                st.rerun()
+            else:
+                st.error("입력한 비밀번호를 확인해 주세요.")
 
-        matched_user = None
-
-        for user_name, saved_password in passwords.items():
-            if password == saved_password:
-                matched_user = user_name
-                break
-
-        if matched_user:
-            st.session_state["password_correct"] = True
-            st.session_state["login_user"] = matched_user
-
-            # 로그인 성공 후 공지 팝업을 다시 띄우기 위한 초기화
-            st.session_state["notice_confirmed"] = False
-
-            st.rerun()
-        else:
-            st.error("비밀번호가 올바르지 않습니다.")
+    with notice_col:
+        render_notice()
 
     return False
 
 
-# 비밀번호가 틀리면 여기서 앱 실행 중단
-if not check_password():
-    st.stop()
+def allowed_app_ids() -> list[str]:
+    user = st.session_state.get("login_user")
+    return [app_id for app_id in USER_PERMISSIONS.get(user, []) if app_id in APP_DEFINITIONS]
 
 
-# -----------------------------
-# 👤 현재 로그인 사용자
-# -----------------------------
-login_user = st.session_state.get("login_user")
+def navigate(app_id: str) -> None:
+    st.session_state["active_app"] = app_id
+    st.rerun()
 
 
-# -----------------------------
-# 🔔 로그인 후 공지 팝업 표시
-# -----------------------------
-if not st.session_state.get("notice_confirmed", False):
-    show_login_notice_popup()
+def logout() -> None:
+    st.session_state["password_correct"] = False
+    st.session_state["login_user"] = None
+    st.session_state["active_app"] = "home"
+    st.rerun()
 
 
-# -----------------------------
-# 🧩 전체 앱 목록
-# -----------------------------
-all_apps = {
-    "📑 보장 분석 도우미": analyzer.run,
-    "💰 적금 vs 단기납 비교": deposit_vs_shortpay.run,
-    "📊 갱신 vs 비갱신 보험 비교": renewal_vs_nonrenewal.run,
-    "🔁 보험 리모델링 전/후 비교": remodeling.run,
-    "🧮 컨벤션 계산기": convention.run,
-    "🌞 썸머 계산기": summer.run,
-    "📊 매니저 업적 환산": manager_results.run,
-    "🧾 상속세 계산기": inheritance_tax.run,
-}
+def render_sidebar(allowed_ids: list[str]) -> None:
+    with st.sidebar:
+        st.title("🧰 업무 도우미")
+        st.caption("필요한 업무를 선택하세요.")
+
+        home_active = st.session_state["active_app"] == "home"
+        if st.button(
+            "⌂  홈",
+            key="nav_home",
+            type="primary" if home_active else "secondary",
+            use_container_width=True,
+        ):
+            navigate("home")
+
+        for category in ("고객 상담", "실적 관리"):
+            category_apps = [
+                app_id
+                for app_id in allowed_ids
+                if APP_DEFINITIONS[app_id]["category"] == category
+            ]
+            if not category_apps:
+                continue
+
+            st.markdown(f"#### {category}")
+            for app_id in category_apps:
+                app = APP_DEFINITIONS[app_id]
+                active = st.session_state["active_app"] == app_id
+                if st.button(
+                    f"{app['icon']}  {app['name']}",
+                    key=f"nav_{app_id}",
+                    type="primary" if active else "secondary",
+                    use_container_width=True,
+                ):
+                    navigate(app_id)
+
+        st.divider()
+        st.caption(f"접속 계정 · {st.session_state['login_user']}")
+        with st.expander("최근 공지"):
+            st.caption(NOTICE["date"])
+            st.markdown(f"**{NOTICE['title']}**")
+        if st.button("로그아웃", key="logout", use_container_width=True):
+            logout()
 
 
-# -----------------------------
-# 🔑 사용자별 메뉴 권한 설정
-# -----------------------------
-user_permissions = {
-    # team1용: 전체 기능 사용 가능
-    "team1": [
-        "📑 보장 분석 도우미",
-        "💰 적금 vs 단기납 비교",
-        "📊 갱신 vs 비갱신 보험 비교",
-        "🔁 보험 리모델링 전/후 비교",
-        "🧮 컨벤션 계산기",
-        "🌞 썸머 계산기",
-        "📊 매니저 업적 환산",
-        "🧾 상속세 계산기",
-    ],
-
-    # team2용: 일부 기능 사용 가능
-    "team2": [
-        "📑 보장 분석 도우미",
-        "💰 적금 vs 단기납 비교",
-        "📊 갱신 vs 비갱신 보험 비교",
-        # "🔁 보험 리모델링 전/후 비교",
-        "🧮 컨벤션 계산기",
-        "🌞 썸머 계산기",
-        # "📊 매니저 업적 환산",
-        "🧾 상속세 계산기",
-    ],
-
-    # team3용: 일부 기능 사용 가능
-    "team3": [
-        "📑 보장 분석 도우미",
-        "💰 적금 vs 단기납 비교",
-        "📊 갱신 vs 비갱신 보험 비교",
-        # "🔁 보험 리모델링 전/후 비교",
-        "🧮 컨벤션 계산기",
-        "🌞 썸머 계산기",
-        "📊 매니저 업적 환산",
-        "🧾 상속세 계산기",
-    ],
-
-    # team4용: 일부 기능 사용 가능
-    "team4": [
-        "📑 보장 분석 도우미",
-        "💰 적금 vs 단기납 비교",
-        # "📊 갱신 vs 비갱신 보험 비교",
-        # "🔁 보험 리모델링 전/후 비교",
-        # "🧮 컨벤션 계산기",
-        # "🌞 썸머 계산기",
-        # "📊 매니저 업적 환산",
-        #"🧾 상속세 계산기",
-    ],
-
-    # team5용: 일부 기능 사용 가능
-    "team5": [
-        "📑 보장 분석 도우미",
-        "💰 적금 vs 단기납 비교",
-        # "📊 갱신 vs 비갱신 보험 비교",
-        # "🔁 보험 리모델링 전/후 비교",
-        # "🧮 컨벤션 계산기",
-        # "🌞 썸머 계산기",
-        # "📊 매니저 업적 환산",
-        #"🧾 상속세 계산기",
-    ],
-}
+def render_app_card(app_id: str) -> None:
+    app = APP_DEFINITIONS[app_id]
+    with st.container(border=True):
+        st.markdown(f"### {app['icon']} {app['name']}")
+        st.write(app["description"])
+        if st.button(app["action"], key=f"home_{app_id}", use_container_width=True):
+            navigate(app_id)
 
 
-# -----------------------------
-# 📌 현재 사용자에게 허용된 앱만 추출
-# -----------------------------
-allowed_app_names = user_permissions.get(login_user, [])
+def render_home(allowed_ids: list[str]) -> None:
+    user = st.session_state["login_user"]
+    st.title("화랑사업부 업무 도우미")
+    st.caption(f"{user} 계정에서 사용할 수 있는 업무 도구입니다.")
 
-available_apps = {
-    app_name: all_apps[app_name]
-    for app_name in allowed_app_names
-    if app_name in all_apps
-}
+    with st.container(border=True):
+        st.markdown("**상담자료 제작부터 실적 환산까지 필요한 업무를 빠르게 시작하세요.**")
+        st.caption("왼쪽 메뉴 또는 아래 업무 카드를 선택하면 해당 프로그램으로 이동합니다.")
+
+    if not allowed_ids:
+        st.warning("현재 계정으로 접근 가능한 메뉴가 없습니다.")
+        return
+
+    for category in ("고객 상담", "실적 관리"):
+        category_apps = [
+            app_id
+            for app_id in allowed_ids
+            if APP_DEFINITIONS[app_id]["category"] == category
+        ]
+        if not category_apps:
+            continue
+
+        st.markdown(f"## {category}")
+        for start in range(0, len(category_apps), 3):
+            row_apps = category_apps[start : start + 3]
+            columns = st.columns(3, gap="medium")
+            for column, app_id in zip(columns, row_apps):
+                with column:
+                    render_app_card(app_id)
+
+    st.divider()
+    st.caption("제작 · 박병선 팀장")
 
 
-# -----------------------------
-# 🚫 허용된 메뉴가 없는 경우 차단
-# -----------------------------
-if not available_apps:
-    st.error("현재 계정으로 접근 가능한 메뉴가 없습니다.")
-    st.stop()
+def main() -> None:
+    initialize_state()
+    if not render_login():
+        st.stop()
+
+    allowed_ids = allowed_app_ids()
+    active_app = st.session_state.get("active_app", "home")
+    if active_app != "home" and active_app not in allowed_ids:
+        st.session_state["active_app"] = "home"
+        active_app = "home"
+
+    render_sidebar(allowed_ids)
+
+    if active_app == "home":
+        render_home(allowed_ids)
+    else:
+        APP_DEFINITIONS[active_app]["run"]()
 
 
-# -----------------------------
-# 🧰 사이드바 메뉴
-# -----------------------------
-st.sidebar.title("🧰 화랑사업부 멀티 도우미")
-st.sidebar.caption(f"접속 계정: {login_user}")
-
-app_option = st.sidebar.radio(
-    "📌 사용할 기능을 선택하세요:",
-    list(available_apps.keys())
-)
-
-
-# -----------------------------
-# 🧠 선택된 앱 실행
-# -----------------------------
-available_apps[app_option]()
+if __name__ == "__main__":
+    main()

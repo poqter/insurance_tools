@@ -360,7 +360,8 @@ def load_selected_example() -> None:
 
 
 def render_sidebar() -> None:
-    with st.sidebar:
+    # 함수명은 기존 호출과의 호환을 위해 유지하고, 표시는 본문으로 이동합니다.
+    with st.expander("계산 흐름·공제 안내·세율표·유의사항"):
         st.markdown("## 🧾 상속세 예상 계산기")
         st.caption("상담 및 사전 검토용")
         st.markdown(

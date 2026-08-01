@@ -20,8 +20,8 @@ def run():
         nonrenew_monthly = st.number_input("비갱신형 월 납입금액 (원)", min_value=0, value=None, step=1000)
         nonrenew_years = st.selectbox("납입기간", [10, 15, 20, 25, 30], index=2)
 
-    # 👉 사이드바 안내문 및 증가율 입력
-    with st.sidebar:
+    # 통합 사이드바와 분리된 본문 안내 및 증가율 입력
+    with st.expander("사용 가이드 및 갱신 주기별 증가율 설정"):
         st.markdown("### 📘 사용 가이드")
         st.markdown("""
         🔄 **갱신 → 비갱신 전환 비교 도구**
