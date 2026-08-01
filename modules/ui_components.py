@@ -44,7 +44,7 @@ def inject_global_styles() -> None:
         .stMainBlockContainer,
         main .block-container {
             max-width: 1280px;
-            padding-top: 4.5rem !important;
+            padding-top: 3.5rem !important;
             padding-bottom: 5rem !important;
         }
         /* app.py의 홈 히어로 음수 상단 여백도 안전하게 무효화합니다. */
