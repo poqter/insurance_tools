@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from io import BytesIO
 from typing import Any, Dict, Tuple
+from .ui_components import page_header
 
 try:
     from openpyxl import Workbook
@@ -908,8 +909,7 @@ def build_excel_report(
 # Streamlit 화면
 # -----------------------------------------------------------------------------
 def run():
-    st.title("🧾 상속세 예상 계산기")
-    st.caption("상속재산과 공제 항목을 입력하여 예상 상속세와 납부재원 부족액을 확인합니다.")
+    page_header("고객 상담", "상속세 예상 계산기", "상속재산과 공제 항목을 입력하여 예상 상속세와 납부재원 부족액을 확인합니다.", "IT")
     st.info("모든 금액은 **만원 단위**로 입력합니다. 입력값은 자동으로 억·만원 단위로 해석해 표시합니다.")
 
     render_sidebar()

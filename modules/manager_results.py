@@ -9,6 +9,7 @@ import os
 import re
 import numpy as np
 import hashlib
+from .ui_components import page_header
 
 
 # ── 전역 상수 ────────────────────────────────────────────────
@@ -737,6 +738,7 @@ def build_workbook(
 
 # ── 메인 실행 함수 ───────────────────────────────────────────
 def run():
+    page_header("실적 관리", "매니저 업적 환산", "선택한 수금자의 실적 환산금액과 지점 합산 결과를 확인합니다.", "MR")
     with st.expander("사용 방법 및 환산 기준 보기"):
         st.header("🧭 사용 방법")
         st.markdown(
@@ -769,9 +771,6 @@ def run():
             - 철회 / 해약 / 실효
             """
         )
-
-    st.title("🏆 매니저 업적 환산기")
-    st.caption("여러 명 선택 가능 · 선택된 수금자만 합산 결과/요약/엑셀로 출력합니다.")
 
     uploaded_file = st.file_uploader(
         "📂 계약 목록 Excel 파일 업로드 (.xlsx)",

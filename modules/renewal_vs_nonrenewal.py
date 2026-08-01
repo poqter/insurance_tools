@@ -1,8 +1,9 @@
 import streamlit as st
 import pandas as pd
+from .ui_components import page_header
 
 def run():
-    st.title("📊 갱신 vs 비갱신 보험 비교")
+    page_header("고객 상담", "갱신 vs 비갱신", "갱신에 따른 보험료 변화를 반영해 장기 총납입액을 비교합니다.", "RN")
 
     # 👉 입력 영역을 왼쪽과 오른쪽으로 나눔
     col_left, col_right = st.columns(2)

@@ -12,6 +12,7 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.page import PageMargins
+from .ui_components import page_header
 
 APP_TITLE = "보험 리모델링 비교 제안서"
 
@@ -1109,8 +1110,7 @@ def render_customer_inputs(i: int, person_count: int) -> None:
 
 
 def run() -> None:
-    st.title(f"🔁 {APP_TITLE}")
-    st.caption("고객정보 → 보험료 비교 → 가입 보험·변경 내용 → 고객 시점 미리보기·엑셀")
+    page_header("고객 상담", APP_TITLE, "고객정보부터 변경안 비교, 고객 시점 미리보기와 엑셀까지 한 번에 완성합니다.", "RM")
     init_state()
 
     person_count = int(st.selectbox("비교 대상 인원 [목록 선택] ▼", [1, 2], format_func=lambda x: f"{x}명", key="rv2_person_count"))
