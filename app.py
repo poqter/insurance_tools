@@ -47,7 +47,7 @@ APP_DEFINITIONS = {
         "name": "보험 리모델링(수정중)",
         "icon": "🔁",
         "category": "고객 상담",
-        "description": "기존 보험과 변경안을 비교하고 고객용 엑셀 자료를 만듭니다.",
+        "description": "변경안을 비교하고 고객용 엑셀 자료를 만듭니다.",
         "action": "리모델링 시작",
         "run": remodeling.run,
     },
