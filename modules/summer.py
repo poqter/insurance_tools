@@ -1000,6 +1000,15 @@ def run():
             """
         )
 
+        st.markdown(
+            """
+            **🚫 제외 기준**  
+            - 일시납  
+            - 연금성 / 저축성  
+            - 철회 / 해약 / 실효
+            """
+        )
+
     uploaded_file = st.file_uploader(
         "📂 썸머 계산용 Excel 파일 업로드 (.xlsx)",
         type=["xlsx"],
