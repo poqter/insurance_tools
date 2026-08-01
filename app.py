@@ -270,6 +270,24 @@ def render_home(allowed_ids: list[str]) -> None:
             border: 1px dashed #B8BEC5 !important;
             border-radius: 0.5rem !important;
         }
+
+        [class*="st-key-available_card_"] button {
+            background-color: #52758A !important;
+            color: #FFFFFF !important;
+            border: 1px solid #52758A !important;
+        }
+
+        [class*="st-key-available_card_"] button:hover {
+            background-color: #466779 !important;
+            color: #FFFFFF !important;
+            border-color: #466779 !important;
+        }
+
+        [class*="st-key-available_card_"] button:active {
+            background-color: #3D5B6B !important;
+            color: #FFFFFF !important;
+            border-color: #3D5B6B !important;
+        }
         </style>
         """,
         unsafe_allow_html=True,
