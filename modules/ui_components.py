@@ -19,15 +19,33 @@ def inject_global_styles() -> None:
             --hw-bg: #F7FAFC;
             --hw-soft-blue: #EAF3FF;
             --hw-soft-teal: #E9F8F7;
+            --hw-surface: rgba(255, 255, 255, 0.92);
+            --hw-premium-line: rgba(191, 211, 226, 0.78);
+            --hw-premium-shadow: 0 14px 38px rgba(37, 72, 98, 0.075), 0 2px 8px rgba(37, 72, 98, 0.035);
         }
         html, body, [class*="css"] { font-family: Pretendard, "Noto Sans KR", "Apple SD Gothic Neo", sans-serif; }
-        .stApp { background: var(--hw-bg); color: var(--hw-ink); }
+        /* 로그인 후 홈·내부 프로그램: 중앙은 밝고 가장자리에만 은은한 색감을 둡니다. */
+        .stApp {
+            color: var(--hw-ink);
+            background:
+                radial-gradient(circle at 88% 8%, rgba(23,105,220,.075) 0%, rgba(23,105,220,.028) 24%, transparent 43%),
+                radial-gradient(circle at 8% 84%, rgba(17,155,152,.060) 0%, rgba(17,155,152,.022) 25%, transparent 44%),
+                linear-gradient(145deg, #F7FAFD 0%, #FFFFFF 45%, #F3F8FB 100%) !important;
+            background-attachment: fixed !important;
+        }
+        /* 로그인 화면: 브랜드 첫인상을 위해 배경의 블루·민트 농도를 한 단계 높입니다. */
+        .stApp:has(.hw-login-hero) {
+            background:
+                radial-gradient(circle at 84% 10%, rgba(23,105,220,.13) 0%, rgba(23,105,220,.050) 26%, transparent 47%),
+                radial-gradient(circle at 12% 88%, rgba(17,155,152,.10) 0%, rgba(17,155,152,.035) 27%, transparent 48%),
+                linear-gradient(140deg, #F5F9FD 0%, #FFFFFF 43%, #EFF7F8 100%) !important;
+        }
         /*
          * Streamlit Community Cloud의 고정 상단바는 약 64~66px입니다.
          * 88px(5.5rem)의 상단 여백으로 상단바와 20px 이상의 안전 간격을 확보합니다.
          */
         header[data-testid="stHeader"] {
-            background: rgba(247, 250, 252, 0.90);
+            background: rgba(248, 251, 253, 0.78);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
         }
@@ -54,7 +72,13 @@ def inject_global_styles() -> None:
         h2 { margin-top: 2.5rem !important; }
         h3 { margin-top: 1.6rem !important; }
         [data-testid="stCaptionContainer"] { color: var(--hw-muted); }
-        [data-testid="stSidebar"] { background: #FFFFFF; border-right: 1px solid var(--hw-line); }
+        [data-testid="stSidebar"] {
+            background: rgba(255,255,255,.91) !important;
+            border-right: 1px solid rgba(199,216,228,.82);
+            box-shadow: 10px 0 34px rgba(40,72,96,.035);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+        }
         [data-testid="stSidebar"] .block-container { padding-top: 1.4rem !important; }
         [data-testid="stSidebar"] hr { border-color: #E8EEF3; }
         .stButton > button, .stDownloadButton > button, [data-testid="stFormSubmitButton"] > button {
@@ -68,22 +92,43 @@ def inject_global_styles() -> None:
             background: var(--hw-blue) !important; border-color: var(--hw-blue) !important; color: white !important;
         }
         [data-testid="stFileUploaderDropzone"] {
-            background: #FFFFFF; border: 1px dashed #AFC4D4; border-radius: 16px; padding: 1rem;
+            background: rgba(255,255,255,.88); border: 1px dashed #A9C1D3; border-radius: 16px; padding: 1rem;
+            box-shadow: 0 9px 26px rgba(37,72,98,.045);
         }
         [data-testid="stFileUploaderDropzone"]:hover { border-color: var(--hw-blue); background: #FAFCFF; }
         [data-testid="stMetric"] {
-            background: #FFFFFF; border: 1px solid var(--hw-line); border-radius: 15px;
-            padding: 1.15rem 1.25rem; box-shadow: 0 7px 22px rgba(30,70,100,.045);
+            background: var(--hw-surface); border: 1px solid var(--hw-premium-line); border-radius: 15px;
+            padding: 1.15rem 1.25rem; box-shadow: var(--hw-premium-shadow);
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
         }
         [data-testid="stMetricLabel"] { color: var(--hw-muted); }
         [data-testid="stMetricValue"] { color: var(--hw-ink); letter-spacing: -0.035em; }
         [data-testid="stExpander"] {
-            background: #FFFFFF; border: 1px solid var(--hw-line) !important; border-radius: 14px !important;
-            box-shadow: 0 5px 18px rgba(30,70,100,.035);
+            background: var(--hw-surface); border: 1px solid var(--hw-premium-line) !important; border-radius: 14px !important;
+            box-shadow: 0 10px 30px rgba(37,72,98,.055);
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
         }
         [data-testid="stAlert"] { border-radius: 13px; }
         [data-testid="stDataFrame"], [data-testid="stDataEditor"] {
-            background: #FFFFFF; border: 1px solid var(--hw-line); border-radius: 13px; overflow: hidden;
+            background: rgba(255,255,255,.94); border: 1px solid var(--hw-premium-line); border-radius: 13px;
+            overflow: hidden; box-shadow: 0 10px 28px rgba(37,72,98,.05);
+        }
+        /* Streamlit border container와 홈 프로그램 카드에 동일한 표면 질감을 적용합니다. */
+        [data-testid="stVerticalBlockBorderWrapper"] {
+            background: rgba(255,255,255,.88);
+            border-radius: 16px;
+            box-shadow: 0 11px 32px rgba(37,72,98,.055);
+            backdrop-filter: blur(9px);
+            -webkit-backdrop-filter: blur(9px);
+        }
+        [class*="st-key-available_card_"] {
+            background: rgba(255,255,255,.93) !important;
+            border-color: rgba(190,211,226,.86) !important;
+            box-shadow: var(--hw-premium-shadow) !important;
+        }
+        [class*="st-key-available_card_"]:hover {
+            border-color: rgba(133,174,207,.92) !important;
+            box-shadow: 0 18px 44px rgba(37,72,98,.115), 0 3px 10px rgba(37,72,98,.05) !important;
         }
         [data-baseweb="tab-list"] { gap: .35rem; background: #EDF3F7; padding: .3rem; border-radius: 12px; }
         [data-baseweb="tab"] { height: 2.7rem; border-radius: 9px; padding: 0 1rem; }
@@ -96,7 +141,8 @@ def inject_global_styles() -> None:
         .hw-page-head { display:flex; align-items:flex-start; gap:1rem; margin: .1rem 0 1.65rem; }
         .hw-page-icon { flex:0 0 auto; width:3.3rem; height:3.3rem; display:grid; place-items:center;
             border-radius:1rem; background:linear-gradient(145deg,var(--hw-soft-blue),var(--hw-soft-teal));
-            color:var(--hw-blue); font-size:1.45rem; border:1px solid #D8E7F4; }
+            color:var(--hw-blue); font-size:1.45rem; border:1px solid rgba(190,215,233,.88);
+            box-shadow:0 9px 24px rgba(37,72,98,.06); }
         .hw-page-copy { min-width:0; }
         .hw-breadcrumb { color:#52758A; font-size:.73rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; margin-bottom:.25rem; }
         .hw-page-title { margin:0; font-size:2rem; line-height:1.25; font-weight:780; letter-spacing:-.055em; color:var(--hw-ink); }
@@ -110,9 +156,10 @@ def inject_global_styles() -> None:
         .hw-login-brand strong { color:#10283D; font-size:1.2rem; letter-spacing:-.04em; }
         .hw-login-brand b { font-weight:800; }
         .hw-login-hero { min-height:0 !important; height:auto !important; margin-bottom:1.5rem !important;
-            padding:1.8rem 2.4rem !important; border:1px solid #DFE9F1; border-radius:18px;
-            background:radial-gradient(circle at 88% 25%,rgba(23,105,220,.13),transparent 28%),radial-gradient(circle at 75% 80%,rgba(17,155,152,.12),transparent 26%),linear-gradient(120deg,#FFFFFF,#F5F9FF);
-            box-shadow:0 18px 45px rgba(30,70,100,.07); }
+            padding:1.8rem 2.4rem !important; border:1px solid rgba(184,208,226,.82); border-radius:18px;
+            background:radial-gradient(circle at 88% 22%,rgba(23,105,220,.17),transparent 31%),radial-gradient(circle at 72% 86%,rgba(17,155,152,.13),transparent 30%),linear-gradient(120deg,rgba(255,255,255,.97),rgba(243,248,255,.94));
+            box-shadow:0 22px 55px rgba(34,70,98,.10), inset 0 1px 0 rgba(255,255,255,.88);
+            backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); }
         .hw-login-hero>span { display:block; margin:0 !important; padding:0 !important; color:#3F7197;
             font-size:.65rem !important; font-weight:850; letter-spacing:.13em; }
         .hw-login-hero h1 { margin:.55rem 0 .65rem !important; padding:0 !important;
