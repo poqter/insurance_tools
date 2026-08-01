@@ -796,6 +796,8 @@ def run():
             """
         )
 
+        st.divider()
+
         st.subheader("🏆 컨벤션 기준")
         st.markdown(
             f"""
