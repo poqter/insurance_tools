@@ -23,7 +23,7 @@ st.set_page_config(
 # 공지는 이 목록만 수정하면 로그인 화면에 반영됩니다.
 NOTICE = {
     "date": "2026.08.01",
-    "title": "업무 도우미 화면이 새롭게 정리되었습니다.",
+    "title": "업무 도우미 화면이 개편.",
     "items": [
         "로그인 후 통합 홈에서 필요한 업무를 선택할 수 있습니다.",
         "고객 상담과 실적 관리 메뉴가 업무 목적별로 구분되었습니다.",
@@ -241,7 +241,7 @@ def render_sidebar(allowed_ids: list[str]) -> None:
 
         home_active = st.session_state["active_app"] == "home"
         if st.button(
-            "⌂  홈",
+            "🏠  홈",
             key="nav_home",
             type="primary" if home_active else "secondary",
             use_container_width=True,
@@ -274,7 +274,7 @@ def render_sidebar(allowed_ids: list[str]) -> None:
         with st.expander("최근 공지"):
             st.caption(NOTICE["date"])
             st.markdown(f"**{NOTICE['title']}**")
-        if st.button("로그아웃", key="logout", use_container_width=True):
+        if st.button("🚪로그아웃", key="logout", use_container_width=True):
             logout()
 
 
