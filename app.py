@@ -202,7 +202,7 @@ def render_app_card(app_id: str, is_allowed: bool) -> None:
         lock_text = '<span class="hw-card-lock">권한 제한</span>' if not is_allowed else ""
         st.markdown(
             f"""
-            <div class="hw-tool-card-head"><span class="hw-tool-icon">{app.get('code', app['icon'])}</span><span class="hw-tool-category">{app['category']}{status}{lock_text}</span></div>
+            <div class="hw-tool-card-head"><span class="hw-tool-category">{app['category']}{status}{lock_text}</span></div>
             <div class="hw-tool-title">{app['name']}</div>
             <div class="hw-tool-desc">{app['description']}</div>
             """,
@@ -234,14 +234,12 @@ def render_home(allowed_ids: list[str]) -> None:
             font-size:1rem !important; line-height:1.5 !important; }
         [class*="st-key-locked_card_"] { background-color:#F2F5F7 !important; opacity:.72;
             border:1px dashed #B8C7D2 !important; border-radius:1rem !important; }
-        [class*="st-key-available_card_"] { min-height:13.2rem; background:#FFFFFF; border:1px solid #DCE6EE !important;
+        [class*="st-key-available_card_"] { min-height:11.9rem; background:#FFFFFF; border:1px solid #DCE6EE !important;
             border-radius:1rem !important; box-shadow:0 8px 24px rgba(27,64,93,.045); transition:transform .2s ease,box-shadow .2s ease; }
         [class*="st-key-available_card_"]:hover { transform:translateY(-3px); box-shadow:0 14px 30px rgba(27,64,93,.1); }
         [class*="st-key-available_card_"] button { background:#FFFFFF !important; color:#1769DC !important; border-color:#C8D9E7 !important; }
         [class*="st-key-available_card_"] button:hover { background:#1769DC !important; color:#FFFFFF !important; border-color:#1769DC !important; }
-        .hw-tool-card-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:.8rem; }
-        .hw-tool-icon { width:2.65rem; height:2.65rem; display:grid; place-items:center; background:linear-gradient(145deg,#EAF3FF,#E9F8F7);
-            color:#1769DC; border-radius:.8rem; font-size:.7rem; font-weight:900; }
+        .hw-tool-card-head { display:flex; align-items:center; justify-content:flex-end; min-height:1.3rem; margin-bottom:.4rem; }
         .hw-tool-category { color:#718697; font-size:.63rem; font-weight:750; }
         .hw-card-badge,.hw-card-lock { margin-left:.4rem; padding:.2rem .38rem; border-radius:999px; background:#EAF3FF; color:#1769DC; font-size:.56rem; }
         .hw-card-lock { background:#E5EAEE; color:#697A87; }
