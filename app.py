@@ -27,8 +27,8 @@ NOTICE = {
     "items": [
         "로그인 후 통합 홈에서 필요한 업무를 선택할 수 있습니다.",
         "고객 상담과 실적 관리 메뉴가 업무 목적별로 구분되었습니다.",
-        "썸머 계산기, 컨벤션 계산기, 상속세 계산기가 추가 되었습니다.",
-        "비밀번호 입력 후 'Enter' 입력으로 로그인 가능합니다.",
+        "썸머·컨벤션·상속세 계산기가 추가되었습니다.",
+        "비밀번호 입력 후 Enter 키를 눌러 로그인할 수 있습니다.",
     ],
     "important": "비밀번호가 변경되었습니다. 변경된 비밀번호는 박병선 팀장에게 문의해 주세요.",
 }
@@ -44,7 +44,8 @@ APP_DEFINITIONS = {
         "run": analyzer.run,
     },
     "remodeling": {
-        "name": "보험 리모델링(수정중)",
+        "name": "보험 리모델링",
+        "status": "수정 중",
         "icon": "🔁",
         "category": "고객 상담",
         "description": "기존 보험과 변경안을 비교하고 고객용 엑셀 자료를 만듭니다.",
@@ -189,9 +190,8 @@ def navigate(app_id: str) -> None:
 
 
 def logout() -> None:
-    st.session_state["password_correct"] = False
-    st.session_state["login_user"] = None
-    st.session_state["active_app"] = "home"
+    # 고객 입력값과 프로그램별 임시 상태까지 모두 삭제합니다.
+    st.session_state.clear()
     st.rerun()
 
 
@@ -243,6 +243,8 @@ def render_app_card(app_id: str) -> None:
     app = APP_DEFINITIONS[app_id]
     with st.container(border=True):
         st.markdown(f"### {app['icon']} {app['name']}")
+        if app.get("status"):
+            st.caption(f"🛠️ {app['status']}")
         st.write(app["description"])
         if st.button(app["action"], key=f"home_{app_id}", use_container_width=True):
             navigate(app_id)
