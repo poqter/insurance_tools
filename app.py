@@ -8,7 +8,6 @@ from modules import (
     convention,
     summer,
     manager_results,
-    pdf_converter,
     inheritance_tax,
 )
 
@@ -171,7 +170,6 @@ all_apps = {
     "🧮 컨벤션 계산기": convention.run,
     "🌞 썸머 계산기": summer.run,
     "📊 매니저 업적 환산": manager_results.run,
-    "📄 PDF 표 엑셀 변환기": pdf_converter.run,
     "🧾 상속세 계산기": inheritance_tax.run,
 }
 
@@ -188,7 +186,6 @@ user_permissions = {
         "🔁 보험 리모델링 전/후 비교",
         "🧮 컨벤션 계산기",
         "🌞 썸머 계산기",
-        "📄 PDF 표 엑셀 변환기",
         "📊 매니저 업적 환산",
         "🧾 상속세 계산기",
     ],
@@ -201,7 +198,6 @@ user_permissions = {
         # "🔁 보험 리모델링 전/후 비교",
         "🧮 컨벤션 계산기",
         "🌞 썸머 계산기",
-        # "📄 PDF 표 엑셀 변환기",
         # "📊 매니저 업적 환산",
         "🧾 상속세 계산기",
     ],
@@ -214,7 +210,6 @@ user_permissions = {
         # "🔁 보험 리모델링 전/후 비교",
         "🧮 컨벤션 계산기",
         "🌞 썸머 계산기",
-        # "📄 PDF 표 엑셀 변환기",
         "📊 매니저 업적 환산",
         "🧾 상속세 계산기",
     ],
@@ -227,7 +222,6 @@ user_permissions = {
         # "🔁 보험 리모델링 전/후 비교",
         # "🧮 컨벤션 계산기",
         # "🌞 썸머 계산기",
-        # "📄 PDF 표 엑셀 변환기",
         # "📊 매니저 업적 환산",
         #"🧾 상속세 계산기",
     ],
@@ -240,7 +234,6 @@ user_permissions = {
         # "🔁 보험 리모델링 전/후 비교",
         # "🧮 컨벤션 계산기",
         # "🌞 썸머 계산기",
-        # "📄 PDF 표 엑셀 변환기",
         # "📊 매니저 업적 환산",
         #"🧾 상속세 계산기",
     ],
