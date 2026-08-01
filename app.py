@@ -108,7 +108,7 @@ APP_DEFINITIONS = {
 # False = 홈에서 잠금 표시, 사이드바에서 숨김
 # --------------------------------------------------
 USER_PERMISSIONS = {
-    "team1": {
+    "admin": {
         "analyzer": True,                  # 보장 분석 도우미
         "remodeling": True,                # 보험 리모델링
         "deposit_vs_shortpay": True,       # 적금 vs 단기납
