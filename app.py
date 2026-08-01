@@ -108,7 +108,7 @@ APP_DEFINITIONS = {
 # False = 홈에서 잠금 표시, 사이드바에서 숨김
 # --------------------------------------------------
 USER_PERMISSIONS = {
-    "admin": {
+    "Admin": {
         "analyzer": True,                  # 보장 분석 도우미
         "remodeling": True,                # 보험 리모델링
         "deposit_vs_shortpay": True,       # 적금 vs 단기납
@@ -118,19 +118,9 @@ USER_PERMISSIONS = {
         "summer": True,                    # 썸머 계산기
         "manager_results": True,           # 매니저 업적 환산
     },
-    "team2": {
+    "Manager1": {
         "analyzer": True,                  # 보장 분석 도우미
-        "remodeling": False,              # 보험 리모델링
-        "deposit_vs_shortpay": True,       # 적금 vs 단기납
-        "renewal_vs_nonrenewal": True,     # 갱신 vs 비갱신
-        "inheritance_tax": True,           # 상속세 계산기
-        "convention": True,                # 컨벤션 계산기
-        "summer": True,                    # 썸머 계산기
-        "manager_results": False,          # 매니저 업적 환산
-    },
-    "team3": {
-        "analyzer": True,                  # 보장 분석 도우미
-        "remodeling": False,              # 보험 리모델링
+        "remodeling": True,                # 보험 리모델링
         "deposit_vs_shortpay": True,       # 적금 vs 단기납
         "renewal_vs_nonrenewal": True,     # 갱신 vs 비갱신
         "inheritance_tax": True,           # 상속세 계산기
@@ -138,24 +128,34 @@ USER_PERMISSIONS = {
         "summer": True,                    # 썸머 계산기
         "manager_results": True,           # 매니저 업적 환산
     },
-    "team4": {
+    "Basic": {
         "analyzer": True,                  # 보장 분석 도우미
-        "remodeling": False,              # 보험 리모델링
-        "deposit_vs_shortpay": True,       # 적금 vs 단기납
-        "renewal_vs_nonrenewal": False,    # 갱신 vs 비갱신
+        "remodeling": False,               # 보험 리모델링
+        "deposit_vs_shortpay": False,       # 적금 vs 단기납
+        "renewal_vs_nonrenewal": False,     # 갱신 vs 비갱신
         "inheritance_tax": False,          # 상속세 계산기
-        "convention": False,               # 컨벤션 계산기
-        "summer": False,                   # 썸머 계산기
+        "convention": True,                # 컨벤션 계산기
+        "summer": True,                    # 썸머 계산기
+        "manager_results": False,           # 매니저 업적 환산
+    },
+    "Crew": {
+        "analyzer": True,                  # 보장 분석 도우미
+        "remodeling": False,               # 보험 리모델링
+        "deposit_vs_shortpay": True,       # 적금 vs 단기납
+        "renewal_vs_nonrenewal": True,     # 갱신 vs 비갱신
+        "inheritance_tax": False,          # 상속세 계산기
+        "convention": True,                # 컨벤션 계산기
+        "summer": True,                    # 썸머 계산기
         "manager_results": False,          # 매니저 업적 환산
     },
-    "team5": {
+    "Dream": {
         "analyzer": True,                  # 보장 분석 도우미
-        "remodeling": False,              # 보험 리모델링
+        "remodeling": True,                # 보험 리모델링
         "deposit_vs_shortpay": True,       # 적금 vs 단기납
-        "renewal_vs_nonrenewal": False,    # 갱신 vs 비갱신
-        "inheritance_tax": False,          # 상속세 계산기
-        "convention": False,               # 컨벤션 계산기
-        "summer": False,                   # 썸머 계산기
+        "renewal_vs_nonrenewal": True,     # 갱신 vs 비갱신
+        "inheritance_tax": True,           # 상속세 계산기
+        "convention": True,                # 컨벤션 계산기
+        "summer": True,                    # 썸머 계산기
         "manager_results": False,          # 매니저 업적 환산
     },
 }
