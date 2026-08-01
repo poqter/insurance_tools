@@ -106,16 +106,16 @@ def inject_global_styles() -> None:
         .hw-side-brand span,.hw-login-brand .hw-logo { width:2.25rem; height:2.25rem; display:grid; place-items:center; border-radius:.7rem;
             background:linear-gradient(145deg,#1769DC,#119B98); color:white; font-weight:900; box-shadow:0 8px 18px rgba(23,105,220,.18); }
         .hw-side-brand strong { font-size:1.05rem; letter-spacing:-.035em; }
-        .hw-login-brand { display:flex; align-items:center; gap:.75rem; margin:.2rem 0 2.1rem; }
+        .hw-login-brand { display:flex; align-items:center; gap:.75rem; margin:.2rem 0 1.5rem; }
         .hw-login-brand strong { color:#10283D; font-size:1.2rem; letter-spacing:-.04em; }
         .hw-login-brand b { font-weight:800; }
-        .hw-login-hero { margin-bottom:2rem; padding:2.6rem 3rem; border:1px solid #DFE9F1; border-radius:22px;
+        .hw-login-hero { margin-bottom:1.5rem; padding:2rem 2.4rem; border:1px solid #DFE9F1; border-radius:18px;
             background:radial-gradient(circle at 88% 25%,rgba(23,105,220,.13),transparent 28%),radial-gradient(circle at 75% 80%,rgba(17,155,152,.12),transparent 26%),linear-gradient(120deg,#FFFFFF,#F5F9FF);
             box-shadow:0 18px 45px rgba(30,70,100,.07); }
-        .hw-login-hero>span { color:#3F7197; font-size:.68rem; font-weight:850; letter-spacing:.13em; }
-        .hw-login-hero h1 { margin:.8rem 0 1rem; font-size:clamp(2.4rem,4.2vw,4rem); line-height:1.13; letter-spacing:-.06em; }
+        .hw-login-hero>span { color:#3F7197; font-size:.65rem; font-weight:850; letter-spacing:.13em; }
+        .hw-login-hero h1 { margin:.55rem 0 7rem; font-size:clamp(2.1rem,3.5vw,3.35rem); line-height:1.12; letter-spacing:-.06em; }
         .hw-login-hero h1 em { color:#1769DC; font-style:normal; }
-        .hw-login-hero p { margin:0; color:#5F7486; font-size:.96rem; line-height:1.65; }
+        .hw-login-hero p { margin:0; color:#5F7486; font-size:.92rem; line-height:1.55; }
         [data-testid="stSidebar"] .stButton>button[kind="primary"] { background:#EAF3FF !important; color:#1769DC !important; border-color:#CFE1F4 !important; }
         @media (max-width: 768px) {
             /* 모바일 상단바 아래에도 약 16px의 안전 여백을 둡니다. */
@@ -147,7 +147,7 @@ def page_header(category: str, title: str, description: str, icon: str) -> None:
         <div class="hw-page-head">
           <div class="hw-page-icon">{html.escape(icon)}</div>
           <div class="hw-page-copy">
-            <div class="hw-breadcrumb">화랑 WORKS&nbsp;&nbsp;/&nbsp;&nbsp;{html.escape(category)}</div>
+            <div class="hw-breadcrumb">화랑 WORKSPACE&nbsp;&nbsp;/&nbsp;&nbsp;{html.escape(category)}</div>
             <div class="hw-page-title">{html.escape(title)}</div>
             <div class="hw-page-desc">{html.escape(description)}</div>
           </div>
