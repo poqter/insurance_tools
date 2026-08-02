@@ -652,7 +652,7 @@ def build_analysis_file(
     workbook.calculation.forceFullCalc = True
 
     today = datetime.today().strftime("%Y%m%d")
-    filename = f"{data['customer_name']}_보장분석_{today}.xlsx"
+    filename = f"{data['customer_name']}_보장분석_엑셀_{today}.xlsx"
     output = BytesIO()
     workbook.save(output)
     output.seek(0)
