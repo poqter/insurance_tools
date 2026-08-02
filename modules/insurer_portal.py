@@ -170,18 +170,39 @@ def _home_search_result(insurer: dict[str, object]) -> str:
     )
 
 
+def _clear_home_search() -> None:
+    st.session_state["home_insurer_search"] = ""
+
+
 def render_home_quick_search() -> None:
     """홈 화면에서 보험사를 검색하고 원수사 전산을 바로 엽니다."""
-    query = st.text_input(
-        "보험사 검색",
-        placeholder="보험사 이름 검색",
-        label_visibility="collapsed",
-        key="home_insurer_search",
-    ).strip()
+    search_col, clear_col = st.columns([20, 1], gap="small")
+    with search_col:
+        query = st.text_input(
+            "보험사 검색",
+            placeholder="보험사 이름 검색",
+            label_visibility="collapsed",
+            key="home_insurer_search",
+        ).strip()
+    with clear_col:
+        if query:
+            st.button(
+                "×",
+                key="clear_home_insurer_search",
+                help="검색어 지우기",
+                on_click=_clear_home_search,
+                use_container_width=True,
+            )
 
     st.markdown(
         """
         <style>
+        [class*="st-key-clear_home_insurer_search"] button { min-height:2.55rem !important; height:2.55rem !important;
+            padding:0 !important; border:1px solid #DCE6EE !important; border-radius:999px !important;
+            background:#FFFFFF !important; color:#718697 !important; font-size:1.05rem !important;
+            line-height:1 !important; box-shadow:none !important; }
+        [class*="st-key-clear_home_insurer_search"] button:hover { border-color:#AFCBE2 !important;
+            background:#F7FAFC !important; color:#1769DC !important; }
         .ip-home-results { display:flex; flex-direction:column; gap:.38rem; margin-top:.35rem; }
         .ip-home-result { min-height:3.15rem; display:flex; align-items:center; gap:.65rem; padding:.42rem .58rem;
             border:1px solid #DCE6EE; border-radius:12px; background:#FFFFFF; color:#18334A !important;
