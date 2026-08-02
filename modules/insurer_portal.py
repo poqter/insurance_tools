@@ -92,26 +92,27 @@ def _card(insurer: dict[str, object]) -> str:
         card_class = "ip-card"
         action = "전산 열기"
 
-    return f"""
-      <a class="{card_class}" href="{href}" target="{target}"{rel} aria-label="{name} 전산 페이지 열기">
-        <span class="ip-logo-box">{logo_html}</span>
-        <span class="ip-card-copy"><strong>{name}</strong><small>{action}</small></span>
-        <span class="ip-card-side">{badge_html}<i aria-hidden="true">↗</i></span>
-      </a>
-    """
+    return (
+        f'<a class="{card_class}" href="{href}" target="{target}"{rel} '
+        f'aria-label="{name} 전산 페이지 열기">'
+        f'<span class="ip-logo-box">{logo_html}</span>'
+        f'<span class="ip-card-copy"><strong>{name}</strong><small>{action}</small></span>'
+        f'<span class="ip-card-side">{badge_html}<i aria-hidden="true">↗</i></span>'
+        '</a>'
+    )
 
 
 def _section(title: str, count: int, insurers: list[dict[str, object]], section_class: str) -> str:
     cards = "".join(_card(insurer) for insurer in insurers)
-    return f"""
-      <section class="ip-panel {section_class}">
-        <div class="ip-panel-head">
-          <div><span>INSURANCE NETWORK</span><h2>{html.escape(title)}</h2></div>
-          <b>{count}개사</b>
-        </div>
-        <div class="ip-card-grid">{cards}</div>
-      </section>
-    """
+    return (
+        f'<section class="ip-panel {section_class}">'
+        '<div class="ip-panel-head">'
+        f'<div><span>INSURANCE NETWORK</span><h2>{html.escape(title)}</h2></div>'
+        f'<b>{count}개사</b>'
+        '</div>'
+        f'<div class="ip-card-grid">{cards}</div>'
+        '</section>'
+    )
 
 
 def _dialog(title: str, width: str = "small"):
