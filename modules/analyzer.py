@@ -405,14 +405,16 @@ def _configure_print(
     last_col: int,
     page_count: int = 1,
 ) -> None:
-    # 인쇄 방향·배율·페이지 분할은 사용자가 엑셀에서 직접 조정합니다.
+    # 다운로드 직후 바로 인쇄할 수 있도록 A3 세로형에서 너비만 1페이지에 맞춥니다.
+    # 높이는 자동으로 두어 계약 수가 많아도 세로 방향으로 자연스럽게 이어집니다.
     ws.page_setup.paperSize = ws.PAPERSIZE_A3
     ws.page_setup.orientation = "portrait"
     ws.page_setup.pageOrder = "overThenDown"
-    ws.page_setup.fitToWidth = None
-    ws.page_setup.fitToHeight = None
-    ws.sheet_properties.pageSetUpPr.fitToPage = False
-    ws.page_setup.scale = 100
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.sheet_properties.pageSetUpPr.autoPageBreaks = False
+    ws.page_setup.scale = None
     ws.print_area = f"A1:{get_column_letter(last_col)}{last_row}"
     ws.print_title_cols = None
     ws.print_options.horizontalCentered = True
@@ -726,12 +728,12 @@ def run() -> None:
             4. 간편모드는 업로드 즉시 결과가 생성되며, 개인모드는 항목 선택 후 시작 버튼을 누릅니다.
 
             - 결과물은 하나의 시트에서 A3 용지에 맞춰집니다.
-            - 결과 엑셀은 A3 세로형·100% 배율을 기본값으로 사용합니다.
-            - 가로·세로 방향, 출력 배율과 페이지 나누기는 엑셀 인쇄 화면에서 직접 조정할 수 있습니다.
+            - 결과 엑셀은 A3 세로형에서 **너비 1페이지·높이 자동 맞춤**을 기본값으로 사용합니다.
+            - 필요하면 가로·세로 방향, 출력 배율과 페이지 나누기를 엑셀 인쇄 화면에서 직접 조정할 수 있습니다.
             - 페이지 하단에는 현재 페이지와 전체 페이지 번호가 표시됩니다.
             """
         )
-        st.caption("최종 버전 v2.11.0 · 제작 박병선 팀장")
+        st.caption("최종 버전 v2.12.0 · 제작 박병선 팀장")
 
     st.markdown("### 1. 전체 보장분석 원본")
     uploaded_main = st.file_uploader(
