@@ -125,14 +125,6 @@ def _section(title: str, count: int, insurers: list[dict[str, object]], section_
     )
 
 
-def _show_mg_notice() -> None:
-    st.warning(
-        "**MG손해보험 접속 안내** · 관련 계약 업무는 현재 예별손해보험의 안내 체계와 함께 확인해야 할 수 있습니다. "
-        "MG 카드를 누르면 새 탭에서 전산이 열리며, 접속 후 공식 공지와 이용 가능한 업무 범위를 먼저 확인해 주세요.",
-        icon="⚠️",
-    )
-
-
 def run() -> None:
     """보험사 전산 포털 화면을 렌더링합니다."""
     page_header(
@@ -141,8 +133,6 @@ def run() -> None:
         "생명보험사와 손해보험사 원수사 전산을 한 화면에서 빠르게 연결합니다.",
         "↗",
     )
-
-    _show_mg_notice()
 
     st.markdown(
         """
@@ -183,7 +173,6 @@ def run() -> None:
         @media(max-width:760px){.ip-card-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.ip-guide{align-items:flex-start;flex-direction:column}}
         @media(max-width:480px){.ip-card-grid{grid-template-columns:1fr}.ip-panel{padding:.8rem}.ip-card{min-height:4rem}}
         </style>
-        <div class="ip-guide"><strong>보험사를 선택하면 새 탭에서 전산 페이지가 열립니다.</strong><span>삼성생명은 Microsoft Edge에서 접속해 주세요.</span></div>
         """,
         unsafe_allow_html=True,
     )
