@@ -20,36 +20,35 @@ LOGO_DIR = PROJECT_ROOT / "assets" / "insurer_logos"
 
 LIFE_INSURERS = [
     {"name": "한화생명", "slug": "hanwha_life", "url": "https://hmp.hanwhalife.com/online/solutions/websquare/websquare.html?w2xPath=/online/ui/uv/pmn/uvpmn010mvw.xml"},
-    {"name": "라이나생명", "slug": "lina_life", "url": "https://ga.lina.co.kr/"},    
-    {"name": "미래에셋생명", "slug": "miraeasset_life", "url": "https://www.loveageplan.com/"},   
-    {"name": "KB라이프생명", "slug": "kb_life", "url": "https://sfa.kblife.co.kr/"},
-    {"name": "신한라이프", "slug": "shinhan_life", "url": "https://ga.shinhanlife.co.kr"},    
-    {"name": "삼성생명", "slug": "samsung_life", "url": "https://ga.samsunglife.com/", "badge": "Edge 전용", "edge_only": True},
-    {"name": "흥국생명", "slug": "heungkuk_life", "url": "https://sales.heungkuklife.co.kr/"},
-    {"name": "IBK연금보험", "slug": "ibk_pension", "url": "https://sf.ibki.co.kr/"},
     {"name": "교보생명", "slug": "kyobo_life", "url": "https://sso.kyobo.com:5443/3rdParty/certLoginFormPage.jsp?"},
     {"name": "동양생명", "slug": "tongyang_life", "url": "https://1004.myangel.co.kr/colgnsf001m.wqv?bizCode=COE0051"},
+    {"name": "라이나생명", "slug": "lina_life", "url": "https://ga.lina.co.kr/"},
     {"name": "MetLife", "slug": "metlife", "url": "https://metplus.metlife.co.kr/"},
+    {"name": "미래에셋생명", "slug": "miraeasset_life", "url": "https://www.loveageplan.com/"},
+    {"name": "삼성생명", "slug": "samsung_life", "url": "https://ga.samsunglife.com/", "badge": "Edge 전용"},
+    {"name": "신한라이프", "slug": "shinhan_life", "url": "https://ga.shinhanlife.co.kr"},
+    {"name": "흥국생명", "slug": "heungkuk_life", "url": "https://sales.heungkuklife.co.kr/"},
     {"name": "ABL생명", "slug": "abl_life", "url": "https://ga.abllife.co.kr/"},
     {"name": "DB생명", "slug": "db_life", "url": "https://ga.idblife.com/"},
+    {"name": "IBK연금보험", "slug": "ibk_pension", "url": "https://sf.ibki.co.kr/"},
+    {"name": "KB라이프생명", "slug": "kb_life", "url": "https://sfa.kblife.co.kr/"},
     {"name": "KDB생명", "slug": "kdb_life", "url": "https://kss.kdblife.co.kr/"},
     {"name": "NH농협생명", "slug": "nh_life", "url": "https://sfa.nhlife.co.kr:8443/"},
     {"name": "BNP파리바 카디프생명", "slug": "bnp_cardif_life", "url": "https://ga.cardif.co.kr/"},
 ]
 
 NON_LIFE_INSURERS = [
-    {"name": "KB손해보험", "slug": "kb_insurance", "url": "https://nsales.kbinsure.co.kr/"},
-    {"name": "흥국화재", "slug": "heungkuk_fire", "url": "https://sales.heungkukfire.co.kr/"},
     {"name": "한화손해보험", "slug": "hanwha_general", "url": "https://portal.hwgeneralins.com/"},
-    {"name": "DB손해보험", "slug": "db_insurance", "url": "https://www.mdbins.com/"},
     {"name": "롯데손해보험", "slug": "lotte_insurance", "url": "https://lottero.lotteins.co.kr/"},
     {"name": "메리츠화재", "slug": "meritz_fire", "url": "https://nsso.meritzfire.com/LoginServer/loginFormPageMulti.jsp"},
     {"name": "삼성화재", "slug": "samsung_fire", "url": "https://login.samsungfire.com/"},
     {"name": "현대해상", "slug": "hyundai_marine", "url": "https://sp.hi.co.kr/"},
+    {"name": "흥국화재", "slug": "heungkuk_fire", "url": "https://sales.heungkukfire.co.kr/"},
+    {"name": "DB손해보험", "slug": "db_insurance", "url": "https://www.mdbins.com/"},
     {"name": "하나손해보험", "slug": "hana_insurance", "url": "https://sfa.saleshana.com/"},
     {"name": "AIG손해보험", "slug": "aig_insurance", "url": "https://ga.aig.co.kr/"},
     {"name": "MG손해보험", "slug": "mg_insurance", "url": "https://mganet.mggeneralins.com/", "badge": "확인 필요", "notice": True},
-
+    {"name": "KB손해보험", "slug": "kb_insurance", "url": "https://nsales.kbinsure.co.kr/"},
 ]
 
 
@@ -80,21 +79,12 @@ def _card(insurer: dict[str, object]) -> str:
         else f'<span class="ip-logo ip-logo-fallback">{name[:1]}</span>'
     )
 
-    if insurer.get("edge_only"):
-        safe_url = _safe_external_url(str(insurer["url"]))
-        href = f"microsoft-edge:{safe_url}"
-        target = "_self"
-        rel = ""
-        card_class = "ip-card"
-        action = "Edge로 전산 열기"
-
-    elif insurer.get("notice"):
+    if insurer.get("notice"):
         href = _safe_external_url(str(insurer["url"]))
         target = "_blank"
         rel = ' rel="noopener noreferrer"'
         card_class = "ip-card ip-warning-card"
         action = "안내 확인 후 전산 열기"
-
     else:
         href = _safe_external_url(str(insurer["url"]))
         target = "_blank"
@@ -117,11 +107,19 @@ def _section(title: str, count: int, insurers: list[dict[str, object]], section_
     return (
         f'<section class="ip-panel {section_class}">'
         '<div class="ip-panel-head">'
-        f'<div><span>INSURANCE NETWORK</span><div class="ip-panel-title">{html.escape(title)}</div></div>'
+        f'<div><span>INSURANCE NETWORK</span><h2>{html.escape(title)}</h2></div>'
         f'<b>{count}개사</b>'
         '</div>'
         f'<div class="ip-card-grid">{cards}</div>'
         '</section>'
+    )
+
+
+def _show_mg_notice() -> None:
+    st.warning(
+        "**MG손해보험 접속 안내** · 관련 계약 업무는 현재 예별손해보험의 안내 체계와 함께 확인해야 할 수 있습니다. "
+        "MG 카드를 누르면 새 탭에서 전산이 열리며, 접속 후 공식 공지와 이용 가능한 업무 범위를 먼저 확인해 주세요.",
+        icon="⚠️",
     )
 
 
@@ -133,6 +131,8 @@ def run() -> None:
         "생명보험사와 손해보험사 원수사 전산을 한 화면에서 빠르게 연결합니다.",
         "↗",
     )
+
+    _show_mg_notice()
 
     st.markdown(
         """
@@ -147,7 +147,7 @@ def run() -> None:
             box-shadow:0 18px 42px rgba(35,72,100,.075); backdrop-filter:blur(16px); }
         .ip-panel-head { display:flex; align-items:flex-end; justify-content:space-between; margin:0 .15rem .85rem; }
         .ip-panel-head span { color:#4B7DA2; font-size:.56rem; font-weight:850; letter-spacing:.13em; }
-        .ip-panel-title { margin:.15rem 0 0; color:##4B7DA2; font-size:1.7rem; line-height:1.2; font-weight:500; letter-spacing:-.035em; }
+        .ip-panel-head h2 { margin:.15rem 0 0 !important; color:#10283D; font-size:1.3rem; line-height:1.2; }
         .ip-panel-head b { color:#718697; font-size:.7rem; font-weight:700; }
         .ip-card-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.52rem; }
         .ip-card { min-width:0; min-height:4.35rem; display:flex; align-items:center; gap:.68rem; padding:.58rem .62rem;
@@ -173,6 +173,7 @@ def run() -> None:
         @media(max-width:760px){.ip-card-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.ip-guide{align-items:flex-start;flex-direction:column}}
         @media(max-width:480px){.ip-card-grid{grid-template-columns:1fr}.ip-panel{padding:.8rem}.ip-card{min-height:4rem}}
         </style>
+        <div class="ip-guide"><strong>보험사를 선택하면 새 탭에서 전산 페이지가 열립니다.</strong><span>삼성생명은 Microsoft Edge에서 접속해 주세요.</span></div>
         """,
         unsafe_allow_html=True,
     )
