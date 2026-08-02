@@ -155,19 +155,43 @@ def inject_global_styles() -> None:
         .hw-login-brand { display:flex; align-items:center; gap:.75rem; margin:0 0 1.25rem !important; }
         .hw-login-brand strong { color:#10283D; font-size:1.2rem; letter-spacing:-.04em; }
         .hw-login-brand b { font-weight:800; }
-        .hw-login-hero { min-height:0 !important; height:auto !important; margin-bottom:1.5rem !important;
-            padding:1.8rem 2.4rem !important; border:1px solid rgba(184,208,226,.82); border-radius:18px;
+        .hw-login-hero { position:relative; overflow:hidden; display:grid; grid-template-columns:minmax(0,1.08fr) minmax(250px,.92fr);
+            align-items:center; gap:2rem; min-height:0 !important; height:auto !important; margin-bottom:1.5rem !important;
+            padding:1.9rem 2.4rem !important; border:1px solid rgba(184,208,226,.82); border-radius:18px;
             background:radial-gradient(circle at 88% 22%,rgba(23,105,220,.17),transparent 31%),radial-gradient(circle at 72% 86%,rgba(17,155,152,.13),transparent 30%),linear-gradient(120deg,rgba(255,255,255,.97),rgba(243,248,255,.94));
             box-shadow:0 22px 55px rgba(34,70,98,.10), inset 0 1px 0 rgba(255,255,255,.88);
             backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); }
-        .hw-login-hero>span { display:block; margin:0 !important; padding:0 !important; color:#3F7197;
-            font-size:.65rem !important; font-weight:850; letter-spacing:.13em; }
-        .hw-login-hero h1 { margin:.55rem 0 .65rem !important; padding:0 !important;
-            font-size:clamp(2.1rem,3.5vw,3.35rem) !important; line-height:1.12 !important; letter-spacing:-.06em; }
-        .hw-login-hero h1 em { color:#1769DC; font-style:normal; }
+        .hw-login-copy { position:relative; z-index:2; min-width:0; }
+        .hw-login-kicker { display:flex; align-items:center; gap:.5rem; margin:0 0 .75rem !important; padding:0 !important;
+            color:#3F7197; font-size:.65rem !important; font-weight:850; letter-spacing:.13em; }
+        .hw-login-kicker i { width:.42rem; height:.42rem; flex:0 0 auto; border-radius:50%; background:#119B98;
+            box-shadow:0 0 0 .28rem rgba(17,155,152,.10); }
+        .hw-login-hero h1 { margin:0 0 1.15rem !important; padding:0 !important;
+            font-size:clamp(2.1rem,3.5vw,3.35rem) !important; line-height:1 !important; letter-spacing:normal; }
+        .hw-title-top { display:block; line-height:1.08 !important; letter-spacing:-.055em; }
+        .hw-title-accent { display:block; margin-top:.18em; color:#1769DC; font-style:normal;
+            line-height:1.04 !important; letter-spacing:-.045em; }
         .hw-login-hero p { margin:0 !important; padding:0 !important; color:#5F7486;
-            font-size:.92rem !important; line-height:1.55 !important; }
+            font-size:.92rem !important; line-height:1.65 !important; }
+        .hw-glass-stack { position:relative; z-index:1; min-height:13.5rem; }
+        .hw-glass-card { position:absolute; left:8%; right:2%; display:flex; align-items:center; gap:.75rem;
+            padding:.9rem 1.05rem; border:1px solid rgba(190,211,226,.70); border-radius:.85rem;
+            background:rgba(255,255,255,.66); color:#29495F; box-shadow:0 16px 36px rgba(31,68,96,.09),inset 0 1px 0 rgba(255,255,255,.90);
+            backdrop-filter:blur(13px); -webkit-backdrop-filter:blur(13px); animation:hw-glass-float 6.5s ease-in-out infinite; }
+        .hw-glass-card::before { content:""; width:1.1rem; height:1px; background:linear-gradient(90deg,#119B98,#8EC9C7); }
+        .hw-glass-card:nth-child(1) { top:3%; left:18%; animation-delay:0s; }
+        .hw-glass-card:nth-child(2) { top:37%; right:10%; animation-delay:-2.1s; }
+        .hw-glass-card:nth-child(3) { top:71%; left:24%; animation-delay:-4.2s; }
+        .hw-glass-card b { font-size:.76rem; font-weight:800; letter-spacing:.09em; }
+        .hw-glass-signal { width:.42rem; height:.42rem; flex:0 0 auto; border-radius:50%; background:#119B98;
+            box-shadow:0 0 0 .26rem rgba(17,155,152,.09); }
+        @keyframes hw-glass-float { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-3px); } }
+        @media (prefers-reduced-motion: reduce) { .hw-glass-card { animation:none !important; } }
         [data-testid="stSidebar"] .stButton>button[kind="primary"] { background:#EAF3FF !important; color:#1769DC !important; border-color:#CFE1F4 !important; }
+        @media (max-width: 880px) {
+            .hw-login-hero { grid-template-columns:1fr; }
+            .hw-glass-stack { display:none; }
+        }
         @media (max-width: 768px) {
             /* 모바일 상단바 아래에도 약 16px의 안전 여백을 둡니다. */
             [data-testid="stAppViewContainer"] .main .block-container,

@@ -118,9 +118,16 @@ def render_login() -> bool:
         """
         <div class="hw-login-brand"><span class="hw-logo">H</span><strong>화랑 <b>WORKSPACE</b></strong></div>
         <div class="hw-login-hero">
-          <span>HWARANG BUSINESS WORKSPACE</span>
-          <h1>보험 업무의 복잡함을,<br><em>더 간단하게.</em></h1>
-          <p>상담자료 제작부터 실적 관리까지 필요한 업무를 한곳에서 이용하세요.</p>
+          <div class="hw-login-copy">
+            <span class="hw-login-kicker"><i></i>HWARANG BUSINESS WORKSPACE</span>
+            <h1><span class="hw-title-top">보험 업무의 복잡함을,</span><em class="hw-title-accent">더 간단하게.</em></h1>
+            <p>상담자료 제작부터 실적 관리까지 필요한 업무를 한곳에서 이용하세요.</p>
+          </div>
+          <div class="hw-glass-stack" aria-label="화랑 WORKSPACE 핵심 업무 영역">
+            <div class="hw-glass-card"><span class="hw-glass-signal"></span><b>CONSULTING</b></div>
+            <div class="hw-glass-card"><span class="hw-glass-signal"></span><b>PERFORMANCE</b></div>
+            <div class="hw-glass-card"><span class="hw-glass-signal"></span><b>INSURANCE PORTAL</b></div>
+          </div>
         </div>
         """,
         unsafe_allow_html=True,
