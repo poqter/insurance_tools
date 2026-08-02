@@ -20,35 +20,36 @@ LOGO_DIR = PROJECT_ROOT / "assets" / "insurer_logos"
 
 LIFE_INSURERS = [
     {"name": "한화생명", "slug": "hanwha_life", "url": "https://hmp.hanwhalife.com/online/solutions/websquare/websquare.html?w2xPath=/online/ui/uv/pmn/uvpmn010mvw.xml"},
+    {"name": "라이나생명", "slug": "lina_life", "url": "https://ga.lina.co.kr/"},    
+    {"name": "미래에셋생명", "slug": "miraeasset_life", "url": "https://www.loveageplan.com/"},   
+    {"name": "KB라이프생명", "slug": "kb_life", "url": "https://sfa.kblife.co.kr/"},
+    {"name": "신한라이프", "slug": "shinhan_life", "url": "https://ga.shinhanlife.co.kr"},    
+    {"name": "삼성생명", "slug": "samsung_life", "url": "https://ga.samsunglife.com/", "badge": "Edge 전용"},
+    {"name": "흥국생명", "slug": "heungkuk_life", "url": "https://sales.heungkuklife.co.kr/"},
+    {"name": "IBK연금보험", "slug": "ibk_pension", "url": "https://sf.ibki.co.kr/"},
     {"name": "교보생명", "slug": "kyobo_life", "url": "https://sso.kyobo.com:5443/3rdParty/certLoginFormPage.jsp?"},
     {"name": "동양생명", "slug": "tongyang_life", "url": "https://1004.myangel.co.kr/colgnsf001m.wqv?bizCode=COE0051"},
-    {"name": "라이나생명", "slug": "lina_life", "url": "https://ga.lina.co.kr/"},
     {"name": "MetLife", "slug": "metlife", "url": "https://metplus.metlife.co.kr/"},
-    {"name": "미래에셋생명", "slug": "miraeasset_life", "url": "https://www.loveageplan.com/"},
-    {"name": "삼성생명", "slug": "samsung_life", "url": "https://ga.samsunglife.com/", "badge": "Edge 전용"},
-    {"name": "신한라이프", "slug": "shinhan_life", "url": "https://ga.shinhanlife.co.kr"},
-    {"name": "흥국생명", "slug": "heungkuk_life", "url": "https://sales.heungkuklife.co.kr/"},
     {"name": "ABL생명", "slug": "abl_life", "url": "https://ga.abllife.co.kr/"},
     {"name": "DB생명", "slug": "db_life", "url": "https://ga.idblife.com/"},
-    {"name": "IBK연금보험", "slug": "ibk_pension", "url": "https://sf.ibki.co.kr/"},
-    {"name": "KB라이프생명", "slug": "kb_life", "url": "https://sfa.kblife.co.kr/"},
     {"name": "KDB생명", "slug": "kdb_life", "url": "https://kss.kdblife.co.kr/"},
     {"name": "NH농협생명", "slug": "nh_life", "url": "https://sfa.nhlife.co.kr:8443/"},
     {"name": "BNP파리바 카디프생명", "slug": "bnp_cardif_life", "url": "https://ga.cardif.co.kr/"},
 ]
 
 NON_LIFE_INSURERS = [
+    {"name": "KB손해보험", "slug": "kb_insurance", "url": "https://nsales.kbinsure.co.kr/"},
+    {"name": "흥국화재", "slug": "heungkuk_fire", "url": "https://sales.heungkukfire.co.kr/"},
     {"name": "한화손해보험", "slug": "hanwha_general", "url": "https://portal.hwgeneralins.com/"},
+    {"name": "DB손해보험", "slug": "db_insurance", "url": "https://www.mdbins.com/"},
     {"name": "롯데손해보험", "slug": "lotte_insurance", "url": "https://lottero.lotteins.co.kr/"},
     {"name": "메리츠화재", "slug": "meritz_fire", "url": "https://nsso.meritzfire.com/LoginServer/loginFormPageMulti.jsp"},
     {"name": "삼성화재", "slug": "samsung_fire", "url": "https://login.samsungfire.com/"},
     {"name": "현대해상", "slug": "hyundai_marine", "url": "https://sp.hi.co.kr/"},
-    {"name": "흥국화재", "slug": "heungkuk_fire", "url": "https://sales.heungkukfire.co.kr/"},
-    {"name": "DB손해보험", "slug": "db_insurance", "url": "https://www.mdbins.com/"},
     {"name": "하나손해보험", "slug": "hana_insurance", "url": "https://sfa.saleshana.com/"},
     {"name": "AIG손해보험", "slug": "aig_insurance", "url": "https://ga.aig.co.kr/"},
     {"name": "MG손해보험", "slug": "mg_insurance", "url": "https://mganet.mggeneralins.com/", "badge": "확인 필요", "notice": True},
-    {"name": "KB손해보험", "slug": "kb_insurance", "url": "https://nsales.kbinsure.co.kr/"},
+
 ]
 
 
