@@ -115,30 +115,20 @@ def _section(title: str, count: int, insurers: list[dict[str, object]], section_
     )
 
 
-def _dialog(title: str, width: str = "small"):
-    """Streamlit 구버전에서는 안내를 본문에 표시하는 호환 장치입니다."""
-    if hasattr(st, "dialog"):
-        return st.dialog(title, width=width)
-    return lambda function: function
-
-
-@_dialog("MG손해보험 접속 전 확인", width="small")
 def _show_mg_notice() -> None:
-    st.markdown("#### 연결 전 안내사항")
-    st.write(
-        "MG손해보험 관련 계약 업무는 현재 예별손해보험의 안내 체계와 함께 확인해야 할 수 있습니다. "
-        "전산 접속 후 표시되는 공식 공지와 이용 가능한 업무 범위를 먼저 확인해 주세요."
-    )
-    st.warning("기존 전산은 브라우저 환경이나 보안 프로그램에 따라 접속이 제한될 수 있습니다.", icon="⚠️")
-    st.link_button(
-        "내용을 확인했습니다 · MG 전산 열기",
-        "https://mganet.mggeneralins.com/",
-        type="primary",
-        use_container_width=True,
-    )
-    if st.button("닫기", use_container_width=True):
-        st.query_params.pop("mg_notice", None)
-        st.rerun()
+    with st.container(border=True):
+        st.markdown("#### MG손해보험 접속 전 확인")
+        st.write(
+            "MG손해보험 관련 계약 업무는 현재 예별손해보험의 안내 체계와 함께 확인해야 할 수 있습니다. "
+            "전산 접속 후 표시되는 공식 공지와 이용 가능한 업무 범위를 먼저 확인해 주세요."
+        )
+        st.warning("기존 전산은 브라우저 환경이나 보안 프로그램에 따라 접속이 제한될 수 있습니다.", icon="⚠️")
+        st.link_button(
+            "내용을 확인했습니다 · MG 전산 열기",
+            "https://mganet.mggeneralins.com/",
+            type="primary",
+            use_container_width=True,
+        )
 
 
 def run() -> None:
