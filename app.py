@@ -261,7 +261,7 @@ def render_home(allowed_ids: list[str]) -> None:
         unsafe_allow_html=True,
     )
     with st.container(key="home_intro"):
-        account_col, search_col = st.columns([1, 2], gap="medium")
+        account_col, search_col, empty_col = st.columns([1, 1, 1], gap="medium")
         with account_col:
             st.markdown(f'<div class="hw-home-user">{user} 계정으로 접속 중</div>', unsafe_allow_html=True)
         with search_col:
