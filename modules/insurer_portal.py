@@ -80,11 +80,11 @@ def _card(insurer: dict[str, object]) -> str:
     )
 
     if insurer.get("notice"):
-        href = "?mg_notice=1"
-        target = "_self"
-        rel = ""
+        href = _safe_external_url(str(insurer["url"]))
+        target = "_blank"
+        rel = ' rel="noopener noreferrer"'
         card_class = "ip-card ip-warning-card"
-        action = "안내 확인"
+        action = "안내 확인 후 전산 열기"
     else:
         href = _safe_external_url(str(insurer["url"]))
         target = "_blank"
@@ -116,32 +116,23 @@ def _section(title: str, count: int, insurers: list[dict[str, object]], section_
 
 
 def _show_mg_notice() -> None:
-    with st.container(border=True):
-        st.markdown("#### MG손해보험 접속 전 확인")
-        st.write(
-            "MG손해보험 관련 계약 업무는 현재 예별손해보험의 안내 체계와 함께 확인해야 할 수 있습니다. "
-            "전산 접속 후 표시되는 공식 공지와 이용 가능한 업무 범위를 먼저 확인해 주세요."
-        )
-        st.warning("기존 전산은 브라우저 환경이나 보안 프로그램에 따라 접속이 제한될 수 있습니다.", icon="⚠️")
-        st.link_button(
-            "내용을 확인했습니다 · MG 전산 열기",
-            "https://mganet.mggeneralins.com/",
-            type="primary",
-            use_container_width=True,
-        )
+    st.warning(
+        "**MG손해보험 접속 안내** · 관련 계약 업무는 현재 예별손해보험의 안내 체계와 함께 확인해야 할 수 있습니다. "
+        "MG 카드를 누르면 새 탭에서 전산이 열리며, 접속 후 공식 공지와 이용 가능한 업무 범위를 먼저 확인해 주세요.",
+        icon="⚠️",
+    )
 
 
 def run() -> None:
     """보험사 전산 포털 화면을 렌더링합니다."""
-    if st.query_params.get("mg_notice") == "1":
-        _show_mg_notice()
-
     page_header(
         "업무 지원",
         "보험사 전산 포털",
         "생명보험사와 손해보험사 원수사 전산을 한 화면에서 빠르게 연결합니다.",
         "↗",
     )
+
+    _show_mg_notice()
 
     st.markdown(
         """
