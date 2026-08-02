@@ -5,6 +5,7 @@ from modules import (
     convention,
     deposit_vs_shortpay,
     inheritance_tax,
+    insurer_portal,
     manager_results,
     remodeling,
     renewal_vs_nonrenewal,
@@ -58,6 +59,10 @@ APP_DEFINITIONS = {
         "name": "상속세 계산기", "icon": "🧾", "code": "IT", "category": "고객 상담",
         "description": "예상 상속세와 부족한 현금성 납부재원을 계산합니다.", "action": "상속세 계산 시작", "run": inheritance_tax.run,
     },
+    "insurer_portal": {
+        "name": "원수사 전산 포털", "icon": "↗", "code": "IP", "category": "고객 상담",
+        "description": "생명·손해보험사 원수사 전산을 한 화면에서 연결합니다.", "action": "전산 포털 열기", "run": insurer_portal.run,
+    },
     "convention": {
         "name": "컨벤션 계산기", "icon": "🏆", "code": "CV", "category": "실적 관리",
         "description": "계약 실적을 환산하고 컨벤션 달성 여부를 확인합니다.", "action": "컨벤션 계산 시작", "run": convention.run,
@@ -79,16 +84,19 @@ USER_PERMISSIONS = {
     "Basic": {
         "analyzer": True, "remodeling": False, "deposit_vs_shortpay": False,
         "renewal_vs_nonrenewal": False, "inheritance_tax": False,
+        "insurer_portal": True,
         "convention": True, "summer": True, "manager_results": False,
     },
     "Crew": {
         "analyzer": True, "remodeling": False, "deposit_vs_shortpay": True,
         "renewal_vs_nonrenewal": True, "inheritance_tax": False,
+        "insurer_portal": True,
         "convention": True, "summer": True, "manager_results": False,
     },
     "Dream": {
         "analyzer": True, "remodeling": True, "deposit_vs_shortpay": True,
         "renewal_vs_nonrenewal": True, "inheritance_tax": True,
+        "insurer_portal": True,
         "convention": True, "summer": True, "manager_results": False,
     },
 }
