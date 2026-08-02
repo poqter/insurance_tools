@@ -630,7 +630,7 @@ def _render_personal_selector(
     default_labels: list[str],
     file_key: str,
 ) -> list[str]:
-    """구분별 빠른 선택과 개별 체크를 함께 제공하는 개인모드 선택기입니다."""
+    """모든 보장항목을 구분별 카드에 펼쳐 보여주는 개인모드 선택기입니다."""
     prefix = f"analyzer_v2_cov_{file_key}_"
     default_set = set(default_labels)
 
@@ -655,33 +655,17 @@ def _render_personal_selector(
         group = _group_for(label).replace("\n", " ")
         grouped.setdefault(group, []).append(label)
 
-    group_names = list(grouped)
-    filter_group = st.selectbox(
-        "확인할 구분",
-        ["전체 구분", *group_names],
-        key=f"{prefix}group_filter",
-        help="항목이 많을 때 특정 구분만 골라서 확인할 수 있습니다.",
-    )
-    visible_groups = group_names if filter_group == "전체 구분" else [filter_group]
-
-    for group in visible_groups:
-        labels = grouped[group]
+    card_columns = st.columns(3)
+    for group_index, (group, labels) in enumerate(grouped.items()):
         selected_count = sum(bool(st.session_state[f"{prefix}{label}"]) for label in labels)
-        with st.expander(f"{group}  ·  {selected_count}/{len(labels)}개 선택", expanded=filter_group != "전체 구분"):
-            group_all, group_clear = st.columns(2)
-            if group_all.button("이 구분 전체 선택", use_container_width=True, key=f"{prefix}{group}_all"):
+        with card_columns[group_index % 3]:
+            with st.container(border=True):
+                st.markdown(f"**{group}** · {selected_count}/{len(labels)}")
                 for label in labels:
-                    st.session_state[f"{prefix}{label}"] = True
-            if group_clear.button("이 구분 전체 해제", use_container_width=True, key=f"{prefix}{group}_clear"):
-                for label in labels:
-                    st.session_state[f"{prefix}{label}"] = False
-
-            item_columns = st.columns(2)
-            for index, label in enumerate(labels):
-                item_columns[index % 2].checkbox(
-                    DISPLAY_NAMES.get(label, label),
-                    key=f"{prefix}{label}",
-                )
+                    st.checkbox(
+                        DISPLAY_NAMES.get(label, label),
+                        key=f"{prefix}{label}",
+                    )
 
     selected = [label for label in available_labels if st.session_state[f"{prefix}{label}"]]
     st.caption(f"전체 {len(available_labels)}개 중 {len(selected)}개 선택")
@@ -708,7 +692,7 @@ def run() -> None:
             - 각 페이지의 계약 수와 보장항목 수에 따라 방향과 열 너비를 자동으로 조정합니다.
             """
         )
-        st.caption("버전 v2.5.0 · 제작 박병선 팀장")
+        st.caption("버전 v2.6.0 · 제작 박병선 팀장")
 
     st.markdown("### 1. 전체 보장분석 원본")
     uploaded_main = st.file_uploader(
@@ -747,7 +731,7 @@ def run() -> None:
                 st.write([DISPLAY_NAMES.get(label, label) for label in selected_labels])
         else:
             st.markdown("#### 출력할 보장항목")
-            st.caption("전체·기본·구분별 빠른 선택을 사용한 뒤 필요한 항목만 개별 조정하세요.")
+            st.caption("구분별 카드에서 필요한 보장항목을 바로 체크하거나 해제하세요.")
             selected_labels = _render_personal_selector(
                 available_labels,
                 default_labels,
