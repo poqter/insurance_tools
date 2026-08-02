@@ -232,15 +232,10 @@ def render_home(allowed_ids: list[str]) -> None:
     st.markdown(
         """
         <style>
-        .hw-home-intro { display:flex; justify-content:space-between; align-items:flex-end; gap:1.5rem;
-            margin:0 0 .75rem !important; padding:0 0 .9rem !important; border-bottom:1px solid #DFE9F1; }
-        .hw-home-intro h1 { margin:0 0 .3rem !important; padding:0 !important; color:#10283D !important;
-            font-size:clamp(2.15rem,3vw,2.7rem) !important; line-height:1.15 !important;
-            font-weight:800 !important; letter-spacing:-.045em !important; }
-        .hw-home-intro p { margin:0 !important; padding:0 !important; color:#5F7486;
-            font-size:1.05rem !important; line-height:1.5 !important; }
+        [class*="st-key-home_intro"] { margin:0 0 .75rem !important; padding:0 0 .9rem !important;
+            border-bottom:1px solid #DFE9F1; }
         .hw-home-user { flex:none; padding:.55rem .85rem; border:1px solid #DCE6EE; border-radius:999px;
-            background:#FFFFFF; color:#536D80; font-size:.92rem !important; font-weight:600; }
+            background:#FFFFFF; color:#536D80; font-size:.92rem !important; font-weight:600; text-align:center; }
         .hw-category-head { margin:1.15rem 0 .8rem !important; padding:0 !important; }
         .hw-category-head h2 { margin:0 0 .3rem !important; padding:0 !important; color:#10283D !important;
             font-size:1.65rem !important; line-height:1.25 !important; font-weight:800 !important;
@@ -260,19 +255,17 @@ def render_home(allowed_ids: list[str]) -> None:
         .hw-card-lock { background:#E5EAEE; color:#697A87; }
         .hw-tool-title { color:#10283D; font-size:1.06rem; font-weight:780; letter-spacing:-.035em; margin-bottom:.35rem; }
         .hw-tool-desc { color:#647789; font-size:.77rem; line-height:1.55; min-height:2.4rem; margin-bottom:.55rem; }
-        @media(max-width:650px){.hw-home-intro{align-items:flex-start;flex-direction:column;gap:.7rem}.hw-home-user{display:none}}
+        @media(max-width:650px){.hw-home-user{margin-bottom:.25rem}}
         </style>
         """,
         unsafe_allow_html=True,
     )
-    st.markdown(
-        f"""
-        <div class="hw-home-intro">
-          <div class="hw-home-user">{user} 계정으로 접속 중</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    with st.container(key="home_intro"):
+        account_col, search_col = st.columns([1, 2], gap="medium")
+        with account_col:
+            st.markdown(f'<div class="hw-home-user">{user} 계정으로 접속 중</div>', unsafe_allow_html=True)
+        with search_col:
+            insurer_portal.render_home_quick_search()
 
     for category in ("고객 상담", "실적 관리"):
         category_apps = [app_id for app_id in APP_DEFINITIONS if APP_DEFINITIONS[app_id]["category"] == category]

@@ -52,6 +52,19 @@ NON_LIFE_INSURERS = [
 
 ]
 
+SEARCH_ALIASES = {
+    "MetLife": ("메트라이프", "메트"),
+    "NH농협생명": ("농협",),
+    "BNP파리바 카디프생명": ("카디프", "비엔피"),
+    "KB라이프생명": ("KB생명", "케이비라이프", "케이비생명"),
+    "KB손해보험": ("KB손보", "케이비손해", "케이비손보"),
+    "DB생명": ("디비생명",),
+    "DB손해보험": ("DB손보", "디비손해", "디비손보"),
+    "IBK연금보험": ("아이비케이",),
+    "ABL생명": ("에이비엘",),
+    "AIG손해보험": ("에이아이지",),
+}
+
 
 def _safe_external_url(url: str) -> str:
     parsed = urlparse(url)
@@ -123,6 +136,91 @@ def _section(title: str, count: int, insurers: list[dict[str, object]], section_
         f'<div class="ip-card-grid">{cards}</div>'
         '</section>'
     )
+
+
+def _normalized_search_text(value: object) -> str:
+    return "".join(str(value).lower().split())
+
+
+def _home_search_result(insurer: dict[str, object]) -> str:
+    name = html.escape(str(insurer["name"]))
+    slug = str(insurer["slug"])
+    logo_uri = _logo_data_uri(slug)
+    logo_html = (
+        f'<img class="ip-home-logo" src="{logo_uri}" alt="{name} 로고">'
+        if logo_uri
+        else f'<span class="ip-home-logo ip-home-logo-fallback">{name[:1]}</span>'
+    )
+
+    if insurer.get("edge_only"):
+        href = f'microsoft-edge:{_safe_external_url(str(insurer["url"]))}'
+        target = "_self"
+        rel = ""
+    else:
+        href = _safe_external_url(str(insurer["url"]))
+        target = "_blank"
+        rel = ' rel="noopener noreferrer"'
+
+    return (
+        f'<a class="ip-home-result" href="{href}" target="{target}"{rel} '
+        f'aria-label="{name} 전산 페이지 열기">'
+        f'<span class="ip-home-logo-box">{logo_html}</span>'
+        f'<strong>{name}</strong><i aria-hidden="true">↗</i>'
+        '</a>'
+    )
+
+
+def render_home_quick_search() -> None:
+    """홈 화면에서 보험사를 검색하고 원수사 전산을 바로 엽니다."""
+    query = st.text_input(
+        "보험사 검색",
+        placeholder="보험사 이름 검색",
+        label_visibility="collapsed",
+        key="home_insurer_search",
+    ).strip()
+
+    st.markdown(
+        """
+        <style>
+        .ip-home-results { display:flex; flex-direction:column; gap:.38rem; margin-top:.35rem; }
+        .ip-home-result { min-height:3.15rem; display:flex; align-items:center; gap:.65rem; padding:.42rem .58rem;
+            border:1px solid #DCE6EE; border-radius:12px; background:#FFFFFF; color:#18334A !important;
+            text-decoration:none !important; box-shadow:0 5px 14px rgba(35,72,100,.035);
+            transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease; }
+        .ip-home-result:hover { transform:translateY(-1px); border-color:#AFCBE2;
+            box-shadow:0 8px 18px rgba(35,72,100,.08); }
+        .ip-home-logo-box { flex:0 0 2.15rem; width:2.15rem; height:2.15rem; display:grid; place-items:center;
+            border:1px solid #E3ECF3; border-radius:9px; background:linear-gradient(145deg,#FFF,#F5F9FC); overflow:hidden; }
+        .ip-home-logo { display:block; width:1.72rem; height:1.72rem; object-fit:contain; }
+        .ip-home-logo-fallback { color:#1769DC; font-size:.78rem; font-weight:850; }
+        .ip-home-result strong { min-width:0; flex:1; overflow:hidden; color:#18334A; font-size:.86rem;
+            font-weight:780; letter-spacing:-.025em; text-overflow:ellipsis; white-space:nowrap; }
+        .ip-home-result i { flex:0 0 auto; color:#7290A7; font-size:.86rem; font-style:normal; }
+        .ip-home-empty { margin-top:.4rem; padding:.65rem .75rem; border:1px dashed #C9D7E2; border-radius:11px;
+            color:#718697; font-size:.8rem; text-align:center; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if not query:
+        return
+
+    normalized_query = _normalized_search_text(query)
+    all_insurers = LIFE_INSURERS + NON_LIFE_INSURERS
+    matches = []
+    for insurer in all_insurers:
+        name = str(insurer["name"])
+        search_values = (name, *SEARCH_ALIASES.get(name, ()))
+        if any(normalized_query in _normalized_search_text(value) for value in search_values):
+            matches.append(insurer)
+
+    if not matches:
+        st.markdown('<div class="ip-home-empty">일치하는 보험사가 없습니다.</div>', unsafe_allow_html=True)
+        return
+
+    results = "".join(_home_search_result(insurer) for insurer in matches[:6])
+    st.markdown(f'<div class="ip-home-results">{results}</div>', unsafe_allow_html=True)
 
 
 def run() -> None:
