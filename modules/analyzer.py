@@ -508,10 +508,6 @@ def _populate_analysis_sheet(
         ws.cell(3, index, contract["product"])
         ws.cell(2, index).font = Font(name="나눔고딕", size=10, bold=True, color="1F4E78")
         ws.cell(3, index).font = Font(name="나눔고딕", size=9, bold=True)
-        if _is_fully_paid(contract["payment_count"]):
-            completed_fill = PatternFill("solid", fgColor=COLORS["completed"])
-            ws.cell(2, index).fill = completed_fill
-            ws.cell(3, index).fill = completed_fill
     ws.row_dimensions[2].height = 25
     ws.row_dimensions[3].height = 55
 
@@ -559,6 +555,13 @@ def _populate_analysis_sheet(
         if row >= 7:
             ws.cell(row, 1).number_format = '#,##0"원"'
             ws.cell(row, 1).font = blue_font
+
+    # 완납 계약은 보험회사명부터 총보험료까지 해당 보험 열 전체를 녹색으로 표시합니다.
+    for index, contract in enumerate(contracts, start=4):
+        if _is_fully_paid(contract["payment_count"]):
+            completed_fill = PatternFill("solid", fgColor=COLORS["completed"])
+            for row in range(2, 11):
+                ws.cell(row, index).fill = completed_fill
 
     group_ranges: list[tuple[int, int]] = []
     group_start = coverage_start
@@ -733,7 +736,7 @@ def run() -> None:
             - 페이지 하단에는 현재 페이지와 전체 페이지 번호가 표시됩니다.
             """
         )
-        st.caption("최종 버전 v2.12.0 · 제작 박병선 팀장")
+        st.caption("최종 버전 v2.13.0 · 제작 박병선 팀장")
 
     st.markdown("### 1. 전체 보장분석 원본")
     uploaded_main = st.file_uploader(
