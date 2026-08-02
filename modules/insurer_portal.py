@@ -173,34 +173,6 @@ def _home_search_result(insurer: dict[str, object]) -> str:
 
 def render_home_quick_search() -> None:
     """홈 화면에서 보험사를 검색하고 원수사 전산을 바로 엽니다."""
-
-    st.markdown(
-        """
-        <style>
-        div[data-testid="stCustomComponentV1"] {
-            height:46px !important;
-            min-height:46px !important;
-            margin:0 !important;
-            padding:0 !important;
-            overflow:hidden !important;
-        }
-
-        div[data-testid="stCustomComponentV1"] iframe {
-            height:46px !important;
-            min-height:46px !important;
-        }
-
-        [class*="st-key-home_insurer_search"] input {
-            height:46px !important;
-            min-height:46px !important;
-            padding:.45rem .75rem !important;
-            font-size:.88rem !important;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
     query = st_keyup(
         "보험사 검색",
         placeholder="보험사 이름 검색",
