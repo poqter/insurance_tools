@@ -124,15 +124,6 @@ def _section(title: str, count: int, insurers: list[dict[str, object]], section_
         '</section>'
     )
 
-
-def _show_mg_notice() -> None:
-    st.warning(
-        "**MG손해보험 접속 안내** · 관련 계약 업무는 현재 예별손해보험의 안내 체계와 함께 확인해야 할 수 있습니다. "
-        "MG 카드를 누르면 새 탭에서 전산이 열리며, 접속 후 공식 공지와 이용 가능한 업무 범위를 먼저 확인해 주세요.",
-        icon="⚠️",
-    )
-
-
 def run() -> None:
     """보험사 전산 포털 화면을 렌더링합니다."""
     page_header(
@@ -147,10 +138,6 @@ def run() -> None:
     st.markdown(
         """
         <style>
-        .ip-guide { display:flex; align-items:center; justify-content:space-between; gap:1rem; margin:-.45rem 0 1rem;
-            padding:.75rem .95rem; border:1px solid rgba(190,207,222,.72); border-radius:14px;
-            background:rgba(255,255,255,.68); color:#62788A; font-size:.82rem; backdrop-filter:blur(12px); }
-        .ip-guide strong { color:#18334A; font-size:.86rem; }
         .ip-layout { display:grid; grid-template-columns:minmax(0,1.08fr) minmax(0,.92fr); gap:1rem; align-items:start; }
         .ip-panel { padding:1rem; border:1px solid rgba(193,211,225,.78); border-radius:20px;
             background:linear-gradient(145deg,rgba(255,255,255,.9),rgba(248,252,255,.76));
@@ -180,10 +167,9 @@ def run() -> None:
         .ip-warning-card { border-color:#E7D6B1; background:linear-gradient(145deg,#FFFDF8,#FFF9EC); }
         .ip-warning-card .ip-badge { background:#FFF0CE; color:#98641D; }
         @media(max-width:1050px){.ip-layout{grid-template-columns:1fr}.ip-card-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
-        @media(max-width:760px){.ip-card-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.ip-guide{align-items:flex-start;flex-direction:column}}
+        @media(max-width:760px){.ip-card-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
         @media(max-width:480px){.ip-card-grid{grid-template-columns:1fr}.ip-panel{padding:.8rem}.ip-card{min-height:4rem}}
         </style>
-        <div class="ip-guide"><strong>보험사를 선택하면 새 탭에서 전산 페이지가 열립니다.</strong><span>삼성생명은 Microsoft Edge에서 접속해 주세요.</span></div>
         """,
         unsafe_allow_html=True,
     )
