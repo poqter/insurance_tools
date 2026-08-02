@@ -148,7 +148,7 @@ def run() -> None:
             box-shadow:0 18px 42px rgba(35,72,100,.075); backdrop-filter:blur(16px); }
         .ip-panel-head { display:flex; align-items:flex-end; justify-content:space-between; margin:0 .15rem .85rem; }
         .ip-panel-head span { color:#4B7DA2; font-size:.56rem; font-weight:850; letter-spacing:.13em; }
-        .ip-panel-title { margin:.15rem 0 0; color:##4B7DA2; font-size:1.7rem; line-height:1.2; font-weight:800; letter-spacing:-.035em; }
+        .ip-panel-title { margin:.15rem 0 0; color:##4B7DA2; font-size:1.7rem; line-height:1.2; font-weight:500; letter-spacing:-.035em; }
         .ip-panel-head b { color:#718697; font-size:.7rem; font-weight:700; }
         .ip-card-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.52rem; }
         .ip-card { min-width:0; min-height:4.35rem; display:flex; align-items:center; gap:.68rem; padding:.58rem .62rem;
