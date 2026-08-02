@@ -11,6 +11,7 @@ from openpyxl import Workbook
 from openpyxl.drawing.image import Image as XLImage
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.pagebreak import Break
 
 from .ui_components import page_header
 
@@ -376,20 +377,27 @@ def _extract_logo() -> bytes:
     return base64.b64decode(LOGO_BASE64)
 
 
-def _configure_print(ws, contract_count: int, coverage_count: int, last_row: int, last_col: int) -> None:
-    # 계약 열 수와 보장행 수를 함께 보아 A3 한 장을 가능한 크게 사용합니다.
-    orientation = "landscape" if contract_count >= 3 else "portrait"
-    if contract_count == 2 and coverage_count >= 45:
-        orientation = "landscape"
-
+def _configure_print(
+    ws,
+    contract_count: int,
+    coverage_count: int,
+    last_row: int,
+    last_col: int,
+    page_count: int = 1,
+) -> None:
+    # 한 시트 안에서 A3 세로형 여러 페이지로 나눠 출력합니다.
     ws.page_setup.paperSize = ws.PAPERSIZE_A3
-    ws.page_setup.orientation = orientation
-    ws.page_setup.fitToWidth = 1
+    ws.page_setup.orientation = "portrait"
+    ws.page_setup.pageOrder = "overThenDown"
+    ws.page_setup.fitToWidth = page_count
     ws.page_setup.fitToHeight = 1
     ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.print_area = f"A1:{get_column_letter(last_col)}{last_row}"
+    ws.print_title_cols = None
     ws.print_options.horizontalCentered = True
     ws.print_options.verticalCentered = True
+    ws.oddFooter.center.text = "페이지 &P / &N"
+    ws.oddFooter.center.size = 9
     ws.page_margins.left = 0.15
     ws.page_margins.right = 0.15
     ws.page_margins.top = 0.2
@@ -400,10 +408,10 @@ def _configure_print(ws, contract_count: int, coverage_count: int, last_row: int
 
 
 def _balanced_contract_pages(contract_count: int) -> list[list[int]]:
-    """보험을 최대 3페이지에 균등하게 나눕니다(예: 7개→4+3, 13개→5+4+4)."""
+    """보험을 페이지당 최대 6개로 제한하면서 전체 페이지에 균등하게 나눕니다."""
     if contract_count <= 0:
         return [[]]
-    page_count = min(3, max(1, (contract_count + 5) // 6))
+    page_count = max(1, (contract_count + 5) // 6)
     base, remainder = divmod(contract_count, page_count)
     sizes = [base + (1 if page < remainder else 0) for page in range(page_count)]
     pages: list[list[int]] = []
@@ -426,6 +434,8 @@ def _populate_analysis_sheet(
     data: dict,
     selected: list[dict],
     contract_indices: list[int],
+    contracts_per_page: int | None = None,
+    page_count: int = 1,
 ) -> None:
     ws = workbook.create_sheet(title)
     ws.sheet_view.showGridLines = False
@@ -578,11 +588,11 @@ def _populate_analysis_sheet(
     ws.column_dimensions["A"].width = 16
     ws.column_dimensions["B"].width = 11
     ws.column_dimensions["C"].width = 31
-    contract_width = _contract_column_width(contract_count)
+    contract_width = _contract_column_width(contracts_per_page or contract_count)
     for col in range(4, last_col + 1):
         ws.column_dimensions[get_column_letter(col)].width = contract_width
 
-    _configure_print(ws, contract_count, len(selected), coverage_end, last_col)
+    _configure_print(ws, contract_count, len(selected), coverage_end, last_col, page_count)
 
 
 def build_analysis_file(
@@ -602,9 +612,27 @@ def build_analysis_file(
     workbook = Workbook()
     workbook.remove(workbook.active)
     contract_pages = _balanced_contract_pages(len(data["contracts"]))
-    for page_number, contract_indices in enumerate(contract_pages, start=1):
-        title = "보장 분석" if len(contract_pages) == 1 else f"보장 분석 {page_number}"
-        _populate_analysis_sheet(workbook, title, data, selected, contract_indices)
+    all_contract_indices = list(range(len(data["contracts"])))
+    _populate_analysis_sheet(
+        workbook,
+        "보장 분석",
+        data,
+        selected,
+        all_contract_indices,
+        contracts_per_page=max(len(page) for page in contract_pages),
+        page_count=len(contract_pages),
+    )
+    ws = workbook["보장 분석"]
+    cumulative_contracts = 0
+    page_start_column = 1
+    for page_index, page in enumerate(contract_pages):
+        cumulative_contracts += len(page)
+        page_end_column = 3 + cumulative_contracts
+        _set_outline(ws, 2, ws.max_row, page_start_column, page_end_column, THICK_SIDE)
+        if page_index < len(contract_pages) - 1:
+            # A:C를 반복하지 않고 다음 보험 열부터 새 인쇄 페이지를 시작합니다.
+            ws.col_breaks.append(Break(id=page_end_column))
+            page_start_column = page_end_column + 1
     workbook.calculation.calcMode = "auto"
     workbook.calculation.fullCalcOnLoad = True
     workbook.calculation.forceFullCalc = True
@@ -688,11 +716,13 @@ def run() -> None:
             3. **개인모드**는 전체 보장 중 원하는 항목을 직접 선택합니다.
             4. 간편모드는 업로드 즉시 결과가 생성되며, 개인모드는 항목 선택 후 시작 버튼을 누릅니다.
 
-            - 결과물은 A3 용지에 맞춰지며 보험 수가 많으면 최대 3페이지로 균등 분할됩니다.
-            - 각 페이지의 계약 수와 보장항목 수에 따라 방향과 열 너비를 자동으로 조정합니다.
+            - 결과물은 하나의 시트에서 A3 세로형으로 출력됩니다.
+            - 보험 수가 많으면 페이지당 최대 6개를 기준으로 균등하게 나눠집니다.
+            - 여러 페이지에서도 합계·구분·보장명 열은 첫 페이지에만 표시됩니다.
+            - 페이지 하단에는 현재 페이지와 전체 페이지 번호가 표시됩니다.
             """
         )
-        st.caption("버전 v2.6.0 · 제작 박병선 팀장")
+        st.caption("버전 v2.8.0 · 제작 박병선 팀장")
 
     st.markdown("### 1. 전체 보장분석 원본")
     uploaded_main = st.file_uploader(
