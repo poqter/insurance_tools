@@ -8,7 +8,6 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import streamlit as st
-from st_keyup import st_keyup
 
 try:
     from modules.ui_components import page_header
@@ -173,12 +172,11 @@ def _home_search_result(insurer: dict[str, object]) -> str:
 
 def render_home_quick_search() -> None:
     """홈 화면에서 보험사를 검색하고 원수사 전산을 바로 엽니다."""
-    query = st_keyup(
+    query = st.text_input(
         "보험사 검색",
         placeholder="보험사 이름 검색",
         label_visibility="collapsed",
         key="home_insurer_search",
-        debounce=250,
     ).strip()
 
     st.markdown(
