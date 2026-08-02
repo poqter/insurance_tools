@@ -24,7 +24,7 @@ LIFE_INSURERS = [
     {"name": "미래에셋생명", "slug": "miraeasset_life", "url": "https://www.loveageplan.com/"},   
     {"name": "KB라이프생명", "slug": "kb_life", "url": "https://sfa.kblife.co.kr/"},
     {"name": "신한라이프", "slug": "shinhan_life", "url": "https://ga.shinhanlife.co.kr"},    
-    {"name": "삼성생명", "slug": "samsung_life", "url": "https://ga.samsunglife.com/", "badge": "Edge 전용"},
+    {"name": "삼성생명", "slug": "samsung_life", "url": "https://ga.samsunglife.com/", "badge": "Edge 전용", "edge_only": True},
     {"name": "흥국생명", "slug": "heungkuk_life", "url": "https://sales.heungkuklife.co.kr/"},
     {"name": "IBK연금보험", "slug": "ibk_pension", "url": "https://sf.ibki.co.kr/"},
     {"name": "교보생명", "slug": "kyobo_life", "url": "https://sso.kyobo.com:5443/3rdParty/certLoginFormPage.jsp?"},
@@ -80,12 +80,21 @@ def _card(insurer: dict[str, object]) -> str:
         else f'<span class="ip-logo ip-logo-fallback">{name[:1]}</span>'
     )
 
-    if insurer.get("notice"):
+    if insurer.get("edge_only"):
+        safe_url = _safe_external_url(str(insurer["url"]))
+        href = f"microsoft-edge:{safe_url}"
+        target = "_self"
+        rel = ""
+        card_class = "ip-card"
+        action = "Edge로 전산 열기"
+
+    elif insurer.get("notice"):
         href = _safe_external_url(str(insurer["url"]))
         target = "_blank"
         rel = ' rel="noopener noreferrer"'
         card_class = "ip-card ip-warning-card"
         action = "안내 확인 후 전산 열기"
+
     else:
         href = _safe_external_url(str(insurer["url"]))
         target = "_blank"
