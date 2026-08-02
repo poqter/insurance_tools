@@ -229,6 +229,7 @@ COLORS = {
     "black": "000000",
     "line": "728197",
     "red": "FF0000",
+    "completed": "92D050",
 }
 
 
@@ -253,6 +254,26 @@ def _to_number(value: object) -> int | float:
         return 0
     number = float(digits)
     return int(number) if number.is_integer() else number
+
+
+def _is_fully_paid(payment_count: object) -> bool:
+    """납입횟수가 1/1회, 180/180회처럼 모두 채워진 계약인지 확인합니다."""
+    match = re.fullmatch(
+        r"\s*([0-9,]+)\s*/\s*([0-9,]+)\s*(?:회)?\s*",
+        str(payment_count or ""),
+    )
+    if not match:
+        return False
+    paid_count = int(match.group(1).replace(",", ""))
+    total_count = int(match.group(2).replace(",", ""))
+    return total_count > 0 and paid_count == total_count
+
+
+def _format_won_text(value: object) -> str:
+    number = _to_number(value)
+    if isinstance(number, float) and not number.is_integer():
+        return f"{number:,.2f}원"
+    return f"{int(number):,}원"
 
 
 def _group_for(label: str) -> str:
@@ -485,6 +506,10 @@ def _populate_analysis_sheet(
         ws.cell(3, index, contract["product"])
         ws.cell(2, index).font = Font(name="나눔고딕", size=10, bold=True, color="1F4E78")
         ws.cell(3, index).font = Font(name="나눔고딕", size=9, bold=True)
+        if _is_fully_paid(contract["payment_count"]):
+            completed_fill = PatternFill("solid", fgColor=COLORS["completed"])
+            ws.cell(2, index).fill = completed_fill
+            ws.cell(3, index).fill = completed_fill
     ws.row_dimensions[2].height = 25
     ws.row_dimensions[3].height = 55
 
@@ -502,7 +527,8 @@ def _populate_analysis_sheet(
             ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=3)
             ws.cell(row, 1, label)
         else:
-            ws.cell(row, 1, sum(_to_number(contract[key]) for contract in contracts))
+            last_contract_col = get_column_letter(last_col)
+            ws.cell(row, 1, f"=SUM(D{row}:{last_contract_col}{row})")
             ws.merge_cells(start_row=row, start_column=2, end_row=row, end_column=3)
             ws.cell(row, 2, label)
 
@@ -515,10 +541,19 @@ def _populate_analysis_sheet(
             cell.font = bold_font
 
         for index, contract in enumerate(contracts, start=4):
-            ws.cell(row, index, contract[key])
+            cell = ws.cell(row, index)
+            if row == 7 and _to_number(contract["monthly"]) == 0:
+                cell.value = "확인 필요"
+                cell.font = normal_font
+            elif row == 7 and _is_fully_paid(contract["payment_count"]):
+                cell.value = _format_won_text(contract["monthly"])
+                cell.font = blue_font
+            else:
+                cell.value = contract[key]
             if row >= 7:
-                ws.cell(row, index).number_format = '#,##0"원"'
-                ws.cell(row, index).font = blue_font
+                cell.number_format = '#,##0"원"'
+                if not (row == 7 and _to_number(contract["monthly"]) == 0):
+                    cell.font = blue_font
         if row >= 7:
             ws.cell(row, 1).number_format = '#,##0"원"'
             ws.cell(row, 1).font = blue_font
@@ -542,7 +577,8 @@ def _populate_analysis_sheet(
         elif group == "심장\n보장":
             section_color = COLORS["heart"]
 
-        ws.cell(row, 1, sum(_to_number(value) for value in item["values"]))
+        last_contract_col = get_column_letter(last_col)
+        ws.cell(row, 1, f"=SUM(D{row}:{last_contract_col}{row})")
         ws.cell(row, 2, group)
         ws.cell(row, 3, item["display"])
         for index, value in enumerate(item["values"], start=4):
