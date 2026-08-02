@@ -377,9 +377,9 @@ def _extract_logo() -> bytes:
 
 
 def _configure_print(ws, contract_count: int, coverage_count: int, last_row: int, last_col: int) -> None:
-    # 계약 열이 넓으면 가로, 계약이 적고 보장행이 많으면 세로가 더 크게 출력됩니다.
-    orientation = "landscape" if contract_count >= 4 else "portrait"
-    if contract_count == 3 and coverage_count <= 45:
+    # 계약 열 수와 보장행 수를 함께 보아 A3 한 장을 가능한 크게 사용합니다.
+    orientation = "landscape" if contract_count >= 3 else "portrait"
+    if contract_count == 2 and coverage_count >= 45:
         orientation = "landscape"
 
     ws.page_setup.paperSize = ws.PAPERSIZE_A3
@@ -399,33 +399,50 @@ def _configure_print(ws, contract_count: int, coverage_count: int, last_row: int
     ws.sheet_view.zoomScale = 70
 
 
-def build_analysis_file(
-    main_bytes: bytes,
-    selected_labels: list[str] | None = None,
-) -> tuple[bytes, str, str]:
-    data = parse_source_file(main_bytes)
-    available = {item["label"]: item for item in data["coverages"]}
+def _balanced_contract_pages(contract_count: int) -> list[list[int]]:
+    """보험을 최대 3페이지에 균등하게 나눕니다(예: 7개→4+3, 13개→5+4+4)."""
+    if contract_count <= 0:
+        return [[]]
+    page_count = min(3, max(1, (contract_count + 5) // 6))
+    base, remainder = divmod(contract_count, page_count)
+    sizes = [base + (1 if page < remainder else 0) for page in range(page_count)]
+    pages: list[list[int]] = []
+    start = 0
+    for size in sizes:
+        pages.append(list(range(start, start + size)))
+        start += size
+    return pages
 
-    if selected_labels is None:
-        selected_labels = DEFAULT_COVERAGES
-    normalized_selection = {_normalize_label(label) for label in selected_labels}
-    selected = [item for item in data["coverages"] if item["label"] in normalized_selection]
-    if not selected:
-        raise ValueError("출력할 보장항목을 한 개 이상 선택해 주세요.")
 
-    workbook = Workbook()
-    ws = workbook.active
-    ws.title = "보장 분석"
+def _contract_column_width(contract_count: int) -> float:
+    """보험 수가 적당할 때 A3 가로폭을 넉넉히 쓰되 지나치게 넓어지지 않게 합니다."""
+    widths = {1: 25.0, 2: 25.0, 3: 27.0, 4: 24.0, 5: 20.5, 6: 18.0}
+    return widths.get(contract_count, max(14.0, 108.0 / max(contract_count, 1)))
+
+
+def _populate_analysis_sheet(
+    workbook: Workbook,
+    title: str,
+    data: dict,
+    selected: list[dict],
+    contract_indices: list[int],
+) -> None:
+    ws = workbook.create_sheet(title)
     ws.sheet_view.showGridLines = False
-
-    contract_count = len(data["contracts"])
+    contracts = [data["contracts"][index] for index in contract_indices]
+    contract_count = len(contracts)
     last_col = 3 + contract_count
-    last_col_letter = get_column_letter(last_col)
     coverage_start = 11
 
     output_items = [
         {"label": "일반사망", "display": "일반 사망", "group": "사망", "values": [0] * contract_count},
-        *selected,
+        *[
+            {
+                **item,
+                "values": [item["values"][index] for index in contract_indices],
+            }
+            for item in selected
+        ],
         {"label": "기타", "display": "기타", "group": "기타", "values": [0] * contract_count},
     ]
     coverage_end = coverage_start + len(output_items) - 1
@@ -468,7 +485,7 @@ def build_analysis_file(
             if cell.coordinate != "A2":
                 cell.font = bold_font
 
-    for index, contract in enumerate(data["contracts"], start=4):
+    for index, contract in enumerate(contracts, start=4):
         ws.cell(2, index, contract["company"])
         ws.cell(3, index, contract["product"])
         ws.cell(2, index).font = Font(name="나눔고딕", size=10, bold=True, color="1F4E78")
@@ -490,7 +507,7 @@ def build_analysis_file(
             ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=3)
             ws.cell(row, 1, label)
         else:
-            ws.cell(row, 1, sum(_to_number(contract[key]) for contract in data["contracts"]))
+            ws.cell(row, 1, sum(_to_number(contract[key]) for contract in contracts))
             ws.merge_cells(start_row=row, start_column=2, end_row=row, end_column=3)
             ws.cell(row, 2, label)
 
@@ -502,7 +519,7 @@ def build_analysis_file(
             cell.alignment = center
             cell.font = bold_font
 
-        for index, contract in enumerate(data["contracts"], start=4):
+        for index, contract in enumerate(contracts, start=4):
             ws.cell(row, index, contract[key])
             if row >= 7:
                 ws.cell(row, index).number_format = '#,##0"원"'
@@ -561,10 +578,33 @@ def build_analysis_file(
     ws.column_dimensions["A"].width = 16
     ws.column_dimensions["B"].width = 11
     ws.column_dimensions["C"].width = 31
+    contract_width = _contract_column_width(contract_count)
     for col in range(4, last_col + 1):
-        ws.column_dimensions[get_column_letter(col)].width = 19
+        ws.column_dimensions[get_column_letter(col)].width = contract_width
 
     _configure_print(ws, contract_count, len(selected), coverage_end, last_col)
+
+
+def build_analysis_file(
+    main_bytes: bytes,
+    selected_labels: list[str] | None = None,
+) -> tuple[bytes, str, str]:
+    data = parse_source_file(main_bytes)
+    available = {item["label"]: item for item in data["coverages"]}
+
+    if selected_labels is None:
+        selected_labels = DEFAULT_COVERAGES
+    normalized_selection = {_normalize_label(label) for label in selected_labels}
+    selected = [item for item in data["coverages"] if item["label"] in normalized_selection]
+    if not selected:
+        raise ValueError("출력할 보장항목을 한 개 이상 선택해 주세요.")
+
+    workbook = Workbook()
+    workbook.remove(workbook.active)
+    contract_pages = _balanced_contract_pages(len(data["contracts"]))
+    for page_number, contract_indices in enumerate(contract_pages, start=1):
+        title = "보장 분석" if len(contract_pages) == 1 else f"보장 분석 {page_number}"
+        _populate_analysis_sheet(workbook, title, data, selected, contract_indices)
     workbook.calculation.calcMode = "auto"
     workbook.calculation.fullCalcOnLoad = True
     workbook.calculation.forceFullCalc = True
@@ -585,6 +625,69 @@ def make_input_signature(main_bytes: bytes, mode: str, selected_labels: list[str
     return digest.hexdigest()
 
 
+def _render_personal_selector(
+    available_labels: list[str],
+    default_labels: list[str],
+    file_key: str,
+) -> list[str]:
+    """구분별 빠른 선택과 개별 체크를 함께 제공하는 개인모드 선택기입니다."""
+    prefix = f"analyzer_v2_cov_{file_key}_"
+    default_set = set(default_labels)
+
+    for label in available_labels:
+        state_key = f"{prefix}{label}"
+        if state_key not in st.session_state:
+            st.session_state[state_key] = label in default_set
+
+    col_all, col_default, col_clear = st.columns(3)
+    if col_all.button("전체 선택", use_container_width=True, key=f"{prefix}all"):
+        for label in available_labels:
+            st.session_state[f"{prefix}{label}"] = True
+    if col_default.button("간편모드 기본값", use_container_width=True, key=f"{prefix}default"):
+        for label in available_labels:
+            st.session_state[f"{prefix}{label}"] = label in default_set
+    if col_clear.button("전체 해제", use_container_width=True, key=f"{prefix}clear"):
+        for label in available_labels:
+            st.session_state[f"{prefix}{label}"] = False
+
+    grouped: dict[str, list[str]] = {}
+    for label in available_labels:
+        group = _group_for(label).replace("\n", " ")
+        grouped.setdefault(group, []).append(label)
+
+    group_names = list(grouped)
+    filter_group = st.selectbox(
+        "확인할 구분",
+        ["전체 구분", *group_names],
+        key=f"{prefix}group_filter",
+        help="항목이 많을 때 특정 구분만 골라서 확인할 수 있습니다.",
+    )
+    visible_groups = group_names if filter_group == "전체 구분" else [filter_group]
+
+    for group in visible_groups:
+        labels = grouped[group]
+        selected_count = sum(bool(st.session_state[f"{prefix}{label}"]) for label in labels)
+        with st.expander(f"{group}  ·  {selected_count}/{len(labels)}개 선택", expanded=filter_group != "전체 구분"):
+            group_all, group_clear = st.columns(2)
+            if group_all.button("이 구분 전체 선택", use_container_width=True, key=f"{prefix}{group}_all"):
+                for label in labels:
+                    st.session_state[f"{prefix}{label}"] = True
+            if group_clear.button("이 구분 전체 해제", use_container_width=True, key=f"{prefix}{group}_clear"):
+                for label in labels:
+                    st.session_state[f"{prefix}{label}"] = False
+
+            item_columns = st.columns(2)
+            for index, label in enumerate(labels):
+                item_columns[index % 2].checkbox(
+                    DISPLAY_NAMES.get(label, label),
+                    key=f"{prefix}{label}",
+                )
+
+    selected = [label for label in available_labels if st.session_state[f"{prefix}{label}"]]
+    st.caption(f"전체 {len(available_labels)}개 중 {len(selected)}개 선택")
+    return selected
+
+
 def run() -> None:
     page_header(
         "고객 상담",
@@ -599,13 +702,13 @@ def run() -> None:
             1. 전체 보장내용이 포함된 **컨설팅보장분석.xlsx** 파일을 업로드합니다.
             2. **간편모드**는 추천 기본 보장을 즉시 적용합니다.
             3. **개인모드**는 전체 보장 중 원하는 항목을 직접 선택합니다.
-            4. **보장 분석 시작**을 누른 뒤 결과 엑셀을 다운로드합니다.
+            4. 간편모드는 업로드 즉시 결과가 생성되며, 개인모드는 항목 선택 후 시작 버튼을 누릅니다.
 
-            - 결과물은 A3 용지에 한 페이지로 맞춰집니다.
-            - 계약 수와 보장항목 수에 따라 가로·세로 방향을 자동으로 결정합니다.
+            - 결과물은 A3 용지에 맞춰지며 보험 수가 많으면 최대 3페이지로 균등 분할됩니다.
+            - 각 페이지의 계약 수와 보장항목 수에 따라 방향과 열 너비를 자동으로 조정합니다.
             """
         )
-        st.caption("버전 v2.0.0 · 제작 박병선 팀장")
+        st.caption("버전 v2.5.0 · 제작 박병선 팀장")
 
     st.markdown("### 1. 전체 보장분석 원본")
     uploaded_main = st.file_uploader(
@@ -643,29 +746,38 @@ def run() -> None:
             with st.expander("간편모드 적용 항목 보기"):
                 st.write([DISPLAY_NAMES.get(label, label) for label in selected_labels])
         else:
-            label_to_display = {label: DISPLAY_NAMES.get(label, label) for label in available_labels}
-            selected_labels = st.multiselect(
-                "출력할 보장항목을 선택하세요",
-                options=available_labels,
-                default=default_labels,
-                format_func=lambda label: f"{_group_for(label).replace(chr(10), ' ')} · {label_to_display[label]}",
-                key=f"analyzer_v2_selected_coverages_{hashlib.sha256(main_bytes).hexdigest()[:10]}",
+            st.markdown("#### 출력할 보장항목")
+            st.caption("전체·기본·구분별 빠른 선택을 사용한 뒤 필요한 항목만 개별 조정하세요.")
+            selected_labels = _render_personal_selector(
+                available_labels,
+                default_labels,
+                hashlib.sha256(main_bytes).hexdigest()[:10],
             )
-            st.caption(f"전체 {len(available_labels)}개 중 {len(selected_labels)}개 선택")
     elif not uploaded_main:
         st.caption("원본 파일을 업로드하면 선택 가능한 전체 보장항목이 표시됩니다.")
 
     ready = bool(parsed) and bool(selected_labels) and parse_error is None
     signature = make_input_signature(main_bytes, mode, selected_labels) if ready else None
 
-    st.markdown("### 3. 분석 실행")
-    if st.button(
-        "보장 분석 시작",
-        type="primary",
-        disabled=not ready,
-        use_container_width=True,
-        key="analyzer_v2_run",
-    ):
+    should_generate = False
+    if mode == "간편모드" and ready:
+        current_result = st.session_state.get("analyzer_v2_result")
+        current_error = st.session_state.get("analyzer_v2_error")
+        should_generate = not (
+            (current_result and current_result.get("signature") == signature)
+            or (current_error and current_error.get("signature") == signature)
+        )
+    else:
+        st.markdown("### 3. 분석 실행")
+        should_generate = st.button(
+            "보장 분석 시작",
+            type="primary",
+            disabled=not ready,
+            use_container_width=True,
+            key="analyzer_v2_run",
+        )
+
+    if should_generate:
         st.session_state.pop("analyzer_v2_result", None)
         st.session_state.pop("analyzer_v2_error", None)
         try:
