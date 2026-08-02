@@ -443,7 +443,7 @@ def build_analysis_file(
     ws.row_dimensions[1].height = 82
     for col in range(1, last_col + 1):
         ws.cell(1, col).fill = PatternFill("solid", fgColor=COLORS["white"])
-        ws.cell(1, col).border = THIN_BORDER
+        ws.cell(1, col).border = Border()
         ws.cell(1, col).alignment = center
 
     logo = XLImage(BytesIO(_extract_logo()))
@@ -556,7 +556,7 @@ def build_analysis_file(
     _set_outline(ws, 2, 3, 1, last_col, MEDIUM_SIDE)
     _set_outline(ws, 4, 6, 1, last_col, MEDIUM_SIDE)
     _set_outline(ws, 7, 10, 1, last_col, MEDIUM_SIDE)
-    _set_outline(ws, 1, coverage_end, 1, last_col, THICK_SIDE)
+    _set_outline(ws, 2, coverage_end, 1, last_col, THICK_SIDE)
 
     ws.column_dimensions["A"].width = 16
     ws.column_dimensions["B"].width = 11
