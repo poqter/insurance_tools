@@ -248,7 +248,12 @@ def render_app_card(app_id: str, is_allowed: bool) -> None:
             """,
             unsafe_allow_html=True,
         )
-        if st.button("시작하기  →" if is_allowed else "🔒  사용 권한 없음", key=f"home_{app_id}", disabled=not is_allowed):
+        if st.button(
+            "시작하기  →" if is_allowed else "🔒  사용 권한 없음",
+            key=f"home_{app_id}",
+            disabled=not is_allowed,
+            use_container_width=True,
+        ):
             navigate(app_id)
 
 
@@ -257,9 +262,12 @@ def render_home(allowed_ids: list[str]) -> None:
     st.markdown(
         """
         <style>
-        [class*="st-key-home_intro"] { margin:0 0 1rem !important; padding:1.05rem 1.25rem .95rem !important;
-            position:relative; overflow:visible; background:linear-gradient(135deg,#FFFFFF 0%,#F7FAFD 100%);
-            border:1px solid #DCE6EE; border-radius:1rem; box-shadow:0 10px 28px rgba(27,64,93,.07); }
+        [class*="st-key-home_intro"] { margin:0 0 1rem !important; padding:1.05rem 1.25rem !important;
+            position:relative; overflow:visible;
+            background:radial-gradient(circle at 82% 18%,rgba(37,99,235,.09),transparent 34%),
+                       linear-gradient(135deg,#FFFFFF 0%,#F6FAFF 100%);
+            border:1px solid #D6E3EF; border-top:2px solid #BFD6F8; border-radius:1rem;
+            box-shadow:0 12px 32px rgba(27,64,93,.075); }
         .hw-home-greeting { display:flex; align-items:center; gap:.85rem; min-height:3.35rem; }
         .hw-home-avatar { flex:0 0 3.2rem; width:3.2rem; height:3.2rem; display:flex; align-items:center;
             justify-content:center; border:1px solid #CFE0FA; border-radius:.8rem; background:#F3F7FF; color:#2563D9; }
@@ -267,8 +275,6 @@ def render_home(allowed_ids: list[str]) -> None:
         .hw-home-copy h1 { margin:0 0 .2rem !important; color:#10283D !important; font-size:1.48rem !important;
             line-height:1.25 !important; font-weight:800 !important; letter-spacing:-.035em !important; }
         .hw-home-copy p { margin:0 !important; color:#607488; font-size:.84rem !important; line-height:1.45 !important; }
-        .hw-tool-count { display:inline-flex; align-items:center; margin:.55rem 0 0 4.05rem; padding:.25rem .62rem;
-            border:1px solid #CCE0FF; border-radius:999px; background:#F3F7FF; color:#1769DC; font-size:.69rem; font-weight:750; }
         .hw-category-head { margin:1rem 0 .62rem !important; padding:0 !important; }
         .hw-category-head h2 { margin:0 0 .18rem !important; padding:0 !important; color:#10283D !important;
             font-size:1.48rem !important; line-height:1.25 !important; font-weight:800 !important;
@@ -282,10 +288,17 @@ def render_home(allowed_ids: list[str]) -> None:
             box-shadow:0 7px 22px rgba(27,64,93,.055); transition:transform .18s ease,box-shadow .18s ease; }
         [class*="st-key-available_card_"]:hover { transform:translateY(-2px); box-shadow:0 12px 28px rgba(27,64,93,.1); }
         [class*="st-key-available_card_"] button,
-        [class*="st-key-locked_card_"] button { width:auto !important; min-height:auto !important; margin:0 !important;
-            padding:.05rem 0 !important; background:transparent !important; border:0 !important;
-            box-shadow:none !important; color:#1769DC !important; font-size:.76rem !important; font-weight:700 !important; }
-        [class*="st-key-available_card_"] button:hover { color:#0B4FB3 !important; background:transparent !important; }
+        [class*="st-key-locked_card_"] button { width:100% !important; min-height:2.65rem !important; margin:0 !important;
+            padding:.48rem .8rem !important; background:#FFFFFF !important; border:1px solid #C8D9E7 !important;
+            border-radius:.62rem !important; box-shadow:none !important; color:#1769DC !important;
+            font-size:.79rem !important; font-weight:750 !important;
+            transition:background-color .18s ease,color .18s ease,border-color .18s ease,box-shadow .18s ease,transform .18s ease !important; }
+        [class*="st-key-available_card_"] button:hover { color:#FFFFFF !important; background:#1769DC !important;
+            border-color:#1769DC !important; box-shadow:0 7px 16px rgba(23,105,220,.2) !important; transform:translateY(-1px); }
+        [class*="st-key-available_card_"] button:active { transform:translateY(0); box-shadow:0 3px 9px rgba(23,105,220,.18) !important; }
+        [class*="st-key-available_card_"] button:focus-visible { outline:3px solid rgba(23,105,220,.2) !important; outline-offset:2px; }
+        [class*="st-key-locked_card_"] button:disabled { background:#E9EEF2 !important; border-color:#D5DEE5 !important;
+            color:#7B8C99 !important; opacity:1 !important; }
         .hw-tool-heading { display:flex; align-items:center; gap:.72rem; min-height:3rem; padding-right:3.65rem; margin-bottom:.48rem; }
         .hw-tool-icon { flex:0 0 2.65rem; width:2.65rem; height:2.65rem; display:flex; align-items:center;
             justify-content:center; border:1px solid #CDDEFA; border-radius:.72rem; background:#F3F7FF; color:#2F6FDB; }
@@ -306,7 +319,7 @@ def render_home(allowed_ids: list[str]) -> None:
             border-radius:999px; background:#E5EAEE; color:#697A87; font-size:.6rem; font-weight:750; }
         [class*="st-key-locked_card_"] .hw-corner-badge { display:none; }
         @media(max-width:900px){
-            .hw-tool-desc{margin-left:0}.hw-tool-heading{padding-right:3.3rem}.hw-tool-count{margin-left:0}
+            .hw-tool-desc{margin-left:0}.hw-tool-heading{padding-right:3.3rem}
         }
         @media(max-width:650px){
             [class*="st-key-home_intro"]{padding:.9rem !important}.hw-home-greeting{margin-bottom:.35rem}
@@ -323,7 +336,7 @@ def render_home(allowed_ids: list[str]) -> None:
                 f'''<div class="hw-home-greeting">
                   <span class="hw-home-avatar"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M5 22v-2a7 7 0 0114 0v2"/></svg></span>
                   <div class="hw-home-copy"><h1>안녕하세요, {user}님</h1><p>오늘 필요한 업무를 빠르게 시작해 보세요.</p></div>
-                </div><span class="hw-tool-count">✦&nbsp; 사용 가능한 도구 {len(allowed_ids)}개</span>''',
+                </div>''',
                 unsafe_allow_html=True,
             )
         with search_col:
