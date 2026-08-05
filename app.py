@@ -262,19 +262,34 @@ def render_home(allowed_ids: list[str]) -> None:
     st.markdown(
         """
         <style>
-        [class*="st-key-home_intro"] { margin:0 0 1rem !important; padding:1.05rem 1.25rem !important;
-            position:relative; overflow:visible;
-            background:radial-gradient(circle at 82% 18%,rgba(37,99,235,.09),transparent 34%),
-                       linear-gradient(135deg,#FFFFFF 0%,#F6FAFF 100%);
-            border:1px solid #D6E3EF; border-top:2px solid #BFD6F8; border-radius:1rem;
-            box-shadow:0 12px 32px rgba(27,64,93,.075); }
-        .hw-home-greeting { display:flex; align-items:center; gap:.85rem; min-height:3.35rem; }
-        .hw-home-avatar { flex:0 0 3.2rem; width:3.2rem; height:3.2rem; display:flex; align-items:center;
-            justify-content:center; border:1px solid #CFE0FA; border-radius:.8rem; background:#F3F7FF; color:#2563D9; }
-        .hw-home-avatar svg { width:1.8rem; height:1.8rem; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; }
-        .hw-home-copy h1 { margin:0 0 .2rem !important; color:#10283D !important; font-size:1.48rem !important;
-            line-height:1.25 !important; font-weight:800 !important; letter-spacing:-.035em !important; }
-        .hw-home-copy p { margin:0 !important; color:#607488; font-size:.84rem !important; line-height:1.45 !important; }
+        [class*="st-key-home_intro"] { margin:0 0 1.15rem !important; padding:1.12rem 1.35rem !important;
+            position:relative; overflow:hidden;
+            background:
+                radial-gradient(circle at 88% -20%,rgba(55,116,230,.15),transparent 38%),
+                radial-gradient(circle at 58% 135%,rgba(70,175,201,.08),transparent 34%),
+                linear-gradient(135deg,#FFFFFF 0%,#F8FBFF 58%,#F2F7FE 100%);
+            border:1px solid #D3E1F0; border-top-color:#B8D2F7; border-radius:1.08rem;
+            box-shadow:0 14px 34px rgba(24,55,85,.08),inset 0 1px 0 rgba(255,255,255,.95); }
+        [class*="st-key-home_intro"]::before { content:""; position:absolute; z-index:0; top:0; left:2rem;
+            width:7.5rem; height:2px; border-radius:0 0 999px 999px;
+            background:linear-gradient(90deg,#2563EB,#57B6CC); opacity:.88; }
+        [class*="st-key-home_intro"]::after { content:""; position:absolute; z-index:0; right:-2.8rem; top:-3.8rem;
+            width:10rem; height:10rem; border:1px solid rgba(86,135,209,.12); border-radius:50%;
+            box-shadow:0 0 0 1.7rem rgba(95,145,220,.035); pointer-events:none; }
+        [class*="st-key-home_intro"] > div { position:relative; z-index:1; }
+        .hw-home-greeting { display:flex; align-items:center; gap:1rem; min-height:3.45rem; }
+        .hw-home-avatar { flex:0 0 3.35rem; width:3.35rem; height:3.35rem; display:flex; align-items:center;
+            justify-content:center; border:1px solid rgba(80,137,225,.3); border-radius:.92rem;
+            background:linear-gradient(145deg,#FFFFFF 0%,#EAF2FF 100%); color:#2563D9;
+            box-shadow:0 7px 18px rgba(37,99,217,.11),inset 0 1px 0 #FFFFFF; }
+        .hw-home-avatar svg { width:1.8rem; height:1.8rem; fill:none; stroke:currentColor; stroke-width:1.75;
+            stroke-linecap:round; filter:drop-shadow(0 2px 3px rgba(37,99,217,.12)); }
+        .hw-home-copy { display:flex; flex-direction:column; justify-content:center; gap:.28rem; min-width:0; }
+        .hw-home-copy h1 { margin:0 !important; padding:0 !important; color:#10283D !important;
+            font-size:1.48rem !important; line-height:1.22 !important; font-weight:800 !important;
+            letter-spacing:-.035em !important; }
+        .hw-home-copy p { margin:0 !important; padding:0 !important; color:#64798C;
+            font-size:.84rem !important; line-height:1.4 !important; letter-spacing:-.012em; }
         .hw-category-head { margin:1rem 0 .62rem !important; padding:0 !important; }
         .hw-category-head h2 { margin:0 0 .18rem !important; padding:0 !important; color:#10283D !important;
             font-size:1.48rem !important; line-height:1.25 !important; font-weight:800 !important;
