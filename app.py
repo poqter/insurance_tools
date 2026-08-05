@@ -37,6 +37,7 @@ NOTICE = {
         "비밀번호 입력 후 Enter 키를 눌러 로그인할 수 있습니다.",
     ],
     "important": "8월1일부터 비밀번호가 변경되었습니다. 변경된 비밀번호는 박병선 팀장에게 문의해 주세요.",
+    "contact_url": "http://qr.kakao.com/talk/V5iAGlTasVARBpUks6ix1p6YKf4-",
 }
 
 
@@ -133,7 +134,43 @@ def render_notice() -> None:
         st.markdown(f"**{NOTICE['title']}**")
         for item in NOTICE["items"]:
             st.markdown(f"- {item}")
-    st.info(NOTICE["important"], icon="ℹ️")
+    st.markdown(
+        textwrap.dedent(
+            f'''
+            <style>
+            .hw-login-contact {{ display:flex; align-items:center; justify-content:space-between; gap:.9rem;
+                margin-top:.55rem; padding:.78rem .9rem; border:1px solid #C9DCF7; border-radius:.75rem;
+                background:linear-gradient(135deg,#F3F8FF 0%,#EDF5FF 100%); }}
+            .hw-login-contact-copy {{ display:flex; align-items:center; gap:.55rem; min-width:0;
+                color:#3F5870; font-size:.82rem; line-height:1.4; }}
+            .hw-login-contact-icon {{ flex:0 0 1.55rem; width:1.55rem; height:1.55rem; display:flex;
+                align-items:center; justify-content:center; border-radius:50%; background:#DCEAFF;
+                color:#2563D9; font-size:.76rem; font-weight:850; }}
+            .hw-login-contact-link {{ flex:0 0 auto; display:inline-flex; align-items:center; gap:.28rem;
+                padding:.48rem .72rem; border:1px solid #F0C900; border-radius:.58rem;
+                background:#FEE500; color:#332A00 !important; text-decoration:none !important;
+                font-size:.76rem; line-height:1; font-weight:800;
+                box-shadow:0 4px 10px rgba(145,122,0,.12); transition:all .18s ease; }}
+            .hw-login-contact-link:hover {{ transform:translateY(-1px); background:#FFEA35;
+                box-shadow:0 6px 14px rgba(145,122,0,.18); }}
+            @media(max-width:700px) {{
+                .hw-login-contact {{ align-items:stretch; flex-direction:column; }}
+                .hw-login-contact-link {{ justify-content:center; }}
+            }}
+            </style>
+            <div class="hw-login-contact">
+              <div class="hw-login-contact-copy">
+                <span class="hw-login-contact-icon">i</span>
+                <span>변경된 비밀번호가 필요하신가요?</span>
+              </div>
+              <a class="hw-login-contact-link" href="{NOTICE['contact_url']}" target="_blank" rel="noopener noreferrer">
+                박병선 팀장에게 문의해 주세요 <span>↗</span>
+              </a>
+            </div>
+            '''
+        ),
+        unsafe_allow_html=True,
+    )
 
 
 def render_login() -> bool:
