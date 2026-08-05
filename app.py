@@ -333,6 +333,22 @@ def render_home(allowed_ids: list[str]) -> None:
         .hw-card-lock { position:absolute; z-index:4; top:.88rem; right:.88rem; padding:.25rem .55rem;
             border-radius:999px; background:#E5EAEE; color:#697A87; font-size:.6rem; font-weight:750; }
         [class*="st-key-locked_card_"] .hw-corner-badge { display:none; }
+        .hw-home-footer { display:flex; align-items:center; justify-content:center; gap:.75rem;
+            margin:2.15rem 0 .45rem; padding:1.05rem 1.25rem;
+            border:1px solid #D9E5F1; border-radius:.95rem;
+            background:linear-gradient(135deg,rgba(255,255,255,.96),rgba(244,249,255,.96));
+            box-shadow:0 8px 24px rgba(27,64,93,.055); text-align:left; }
+        .hw-footer-mark { flex:0 0 2.35rem; width:2.35rem; height:2.35rem; display:flex;
+            align-items:center; justify-content:center; border-radius:.7rem;
+            background:linear-gradient(145deg,#2F73E0,#205CC3); color:#FFFFFF;
+            box-shadow:0 6px 14px rgba(37,99,217,.2); font-size:1rem; font-weight:850; }
+        .hw-footer-copy { display:flex; flex-direction:column; gap:.14rem; }
+        .hw-footer-brand { color:#17334B; font-size:.82rem; line-height:1.25; font-weight:750;
+            letter-spacing:-.015em; }
+        .hw-footer-brand b { color:#2563D9; font-weight:850; }
+        .hw-footer-credit { margin:0 !important; padding:0 !important; color:#697E91;
+            font-size:.72rem !important; line-height:1.35 !important; letter-spacing:.01em; }
+        .hw-footer-credit b { color:#2B4861; font-weight:800; }
         @media(max-width:900px){
             .hw-tool-desc{margin-left:0}.hw-tool-heading{padding-right:3.3rem}
         }
@@ -368,8 +384,16 @@ def render_home(allowed_ids: list[str]) -> None:
                 with column:
                     render_app_card(app_id, app_id in allowed_ids)
 
-    st.divider()
-    st.caption("제작 · 박병선 팀장")
+    st.markdown(
+        '''<div class="hw-home-footer">
+          <span class="hw-footer-mark">H</span>
+          <div class="hw-footer-copy">
+            <span class="hw-footer-brand">화랑 <b>WORKSPACE</b></span>
+            <p class="hw-footer-credit">Planned &amp; Built by <b>박병선 팀장</b></p>
+          </div>
+        </div>''',
+        unsafe_allow_html=True,
+    )
 
 
 def main() -> None:
