@@ -1,3 +1,5 @@
+import textwrap
+
 import streamlit as st
 
 from modules import (
@@ -199,7 +201,8 @@ def logout() -> None:
 def render_sidebar(allowed_ids: list[str]) -> None:
     with st.sidebar:
         st.markdown(
-            '''<style>
+            textwrap.dedent('''
+            <style>
             .hw-side-brand-signature { display:flex; align-items:center; gap:.72rem; margin:.08rem 0 .4rem;
                 padding:.72rem .75rem; border:1px solid rgba(94,142,207,.2); border-radius:.82rem;
                 background:linear-gradient(145deg,rgba(255,255,255,.74),rgba(238,246,255,.72));
@@ -222,7 +225,8 @@ def render_sidebar(allowed_ids: list[str]) -> None:
                 <span class="hw-side-brand-title">화랑 <b>WORKSPACE</b></span>
                 <p class="hw-side-brand-credit">Planned &amp; Built by <b>박병선 팀장</b></p>
               </div>
-            </div>''',
+            </div>
+            '''),
             unsafe_allow_html=True,
         )
         st.caption("필요한 업무를 선택하세요.")
