@@ -442,6 +442,48 @@ def load_example(count: int) -> None:
         ("홍길동", "694580", "144940000", "0", "0", [("암·뇌·심장 진단비", "128589"), ("암 주요치료비", "111255"), ("순환계 주요치료비 및 추가 보장", "112863"), ("운전자보험", "15000")]),
         ("홍길순", "495470", "102950000", "0", "0", [("암·뇌·심장 진단비", "95691"), ("암 주요치료비", "101245"), ("순환계 주요치료비 및 추가 보장", "117274"), ("운전자보험", "15000")]),
     ]
+    example_contracts = {
+        1: [
+            {
+                "company": "DB손해보험",
+                "product": "건강할때가입하는청춘어람플러스종합보험",
+                "action": "해지",
+                "detail": "DB손해보험 고객센터 1544-0100 상담원 연결 후 해지 요청",
+            },
+            {
+                "company": "KB손해보험",
+                "product": "KBThe좋은닥터플러스건강보험Ⅱ",
+                "action": "해지",
+                "detail": "KB손해보험 고객센터 1544-0114 상담원 연결 후 해지 요청",
+            },
+            {
+                "company": "흥국화재",
+                "product": "흥GoodThe건강한0550종합보험",
+                "action": "일부 특약 조정",
+                "detail": "흥국화재 고객센터 1688-1688 상담원 연결 후 일상생활 배상책임 특약 삭제 요청",
+            },
+        ],
+        2: [
+            {
+                "company": "메리츠 화재",
+                "product": "The알뜰한 건강보험",
+                "action": "유지",
+                "detail": "기존 가입 조건과 주요 보장을 확인한 결과 유지하는 방향으로 검토",
+            },
+            {
+                "company": "DB손해보험",
+                "product": "참 좋은 운전자 상해보험",
+                "action": "해지",
+                "detail": "신규 운전자보험의 승인과 보장 개시를 확인한 후 기존 계약 해지 요청",
+            },
+            {
+                "company": "삼성생명",
+                "product": "통합유니버설종신보험",
+                "action": "유지",
+                "detail": "기존 가입 조건과 주요 보장을 확인한 결과 유지하는 방향으로 검토",
+            },
+        ],
+    }
     for idx in range(count):
         no = idx + 1
         name, oldm, oldt, keepm, keept, plans = examples[idx]
@@ -457,9 +499,17 @@ def load_example(count: int) -> None:
             st.session_state[f"rm_plan_years_{no}_{i}"] = 20
         st.session_state[f"rm_coverage_{no}"] = "암·뇌·심장 진단비 보완 · 주요 치료비 강화 · 보장 공백 보완"
 
+        contracts = example_contracts.get(no, [])
+        st.session_state[f"rm_contract_count_{no}"] = len(contracts)
+        for contract_index, contract in enumerate(contracts):
+            st.session_state[f"rm_contract_company_{no}_{contract_index}"] = contract["company"]
+            st.session_state[f"rm_contract_product_{no}_{contract_index}"] = contract["product"]
+            st.session_state[f"rm_contract_action_{no}_{contract_index}"] = contract["action"]
+            st.session_state[f"rm_contract_detail_{no}_{contract_index}"] = contract["detail"]
+
 
 def run() -> None:
-    page_header("고객 상담", APP_TITLE, "간편 입력으로 한눈에 보는 비교표를 만들고 워드·엑셀로 내려받습니다.", "RM")
+    page_header("고객 상담", APP_TITLE, "간편 입력으로 한눈에 보는 비교표를 만들고 엑셀로 내려받습니다.", "RM")
     c1, c2, c3 = st.columns(3)
     with c1:
         count = int(st.selectbox("대상 인원", [1, 2], format_func=lambda x: f"{x}명", key="rm_count"))
