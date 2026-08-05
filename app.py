@@ -15,7 +15,7 @@ from modules.ui_components import inject_global_styles
 
 
 st.set_page_config(
-    page_title="화랑사업부 업무 도우미",
+    page_title="화랑WORKSPACE",
     page_icon="🧰",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -45,7 +45,7 @@ APP_DEFINITIONS = {
     },
     "remodeling": {
         "name": "보험 리모델링", "icon": "🔁", "code": "RM", "category": "고객 상담",
-        "description": "변경안을 비교하고 고객용 엑셀 자료를 만듭니다.", "action": "리모델링 시작", "status": "개선 중", "run": remodeling.run,
+        "description": "변경안을 비교하고 고객용 엑셀 자료를 만듭니다.", "action": "리모델링 시작", "run": remodeling.run,
     },
     "deposit_vs_shortpay": {
         "name": "적금 vs 단기납", "icon": "💰", "code": "DS", "category": "고객 상담",
