@@ -405,28 +405,32 @@ def _configure_print(
     last_col: int,
     page_count: int = 1,
 ) -> None:
-    # 다운로드 직후 바로 인쇄할 수 있도록 A3 세로형에서 너비만 1페이지에 맞춥니다.
-    # 높이는 자동으로 두어 계약 수가 많아도 세로 방향으로 자연스럽게 이어집니다.
+    # 다운로드 직후 바로 인쇄할 수 있도록 A3 세로형에서 높이만 1페이지에 맞춥니다.
+    # 너비는 자동으로 두어 계약 수가 많으면 가로 방향으로 자연스럽게 이어집니다.
     ws.page_setup.paperSize = ws.PAPERSIZE_A3
     ws.page_setup.orientation = "portrait"
     ws.page_setup.pageOrder = "overThenDown"
-    ws.page_setup.fitToWidth = 1
-    ws.page_setup.fitToHeight = 0
+    ws.page_setup.fitToWidth = 0
+    ws.page_setup.fitToHeight = 1
     ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.sheet_properties.pageSetUpPr.autoPageBreaks = False
     ws.page_setup.scale = None
     ws.print_area = f"A1:{get_column_letter(last_col)}{last_row}"
+    # 가로로 여러 페이지가 되더라도 A~C열은 반복하지 않습니다.
     ws.print_title_cols = None
     ws.print_options.horizontalCentered = True
-    ws.print_options.verticalCentered = True
+    ws.print_options.verticalCentered = False
     ws.oddFooter.center.text = "페이지 &P / &N"
     ws.oddFooter.center.size = 9
-    ws.page_margins.left = 0.15
-    ws.page_margins.right = 0.15
-    ws.page_margins.top = 0.2
-    ws.page_margins.bottom = 0.2
+    # 좌우·위쪽은 인쇄 공간을 넓게 쓰고, 아래쪽은 표와 페이지 번호가
+    # 겹치지 않도록 여유를 둡니다. 바닥글은 일반 프린터의 비인쇄 영역을
+    # 고려해 용지 아래에서 0.20인치 위치에 배치합니다.
+    ws.page_margins.left = 0.12
+    ws.page_margins.right = 0.12
+    ws.page_margins.top = 0.12
+    ws.page_margins.bottom = 0.38
     ws.page_margins.header = 0
-    ws.page_margins.footer = 0.15
+    ws.page_margins.footer = 0.20
     ws.sheet_view.zoomScale = 70
 
 
@@ -609,6 +613,35 @@ def _populate_analysis_sheet(
     _set_outline(ws, 2, 3, 1, last_col, MEDIUM_SIDE)
     _set_outline(ws, 4, 6, 1, last_col, MEDIUM_SIDE)
     _set_outline(ws, 7, 10, 1, last_col, MEDIUM_SIDE)
+
+    # C열(보장명)과 D열(첫 보험계약) 사이를 굵게 구분합니다.
+    # 같은 보험사의 연속된 계약은 한 묶음으로 두고, 보험사가 바뀌는
+    # 지점에만 굵은 세로 경계선을 표시합니다.
+    company_group_start = 4
+    for col in range(5, last_col + 1):
+        previous_company = str(ws.cell(2, col - 1).value or "").strip()
+        current_company = str(ws.cell(2, col).value or "").strip()
+        if current_company != previous_company:
+            _set_outline(
+                ws,
+                2,
+                coverage_end,
+                company_group_start,
+                col - 1,
+                MEDIUM_SIDE,
+            )
+            company_group_start = col
+    _set_outline(
+        ws,
+        2,
+        coverage_end,
+        company_group_start,
+        last_col,
+        MEDIUM_SIDE,
+    )
+
+    # 모든 내부 경계선을 적용한 뒤 표 전체 외곽선을 마지막에 다시
+    # 설정해 2행부터 시작하는 굵은 테두리가 중간에 끊기지 않게 합니다.
     _set_outline(ws, 2, coverage_end, 1, last_col, THICK_SIDE)
 
     ws.column_dimensions["A"].width = 16
