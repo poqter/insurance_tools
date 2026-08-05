@@ -474,7 +474,7 @@ def load_example(count: int) -> None:
                 "company": "DB손해보험",
                 "product": "참 좋은 운전자 상해보험",
                 "action": "해지",
-                "detail": "신규 운전자보험의 승인과 보장 개시를 확인한 후 기존 계약 해지 요청",
+                "detail": "DB손해보험 고객센터 1544-0100 상담원 연결 후 해지 요청",
             },
             {
                 "company": "삼성생명",
