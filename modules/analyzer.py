@@ -392,6 +392,38 @@ def _set_outline(ws, min_row: int, max_row: int, min_col: int, max_col: int, sid
         replace_side(right_cell, right=side)
 
 
+def _set_vertical_borders(
+    ws,
+    min_row: int,
+    max_row: int,
+    min_col: int,
+    max_col: int,
+    side: Side,
+) -> None:
+    """표 안의 모든 열 경계만 지정한 굵기로 통일합니다."""
+
+    def replace_side(cell, **changes) -> None:
+        border = cell.border
+        cell.border = Border(
+            left=changes.get("left", copy(border.left)),
+            right=changes.get("right", copy(border.right)),
+            top=copy(border.top),
+            bottom=copy(border.bottom),
+            diagonal=copy(border.diagonal),
+            diagonal_direction=border.diagonal_direction,
+            diagonalUp=border.diagonalUp,
+            diagonalDown=border.diagonalDown,
+            outline=border.outline,
+            vertical=copy(border.vertical),
+            horizontal=copy(border.horizontal),
+        )
+
+    for row in range(min_row, max_row + 1):
+        for col in range(min_col, max_col):
+            replace_side(ws.cell(row, col), right=side)
+            replace_side(ws.cell(row, col + 1), left=side)
+
+
 def _extract_logo() -> bytes:
     """외부 파일 없이 코드에 내장된 Hanwha Life Lab 로고를 반환합니다."""
     return base64.b64decode(LOGO_BASE64)
@@ -405,21 +437,21 @@ def _configure_print(
     last_col: int,
     page_count: int = 1,
 ) -> None:
-    # 다운로드 직후 바로 인쇄할 수 있도록 A3 세로형에서 높이만 1페이지에 맞춥니다.
-    # 너비는 자동으로 두어 계약 수가 많으면 가로 방향으로 자연스럽게 이어집니다.
+    # 다운로드 직후 바로 인쇄할 수 있도록 A3 세로형에서
+    # 너비와 높이를 모두 1페이지에 맞춥니다.
     ws.page_setup.paperSize = ws.PAPERSIZE_A3
     ws.page_setup.orientation = "portrait"
     ws.page_setup.pageOrder = "overThenDown"
-    ws.page_setup.fitToWidth = 0
+    ws.page_setup.fitToWidth = 1
     ws.page_setup.fitToHeight = 1
     ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.sheet_properties.pageSetUpPr.autoPageBreaks = False
     ws.page_setup.scale = None
     ws.print_area = f"A1:{get_column_letter(last_col)}{last_row}"
-    # 가로로 여러 페이지가 되더라도 A~C열은 반복하지 않습니다.
+    # A~C열은 반복 인쇄하지 않습니다.
     ws.print_title_cols = None
     ws.print_options.horizontalCentered = True
-    ws.print_options.verticalCentered = False
+    ws.print_options.verticalCentered = True
     ws.oddFooter.center.text = "페이지 &P / &N"
     ws.oddFooter.center.size = 9
     # 좌우·위쪽은 인쇄 공간을 넓게 쓰고, 아래쪽은 표와 페이지 번호가
@@ -639,6 +671,10 @@ def _populate_analysis_sheet(
         last_col,
         MEDIUM_SIDE,
     )
+
+    # A열부터 마지막 보험계약 열까지 모든 내부 세로선을 굵게 표시합니다.
+    # 가로선은 기존 굵기를 그대로 유지합니다.
+    _set_vertical_borders(ws, 2, coverage_end, 1, last_col, MEDIUM_SIDE)
 
     # 모든 내부 경계선을 적용한 뒤 표 전체 외곽선을 마지막에 다시
     # 설정해 2행부터 시작하는 굵은 테두리가 중간에 끊기지 않게 합니다.
