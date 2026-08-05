@@ -1,5 +1,5 @@
-streamlit>=1.40
+streamlit==1.61.0
+starlette==0.47.3
 pandas>=2.0
 numpy>=1.26
 openpyxl>=3.1
-streamlit-keyup==0.3.0
