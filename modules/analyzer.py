@@ -463,7 +463,7 @@ def _configure_print(
     ws.page_margins.bottom = 0.38
     ws.page_margins.header = 0
     ws.page_margins.footer = 0.20
-    ws.sheet_view.zoomScale = 70
+    ws.sheet_view.zoomScale = 100
 
 
 def _contract_column_width(contract_count: int) -> float:
