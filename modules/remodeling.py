@@ -264,6 +264,10 @@ def _merge(ws, address: str, value: object, *, fill: str | None = None, color: s
 
 def _excel_setup(ws, last_col: str, last_row: int) -> None:
     ws.sheet_view.showGridLines = False
+    # 파일을 처음 열었을 때 비교표가 조금 더 크게 보이도록 설정합니다.
+    # 화면 확대 비율은 인쇄 배율에는 영향을 주지 않습니다.
+    ws.sheet_view.zoomScale = 110
+    ws.sheet_view.zoomScaleNormal = 110
     ws.page_setup.orientation = "landscape"
     ws.page_setup.paperSize = ws.PAPERSIZE_A4
     ws.page_setup.fitToWidth = 1
@@ -271,6 +275,7 @@ def _excel_setup(ws, last_col: str, last_row: int) -> None:
     ws.sheet_properties.pageSetUpPr.fitToPage = True
     ws.page_margins = PageMargins(left=.25, right=.25, top=.30, bottom=.30, header=.1, footer=.1)
     ws.print_options.horizontalCentered = True
+    ws.print_options.verticalCentered = True
     ws.print_area = f"A1:{last_col}{last_row}"
 
 
