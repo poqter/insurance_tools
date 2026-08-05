@@ -223,7 +223,7 @@ def render_sidebar(allowed_ids: list[str]) -> None:
               <span class="hw-side-brand-mark">H</span>
               <div class="hw-side-brand-copy">
                 <span class="hw-side-brand-title">화랑 <b>WORKSPACE</b></span>
-                <p class="hw-side-brand-credit">Planned &amp; Built by <b>박병선 팀장</b></p>
+                <p class="hw-side-brand-credit">Planned &amp; Built by <b>박병선</b></p>
               </div>
             </div>
             '''),
@@ -419,7 +419,7 @@ def render_home(allowed_ids: list[str]) -> None:
           <span class="hw-footer-mark">H</span>
           <div class="hw-footer-copy">
             <span class="hw-footer-brand">화랑 <b>WORKSPACE</b></span>
-            <p class="hw-footer-credit">Planned &amp; Built by <b>박병선 팀장</b></p>
+            <p class="hw-footer-credit">Planned &amp; Built by <b>박병선</b></p>
           </div>
         </div>''',
         unsafe_allow_html=True,
