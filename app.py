@@ -198,7 +198,33 @@ def logout() -> None:
 
 def render_sidebar(allowed_ids: list[str]) -> None:
     with st.sidebar:
-        st.markdown('<div class="hw-side-brand"><span>H</span><strong>화랑 WORKSPACE</strong></div>', unsafe_allow_html=True)
+        st.markdown(
+            '''<style>
+            .hw-side-brand-signature { display:flex; align-items:center; gap:.72rem; margin:.08rem 0 .4rem;
+                padding:.72rem .75rem; border:1px solid rgba(94,142,207,.2); border-radius:.82rem;
+                background:linear-gradient(145deg,rgba(255,255,255,.74),rgba(238,246,255,.72));
+                box-shadow:0 6px 18px rgba(27,64,93,.055); }
+            .hw-side-brand-mark { flex:0 0 2.35rem; width:2.35rem; height:2.35rem; display:flex;
+                align-items:center; justify-content:center; border-radius:.68rem;
+                background:linear-gradient(145deg,#2F73E0,#205CC3); color:#FFFFFF;
+                box-shadow:0 5px 12px rgba(37,99,217,.2); font-size:1rem; font-weight:850; }
+            .hw-side-brand-copy { display:flex; flex-direction:column; min-width:0; gap:.16rem; }
+            .hw-side-brand-title { color:#17334B; font-size:.91rem; line-height:1.2; font-weight:800;
+                letter-spacing:-.025em; white-space:nowrap; }
+            .hw-side-brand-title b { color:#2563D9; font-weight:850; }
+            .hw-side-brand-credit { margin:0 !important; padding:0 !important; color:#667D91;
+                font-size:.61rem !important; line-height:1.3 !important; letter-spacing:0; white-space:nowrap; }
+            .hw-side-brand-credit b { color:#294A67; font-weight:800; }
+            </style>
+            <div class="hw-side-brand-signature">
+              <span class="hw-side-brand-mark">H</span>
+              <div class="hw-side-brand-copy">
+                <span class="hw-side-brand-title">화랑 <b>WORKSPACE</b></span>
+                <p class="hw-side-brand-credit">Planned &amp; Built by <b>박병선 팀장</b></p>
+              </div>
+            </div>''',
+            unsafe_allow_html=True,
+        )
         st.caption("필요한 업무를 선택하세요.")
 
         home_active = st.session_state["active_app"] == "home"
