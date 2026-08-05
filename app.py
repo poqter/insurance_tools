@@ -37,7 +37,7 @@ NOTICE = {
         "비밀번호 입력 후 Enter 키를 눌러 로그인할 수 있습니다.",
     ],
     "important": "8월1일부터 비밀번호가 변경되었습니다. 변경된 비밀번호는 박병선 팀장에게 문의해 주세요.",
-    "contact_url": "http://qr.kakao.com/talk/V5iAGlTasVARBpUks6ix1p6YKf4-",
+    "contact_url": "https://open.kakao.com/o/sFxdv4Rf",
 }
 
 
