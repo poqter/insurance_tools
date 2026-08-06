@@ -59,6 +59,7 @@ APP_DEFINITIONS = {
     },
     "renewal_vs_nonrenewal": {
         "name": "갱신 vs 비갱신", "icon": "📊", "code": "RN", "category": "고객 상담",
+        "badge": {"text": "UPDATE", "tone": "update"},
         "description": "보험료 변동을 반영해 장기 총납입액을 비교합니다.", "action": "보험료 비교 시작", "run": renewal_vs_nonrenewal.run,
     },
     "inheritance_tax": {
