@@ -174,14 +174,15 @@ def _inject_style() -> None:
         .rn-chart-zone {height:238px; border-bottom:2px solid #cad9e4; background:linear-gradient(180deg,#fbfdff 0%,#f4f8fb 100%); box-shadow:inset 0 -18px 24px rgba(44,80,106,.025);}
         .rn-bars {display:flex; align-items:stretch; gap:7px; height:100%;}
         .rn-column {position:relative; display:flex; flex:1 1 0; flex-direction:column; justify-content:flex-end; min-width:0; padding-bottom:29px; text-align:center;}
-        .rn-bar-value {align-self:center; padding:.08rem .35rem; color:#4e6d85; background:rgba(255,255,255,.78); border:1px solid rgba(92,127,153,.14); border-radius:999px; box-shadow:0 3px 9px rgba(35,70,96,.055); font-size:.78rem; font-weight:700; white-space:nowrap;}
+        .rn-bar-value {align-self:center; padding:.12rem .45rem; color:#365c78; background:rgba(255,255,255,.82); border:1px solid rgba(92,127,153,.16); border-radius:999px; box-shadow:0 3px 9px rgba(35,70,96,.065); font-size:.92rem; font-weight:800; white-space:nowrap;}
         .rn-bar {position:relative; min-height:28px; margin-top:5px; overflow:hidden; border-top:1px solid rgba(255,255,255,.7); border-radius:10px 10px 2px 2px; background:linear-gradient(160deg,var(--bar-top) 0%,var(--bar-mid) 46%,var(--bar-bottom) 100%); box-shadow:0 12px 20px rgba(37,76,105,.13),inset 1px 0 rgba(255,255,255,.28),inset -1px 0 rgba(19,51,75,.09);}
         .rn-bar::before {content:"";position:absolute;top:0;bottom:0;left:0;width:18%;background:linear-gradient(90deg,rgba(255,255,255,.30),rgba(255,255,255,0));}
         .rn-bar::after {content:"";position:absolute;top:0;right:8%;left:8%;height:2px;border-radius:999px;background:rgba(255,255,255,.55);}
         .rn-bar-age {position:absolute; right:0; bottom:5px; left:0; color:#70879a; font-size:.76rem; white-space:nowrap;}
         .rn-fixed-chart {position:relative; height:calc(100% - 29px);}
         .rn-fixed-block {position:absolute; left:0; bottom:0; display:flex; align-items:center; justify-content:center; width:var(--w); min-width:24%; height:var(--h); min-height:52px; padding:.45rem; overflow:hidden; color:#173451; border-top:1px solid rgba(255,255,255,.72); border-radius:10px 10px 2px 2px; background:linear-gradient(160deg,#f4dfa9 0%,#d9b460 48%,#b7802e 100%); text-align:center; box-shadow:0 12px 20px rgba(135,94,29,.15),inset 1px 0 rgba(255,255,255,.32),inset -1px 0 rgba(93,58,14,.10);}
-        .rn-coverage {position:absolute; top:calc(100% - var(--h)); right:0; left:var(--w); padding:.5rem .25rem 0; color:#71889c; border-top:2px solid #d9e2e8; font-size:.79rem; text-align:center;}
+        .rn-coverage {position:absolute; top:calc(100% - var(--h)); right:0; left:var(--w); padding:.55rem .3rem 0; color:#4f687c; border-top:2px solid #d9e2e8; font-size:.90rem; font-weight:650; line-height:1.45; text-align:center;}
+        .rn-coverage strong {color:#38566e; font-weight:800;}
         .rn-axis {position:relative; height:2rem; margin-top:.28rem; color:#71889c; font-size:.76rem;}
         .rn-axis span {position:absolute; top:0; white-space:nowrap;}
         .rn-axis-start {left:0;}.rn-axis-end {right:0;}.rn-axis-complete {left:var(--w); transform:translateX(-50%);}
@@ -194,7 +195,9 @@ def _inject_style() -> None:
           .rn-result-hero{margin-top:.35rem!important;break-inside:avoid;}
           .rn-metric-grid,.rn-chart-grid,.rn-panel,.rn-metric{break-inside:avoid;}
           [data-testid="stExpander"] details:not([open])>:not(summary){display:block!important;}
-          .rn-note,.rn-panel-copy,.rn-axis,.rn-bar-age,.rn-bar-value{font-size:10pt!important;}
+          .rn-note,.rn-panel-copy,.rn-axis,.rn-bar-age{font-size:10pt!important;}
+          .rn-bar-value{font-size:11pt!important;}
+          .rn-coverage{font-size:10.5pt!important;}
           .rn-result-copy{font-size:15pt!important}.rn-result-value{font-size:21pt!important}
         }
         </style>
@@ -263,7 +266,7 @@ def _render_chart(
                 <div class="rn-chart-zone">
                   <div class="rn-fixed-chart" style="--w:{pay_width:.1f}%;--h:{fixed_height:.1f}%">
                     <div class="rn-fixed-block"><span><strong>월 {_won(fixed_premium)}</strong><br>{fixed_end_age}세 납입 완료</span></div>
-                    <div class="rn-coverage">{fixed_end_age}세 이후 {end_age}세까지 보장 유지</div>
+                    <div class="rn-coverage"><strong>{fixed_end_age}세 이후</strong><br>{end_age}세까지 보장 유지</div>
                   </div>
                 </div>
                 <div class="rn-axis" style="--w:{pay_width:.1f}%"><span class="rn-axis-start">가입 {current_age}세</span><span class="rn-axis-complete">납입 완료 {fixed_end_age}세</span>{end_label}</div>
