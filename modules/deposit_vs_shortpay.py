@@ -330,41 +330,56 @@ def render_styles() -> None:
 
         .hw-rate-box {
             margin-top: 18px;
-            padding: 23px 20px 21px;
-            text-align: center;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            padding: 0;
             border: 1px solid rgba(47,111,163,.22);
             border-radius: 16px;
             color: var(--hw-text);
             background: linear-gradient(135deg, #f4f9fd, var(--hw-blue-soft));
             box-shadow: 0 9px 22px rgba(22,50,79,.07);
+            overflow: hidden;
+        }
+        .hw-rate-panel {
+            min-width: 0;
+            padding: 21px 24px 19px;
+            text-align: center;
+        }
+        .hw-rate-panel + .hw-rate-panel {
+            border-left: 1px solid rgba(47,111,163,.18);
+            background: rgba(255,255,255,.34);
         }
         .hw-rate-label { color: var(--hw-muted); font-size: 14px; font-weight: 650; }
-        .hw-rate-main { margin-top: 5px; color: var(--hw-navy); font-size: 18px; font-weight: 750; }
-        .hw-rate-percent {
+        .hw-rate-main {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 2px 4px;
+            min-height: 44px;
+            margin-top: 5px;
+            color: var(--hw-navy);
+            font-size: 18px;
+            font-weight: 750;
+        }
+        .hw-rate-percent,
+        .hw-required-amount {
             display: inline-block;
             margin: 0 4px;
-            color: #d83b3b;
             font-size: 34px;
             line-height: 1.1;
             font-weight: 900;
             letter-spacing: -.5px;
+        }
+        .hw-rate-percent {
+            color: #d83b3b;
             text-shadow: 0 3px 13px rgba(216,59,59,.13);
         }
-        .hw-rate-sub {
-            margin-top: 11px;
-            color: #53667b;
-            font-size: 16px;
-            line-height: 1.55;
-            font-weight: 650;
+        .hw-required-amount {
+            color: #176fa7;
+            text-shadow: 0 3px 13px rgba(23,111,167,.12);
         }
         .hw-current-rate { color: var(--hw-navy); font-weight: 850; }
-        .hw-required-amount {
-            display: inline-block;
-            margin: 0 2px;
-            color: #176fa7;
-            font-size: 20px;
-            font-weight: 900;
-        }
 
         .hw-note { margin-top: 14px; color: var(--hw-muted); font-size: 11px; line-height: 1.55; }
 
@@ -377,9 +392,13 @@ def render_styles() -> None:
             .hw-chart-insight strong { font-size: 15px; }
             .hw-timeline { grid-template-columns: 1fr 1fr; gap: 22px 0; }
             .hw-calc-grid { grid-template-columns: 1fr; }
-            .hw-rate-percent { font-size: 29px; }
-            .hw-rate-sub { font-size: 14px; }
-            .hw-required-amount { font-size: 18px; }
+            .hw-rate-box { grid-template-columns: 1fr; }
+            .hw-rate-panel + .hw-rate-panel {
+                border-top: 1px solid rgba(47,111,163,.18);
+                border-left: 0;
+            }
+            .hw-rate-percent,
+            .hw-required-amount { font-size: 29px; }
         }
 
         @media print {
@@ -648,11 +667,13 @@ def run():
     st.markdown(
         f"""
         <div class="hw-rate-box">
-            <div class="hw-rate-label">단기납과 같은 예상 이익을 내려면</div>
-            <div class="hw-rate-main">적금금리가 연 <span class="hw-rate-percent">{required_rate:,.2f}%</span> 필요합니다.</div>
-            <div class="hw-rate-sub">
-                현재 금리 연 <span class="hw-current-rate">{annual_rate:,.1f}%</span>를 유지한다면<br>
-                월납입액은 약 <span class="hw-required-amount">{format_currency(required_monthly)}</span>이 필요합니다.
+            <div class="hw-rate-panel">
+                <div class="hw-rate-label">단기납과 같은 예상 이익을 내려면</div>
+                <div class="hw-rate-main">적금금리가 연 <span class="hw-rate-percent">{required_rate:,.2f}%</span> 필요합니다.</div>
+            </div>
+            <div class="hw-rate-panel">
+                <div class="hw-rate-label">현재 금리 연 <span class="hw-current-rate">{annual_rate:,.1f}%</span>를 유지한다면</div>
+                <div class="hw-rate-main">월납입액은 약 <span class="hw-required-amount">{format_currency(required_monthly)}</span>이 필요합니다.</div>
             </div>
         </div>
         """,
