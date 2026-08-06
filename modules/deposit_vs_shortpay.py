@@ -1,156 +1,575 @@
+import time
 
 import streamlit as st
-import time
+
 from .ui_components import page_header
 
-def run():
-    # 강조 박스 함수
-    def emphasize_box(text, bg="#e6f2ff", color="#003366"):
-        return f"""<div style='background-color:{bg}; color:{color}; padding:12px; border-radius:10px;
-                    font-size:20px; font-weight:bold; margin-bottom:10px;'>{text}</div>"""
 
-    # 금액 포맷 함수 (만원 이하 삭제용)
-    def format_currency_trim(value):
-        won = int(value * 10000)
-        if won % 10000 == 0:
-            return f"{won // 10000:,}만원"
-        else:
-            return f"{won:,}원"
+TAX_RATE = 0.154
+DEPOSIT_REPEAT_YEARS = 10
 
-    # 통합 사이드바와 분리된 본문 안내
-    with st.expander("인쇄 방법 및 계산기 정보"):
-        st.markdown("""
-        📄 **인쇄 안내**
 
-        🖨️ 오른쪽 위 ... 버튼 → print를 누르면 인쇄하거나 PDF로 저장할 수 있어요.
+def format_currency(value_manwon: float) -> str:
+    """만원 단위 값을 자연스러운 원화 문자열로 변환합니다."""
+    won = int(round(value_manwon * 10_000))
+    sign = "-" if won < 0 else ""
+    won = abs(won)
 
-        🔧 **설정 더 보기**에서:
-        - 머리글과 바닥글 ❌ 체크 해제
-        - 배경 그래픽 ✅ 체크
+    if won >= 100_000_000 and won % 1_000_000 == 0:
+        eok = won / 100_000_000
+        text = f"{eok:,.2f}".rstrip("0").rstrip(".")
+        return f"{sign}{text}억원"
+    if won % 10_000 == 0:
+        return f"{sign}{won // 10_000:,}만원"
+    return f"{sign}{won:,}원"
 
-        🔍 배율 조정으로 페이지에 알맞게 설정
 
-        🚫 인쇄 시에는 이 안내 페이지 닫기.             
-        """)
-        st.markdown("<hr>", unsafe_allow_html=True)
-        st.markdown("""
-        <div style='margin-bottom:20px;'>👨‍💻 <strong>제작자:</strong> 비전본부 드림지점 박병선 팀장</div>
-        <div style='margin-bottom:20px;'>🗓️ <strong>버전:</strong> v1.0.0</div>
-        <div style='margin-bottom:20px;'>📅 <strong>최종 업데이트:</strong> 2026-05-17</div>
-        """, unsafe_allow_html=True)
+def calculate_deposit(monthly_manwon: float, annual_rate: float) -> dict:
+    """기존 방식대로 1년 적금의 단리 세후이자를 10회 합산합니다."""
+    monthly_rate = annual_rate / 100 / 12
+    interest_weight = sum(12 - month for month in range(12))  # 12+...+1 = 78
+    one_year_principal = monthly_manwon * 12
+    pretax_interest = monthly_manwon * monthly_rate * interest_weight
+    tax = pretax_interest * TAX_RATE
+    aftertax_interest = pretax_interest - tax
+    ten_year_interest = aftertax_interest * DEPOSIT_REPEAT_YEARS
 
-    # 제목 링크 아이콘 숨기기
-    st.markdown("""
-    <style>
-    h1 a, h2 a, h3 a { display: none !important; }
-    </style>
-    """, unsafe_allow_html=True)
+    return {
+        "one_year_principal": one_year_principal,
+        "pretax_interest": pretax_interest,
+        "tax": tax,
+        "aftertax_interest": aftertax_interest,
+        "ten_year_interest": ten_year_interest,
+        "ten_year_total_paid": monthly_manwon * 12 * DEPOSIT_REPEAT_YEARS,
+        "interest_weight": interest_weight,
+    }
 
-    page_header("고객 상담", "적금 vs 단기납", "10년 기준 적금과 단기납의 예상 결과를 한눈에 비교합니다.", "DS")
 
-    col1, col2 = st.columns(2)
+def calculate_shortpay(
+    monthly_manwon: float,
+    pay_years: int,
+    refund_rate: float,
+) -> dict:
+    total_premium = monthly_manwon * 12 * pay_years
+    refund_amount = total_premium * refund_rate / 100
+    refund_gain = refund_amount - total_premium
 
-    with col1:
-        st.header("📌 적금")
-        deposit_monthly = st.number_input("월 납입액 (만원)", min_value=0, step=1, value=None, format="%d", placeholder="예: 100")
-        deposit_rate = st.number_input("연 이자율 (%)", min_value=0.0, step=0.1, value=None, placeholder="예: 2.5")
+    return {
+        "total_premium": total_premium,
+        "refund_amount": refund_amount,
+        "refund_gain": refund_gain,
+    }
 
-    with col2:
-        st.header("📌 단기납")
-        insurance_monthly = st.number_input("월 납입액 (만원)", min_value=0, step=1, value=None, format="%d", placeholder="예: 100", key="ins_monthly")
-        pay_years = st.selectbox("납입 기간 (년)", [5, 7], index=0)
-        return_rate = st.number_input("10년 시점 해지환급률 (%)", min_value=0.0, step=0.1, value=None, placeholder="예: 123.0")
 
-    if st.button("결과 보기"):
-        if deposit_monthly in (None, 0) or deposit_rate in (None, 0.0) or insurance_monthly in (None, 0) or return_rate in (None, 0.0):
-            st.warning("⚠️ 모든 항목에 값을 입력해주세요.")
-        else:
-            with st.spinner("결과를 계산 중입니다..."):
-                time.sleep(0.5)
+def calculate_required_deposit_rate(
+    monthly_manwon: float,
+    target_gain_manwon: float,
+    interest_weight: int = 78,
+) -> float:
+    """기존 단리 방식에서 목표 이익에 도달하기 위한 적금 연이율입니다."""
+    if monthly_manwon <= 0 or target_gain_manwon <= 0:
+        return 0.0
+    monthly_rate = (
+        (target_gain_manwon / DEPOSIT_REPEAT_YEARS)
+        / (monthly_manwon * interest_weight * (1 - TAX_RATE))
+    )
+    return monthly_rate * 12 * 100
 
-            st.markdown("---")
-            st.subheader("🔍 결과 분석")
 
-            monthly_rate = (deposit_rate / 100) / 12
-            total_deposit = deposit_monthly * 12
-            interest_sum = sum([deposit_monthly * monthly_rate * (12 - m) for m in range(12)])
-            pre_tax_interest = interest_sum
-            tax = pre_tax_interest * 0.154
-            after_tax_interest = pre_tax_interest - tax
-            monthly_avg_interest = after_tax_interest / 12
-            total_after_tax_interest_10y = after_tax_interest * 10
+def calculate_required_monthly_payment(
+    annual_rate: float,
+    target_gain_manwon: float,
+    interest_weight: int = 78,
+) -> float:
+    """현재 금리에서 목표 이익에 도달하기 위한 적금 월납입액입니다."""
+    monthly_rate = annual_rate / 100 / 12
+    denominator = monthly_rate * interest_weight * (1 - TAX_RATE) * DEPOSIT_REPEAT_YEARS
+    if denominator <= 0:
+        return 0.0
+    return target_gain_manwon / denominator
 
-            total_insurance = insurance_monthly * 12 * pay_years
-            refund = total_insurance * (return_rate / 100)
-            bonus = refund - total_insurance
-            monthly_bonus = bonus / 120
 
-            sum1, sum2 = st.columns(2)
-            with sum1:
-                st.markdown("### 📜 적금 계산 요약")
-                st.write(f"- 원금 합계 (1년): {format_currency_trim(total_deposit)}")
-                st.write(f"- 세전 이자: {format_currency_trim(pre_tax_interest)}")
-                st.write(f"- 이자 과세 (15.4%): {format_currency_trim(tax)}")
-                st.write(f"- 세후 이자: {format_currency_trim(after_tax_interest)}")
+def render_styles() -> None:
+    st.markdown(
+        """
+        <style>
+        :root {
+            --hw-navy: #16324f;
+            --hw-blue: #2f6fa3;
+            --hw-blue-soft: #eaf2f8;
+            --hw-gold: #c9963d;
+            --hw-gold-deep: #a87422;
+            --hw-gold-soft: #fbf5e9;
+            --hw-text: #203247;
+            --hw-muted: #6e7e90;
+            --hw-line: #dce4ec;
+            --hw-surface: #ffffff;
+        }
 
-            with sum2:
-                st.markdown("### 📜 단기납 계산 요약")
-                st.write(f"- 원금 합계 ({pay_years}년): {format_currency_trim(total_insurance)}")
-                st.write(f"- 10년 시점 해지환급금: {format_currency_trim(refund)}")
-                st.write(f"- 단기납 보너스 금액: {format_currency_trim(bonus)}")
-                st.write(f"- 10년 이후 해지 시, **비과세 혜택** 적용 가능")
+        h1 a, h2 a, h3 a { display: none !important; }
 
-            st.markdown("### ✅ 핵심 요약")
-            colm1, colm2 = st.columns(2)
-            with colm1:
-                st.metric("세후 이자 총합 (10년 기준)", f"{int(total_after_tax_interest_10y // 1)}만원")
-                st.markdown(emphasize_box(f"세후 이자 월 평균: {monthly_avg_interest * 10000:,.0f}원", bg="#e6f2ff", color="#003366"), unsafe_allow_html=True)
-            with colm2:
-                st.metric("단기납 보너스 총합 (10년 기준)", f"{int(bonus // 1)}만원", delta=f"{bonus - total_after_tax_interest_10y:,.0f}만원")
-                st.markdown(emphasize_box(f"단기납 보너스 월 평균: {monthly_bonus * 10000:,.0f}원", bg="#fff3e6", color="#663300"), unsafe_allow_html=True)
+        div[data-testid="stForm"] {
+            padding: 24px 24px 20px;
+            border: 1px solid rgba(47, 111, 163, 0.18);
+            border-radius: 18px;
+            background:
+                radial-gradient(circle at 100% 0%, rgba(201,150,61,.10), transparent 32%),
+                linear-gradient(145deg, rgba(255,255,255,.98), rgba(244,248,252,.98));
+            box-shadow: 0 12px 30px rgba(22, 50, 79, 0.07);
+        }
 
-            st.markdown("---")
-            st.markdown("### 📌 참고 계산")
+        div[data-testid="stForm"] label p {
+            color: var(--hw-text);
+            font-weight: 650;
+        }
 
-            if deposit_rate > 0:
-                monthly_rate = (deposit_rate / 100) / 12
-                factor = sum([(12 - m) * monthly_rate for m in range(12)])
-                monthly_required = (bonus / 10) / (factor * (1 - 0.154))
-                st.markdown(f"""
-                <div style='font-size:18px; margin-top:8px; margin-bottom:6px;'>
-                    👉 단기납 보너스 총합과 같으려면, 적금 월 납입액을 <span style='color:red; font-weight:bold;'>{monthly_required:,.0f}만원</span>으로 변경해야 합니다.
-                </div>
-                """, unsafe_allow_html=True)
+        div[data-testid="stForm"] div[data-baseweb="input"] > div,
+        div[data-testid="stForm"] div[data-baseweb="select"] > div {
+            border-color: rgba(47, 111, 163, 0.20);
+            background: rgba(255,255,255,.94);
+        }
 
-            if deposit_monthly > 0:
-                r_monthly = (bonus / 10) / (deposit_monthly * 78 * (1 - 0.154))
-                deposit_rate_needed = r_monthly * 12 * 100
-                st.markdown(f"""
-                <div style='font-size:18px; margin-top:4px; margin-bottom:8px;'>
-                    👉 현재 적금 월 납입액으로 단기납 보너스 총합과 같아지려면, 연 이자율이 <span style='color:red; font-weight:bold;'>{deposit_rate_needed:,.2f}%</span>여야 합니다.
-                </div>
-                """, unsafe_allow_html=True)
+        div[data-testid="stFormSubmitButton"] button {
+            min-height: 48px;
+            border: 0;
+            border-radius: 12px;
+            color: white;
+            font-weight: 750;
+            background: linear-gradient(135deg, var(--hw-navy), var(--hw-blue));
+            box-shadow: 0 8px 18px rgba(22, 50, 79, 0.18);
+            transition: transform .16s ease, box-shadow .16s ease;
+        }
 
-            st.markdown("""
-            <style>
-            @media print {
-                html, body {
-                    margin: 0;
-                    padding: 0;
-                    height: auto !important;
-                    overflow: visible !important;
-                }
-                .block-container {
-                    padding-bottom: 0 !important;
-                    margin-bottom: 0 !important;
-                }
-                main:after {
-                    content: none !important;
-                }
-                .no-print {
-                    display: none;
-                }
+        div[data-testid="stFormSubmitButton"] button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 11px 24px rgba(22, 50, 79, 0.24);
+        }
+
+        .hw-input-heading {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 0 0 14px;
+            color: var(--hw-navy);
+            font-size: 17px;
+            font-weight: 750;
+        }
+
+        .hw-input-heading::before {
+            content: "";
+            width: 5px;
+            height: 19px;
+            border-radius: 999px;
+            background: linear-gradient(var(--hw-gold), var(--hw-gold-deep));
+        }
+
+        .hw-result-hero {
+            margin: 22px 0 4px;
+            padding: 25px 18px 22px;
+            text-align: center;
+            border: 1px solid rgba(201,150,61,.26);
+            border-radius: 18px;
+            background: linear-gradient(135deg, var(--hw-gold-soft), #ffffff 68%);
+        }
+
+        .hw-result-context { color: var(--hw-muted); font-size: 14px; }
+        .hw-result-title { margin-top: 6px; color: var(--hw-navy); font-size: 28px; font-weight: 800; }
+        .hw-result-title strong { color: var(--hw-gold-deep); }
+        .hw-result-basis { margin-top: 7px; color: var(--hw-muted); font-size: 13px; }
+
+        .hw-chart {
+            position: relative;
+            min-height: 430px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+            gap: clamp(64px, 13vw, 145px);
+            padding: 54px 28px 18px;
+            margin: 4px 0 12px;
+            border-bottom: 1px solid var(--hw-line);
+        }
+
+        .hw-chart-grid {
+            position: absolute;
+            inset: 54px 0 64px;
+            z-index: 0;
+            background: repeating-linear-gradient(
+                to bottom,
+                rgba(110,126,144,.12) 0,
+                rgba(110,126,144,.12) 1px,
+                transparent 1px,
+                transparent 74px
+            );
+        }
+
+        .hw-bar-group { position: relative; z-index: 1; width: min(176px, 31vw); text-align: center; }
+        .hw-bar-value { margin-bottom: 8px; color: var(--hw-navy); font-size: 19px; font-weight: 800; }
+        .hw-bar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 56px;
+            border-radius: 9px 9px 2px 2px;
+            box-shadow: 0 8px 18px rgba(22,50,79,.10);
+        }
+        .hw-bar span { font-size: 13px; line-height: 1.38; font-weight: 750; }
+        .hw-deposit-bar { color: white; background: linear-gradient(180deg, #5e91bb, var(--hw-blue)); }
+        .hw-shortpay-bar { color: white; background: linear-gradient(180deg, #ddb766, var(--hw-gold-deep)); }
+        .hw-bar-name { margin-top: 11px; color: var(--hw-navy); font-size: 17px; font-weight: 800; }
+        .hw-bar-detail { margin-top: 3px; color: var(--hw-muted); font-size: 12px; }
+
+        .hw-chart-badge {
+            position: absolute;
+            left: calc(100% + 13px);
+            top: 35px;
+            padding: 7px 11px;
+            white-space: nowrap;
+            border: 1px solid rgba(201,150,61,.55);
+            border-radius: 999px;
+            color: #7a5317;
+            background: var(--hw-gold-soft);
+            font-size: 12px;
+            font-weight: 750;
+        }
+
+        .hw-timeline {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            margin: 24px 0 26px;
+        }
+
+        .hw-phase {
+            position: relative;
+            padding: 15px 7px 0;
+            text-align: center;
+            border-top: 2px solid var(--hw-line);
+        }
+
+        .hw-phase::before {
+            content: "";
+            position: absolute;
+            top: -6px;
+            left: calc(50% - 5px);
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--hw-line);
+        }
+
+        .hw-phase-main { color: var(--hw-navy); font-size: 13px; font-weight: 750; }
+        .hw-phase-sub { margin-top: 3px; color: var(--hw-muted); font-size: 11px; line-height: 1.35; }
+        .hw-phase-point { border-top-color: var(--hw-gold); }
+        .hw-phase-point::before { background: var(--hw-gold); box-shadow: 0 0 0 4px rgba(201,150,61,.14); }
+
+        .hw-calc-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 18px;
+            margin-top: 8px;
+        }
+
+        .hw-calc-card {
+            padding: 18px 19px 15px;
+            border: 1px solid var(--hw-line);
+            border-radius: 14px;
+            background: var(--hw-surface);
+            box-shadow: 0 7px 19px rgba(22,50,79,.05);
+        }
+
+        .hw-calc-title { margin-bottom: 9px; color: var(--hw-navy); font-size: 15px; font-weight: 800; }
+        .hw-calc-row { display: flex; justify-content: space-between; gap: 16px; padding: 7px 0; border-bottom: 1px solid rgba(220,228,236,.72); color: var(--hw-muted); font-size: 13px; }
+        .hw-calc-row:last-child { border-bottom: 0; }
+        .hw-calc-row span:last-child { color: var(--hw-text); font-weight: 700; text-align: right; }
+        .hw-calc-result span { color: var(--hw-navy) !important; font-weight: 800 !important; }
+
+        .hw-rate-box {
+            margin-top: 18px;
+            padding: 18px;
+            text-align: center;
+            border: 1px solid rgba(47,111,163,.17);
+            border-radius: 13px;
+            color: var(--hw-text);
+            background: var(--hw-blue-soft);
+        }
+        .hw-rate-box strong { color: var(--hw-navy); font-size: 21px; }
+        .hw-rate-sub { margin-top: 5px; color: var(--hw-muted); font-size: 12px; }
+
+        .hw-note { margin-top: 14px; color: var(--hw-muted); font-size: 11px; line-height: 1.55; }
+
+        @media (max-width: 680px) {
+            .hw-result-title { font-size: 23px; }
+            .hw-chart { gap: 36px; padding-left: 8px; padding-right: 8px; }
+            .hw-bar-group { width: 132px; }
+            .hw-chart-badge { left: auto; right: -14px; top: 10px; font-size: 10px; }
+            .hw-timeline { grid-template-columns: 1fr 1fr; gap: 22px 0; }
+            .hw-calc-grid { grid-template-columns: 1fr; }
+        }
+
+        @media print {
+            header, footer, [data-testid="stSidebar"], [data-testid="stForm"], [data-testid="stExpander"] {
+                display: none !important;
             }
-            h1 a, h2 a, h3 a { display: none !important; }
-            </style>
-            """, unsafe_allow_html=True)
+            .block-container { padding: .35rem 1rem 0 !important; }
+            .hw-chart { min-height: 380px; }
+            .hw-calc-card { box-shadow: none; }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_bar_chart(
+    monthly: float,
+    pay_years: int,
+    deposit_interest: float,
+    refund_gain: float,
+    advantage: float,
+) -> None:
+    chart_max = max(deposit_interest, refund_gain, 1)
+    deposit_height = max(56, min(300, deposit_interest / chart_max * 300))
+    shortpay_height = max(56, min(300, refund_gain / chart_max * 300))
+
+    if advantage >= 0:
+        badge = f'<div class="hw-chart-badge">적금 대비 +{format_currency(advantage)}</div>'
+    else:
+        badge = '<div class="hw-chart-badge">현재 조건은 적금 우위</div>'
+
+    st.markdown(
+        f"""
+        <div class="hw-chart" role="img" aria-label="적금 10년 누적 세후이자와 단기납 10년 예상 환급차익 비교">
+            <div class="hw-chart-grid"></div>
+            <div class="hw-bar-group">
+                <div class="hw-bar-value">{format_currency(deposit_interest)}</div>
+                <div class="hw-bar hw-deposit-bar" style="height:{deposit_height:.1f}px">
+                    <span>10년 누적<br>세후이자</span>
+                </div>
+                <div class="hw-bar-name">적금</div>
+                <div class="hw-bar-detail">월 {format_currency(monthly)} · 1년 적금 10회</div>
+            </div>
+            <div class="hw-bar-group">
+                {badge}
+                <div class="hw-bar-value">{format_currency(refund_gain)}</div>
+                <div class="hw-bar hw-shortpay-bar" style="height:{shortpay_height:.1f}px">
+                    <span>10년 시점<br>예상 환급차익</span>
+                </div>
+                <div class="hw-bar-name">단기납</div>
+                <div class="hw-bar-detail">월 {format_currency(monthly)} · {pay_years}년납 후 유지</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_timeline(pay_years: int) -> None:
+    holding_years = 10 - pay_years
+    st.markdown(
+        f"""
+        <div class="hw-timeline">
+            <div class="hw-phase">
+                <div class="hw-phase-main">1~{pay_years}년 납입</div>
+                <div class="hw-phase-sub">보험료 납입</div>
+            </div>
+            <div class="hw-phase">
+                <div class="hw-phase-main">{pay_years + 1}~9년 유지</div>
+                <div class="hw-phase-sub">추가납입 없이 약 {holding_years}년 유지</div>
+            </div>
+            <div class="hw-phase hw-phase-point">
+                <div class="hw-phase-main">10년 주요 시점</div>
+                <div class="hw-phase-sub">환급률·비과세 요건 확인</div>
+            </div>
+            <div class="hw-phase">
+                <div class="hw-phase-main">해지 또는 계속 유지</div>
+                <div class="hw-phase-sub">설계서에 따라 환급금 추가 증가 가능</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_calculation_details(deposit: dict, shortpay: dict, pay_years: int, refund_rate: float) -> None:
+    st.markdown(
+        f"""
+        <div class="hw-calc-grid">
+            <div class="hw-calc-card">
+                <div class="hw-calc-title">적금 계산 내역</div>
+                <div class="hw-calc-row"><span>1년 납입원금</span><span>{format_currency(deposit['one_year_principal'])}</span></div>
+                <div class="hw-calc-row"><span>1년 세전이자</span><span>{format_currency(deposit['pretax_interest'])}</span></div>
+                <div class="hw-calc-row"><span>이자소득세 15.4%</span><span>{format_currency(deposit['tax'])}</span></div>
+                <div class="hw-calc-row"><span>1년 세후이자</span><span>{format_currency(deposit['aftertax_interest'])}</span></div>
+                <div class="hw-calc-row hw-calc-result"><span>10년 누적 세후이자</span><span>{format_currency(deposit['ten_year_interest'])}</span></div>
+            </div>
+            <div class="hw-calc-card">
+                <div class="hw-calc-title">단기납 계산 내역</div>
+                <div class="hw-calc-row"><span>납입기간</span><span>{pay_years}년</span></div>
+                <div class="hw-calc-row"><span>총납입보험료</span><span>{format_currency(shortpay['total_premium'])}</span></div>
+                <div class="hw-calc-row"><span>10년 예상 환급률</span><span>{refund_rate:,.1f}%</span></div>
+                <div class="hw-calc-row"><span>10년 예상 해지환급금</span><span>{format_currency(shortpay['refund_amount'])}</span></div>
+                <div class="hw-calc-row hw-calc-result"><span>예상 환급차익</span><span>{format_currency(shortpay['refund_gain'])}</span></div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def run():
+    render_styles()
+
+    with st.expander("인쇄 방법 및 계산 기준"):
+        st.markdown(
+            """
+            **계산 기준**
+
+            - 적금은 1년 만기 상품을 동일한 월납입액과 금리로 10회 반복한 단리 계산입니다.
+            - 매년 만기 원금의 재예치와 복리 효과는 반영하지 않습니다.
+            - 적금 이자에는 이자소득세 15.4%를 반영합니다.
+            - 단기납은 입력한 10년 시점 예상 해지환급률을 기준으로 계산합니다.
+
+            **인쇄 안내**
+
+            오른쪽 위 메뉴에서 Print를 선택한 뒤 머리글과 바닥글을 해제하고 배경 그래픽을 켜주세요.
+            """
+        )
+        st.markdown(
+            """
+            <div style="margin-top:14px; color:#6e7e90; font-size:12px;">
+                제작자: 비전본부 드림지점 박병선 팀장 · 버전 v2.0.0 · 2026-08-06
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    page_header(
+        "고객 상담",
+        "적금 vs 단기납",
+        "같은 월납입금액으로 10년 예상 이익을 간편하게 비교합니다.",
+        "DS",
+    )
+
+    with st.form("hwarang_deposit_shortpay_form"):
+        st.markdown('<div class="hw-input-heading">상담 조건 입력</div>', unsafe_allow_html=True)
+        left, right = st.columns(2, gap="large")
+
+        with left:
+            monthly = st.number_input(
+                "공통 월납입금액 (만원)",
+                min_value=1,
+                step=10,
+                value=100,
+                format="%d",
+                help="적금과 단기납에 동일하게 적용되는 월납입금액입니다.",
+            )
+            annual_rate = st.number_input(
+                "적금 연이율 (%)",
+                min_value=0.1,
+                max_value=30.0,
+                step=0.1,
+                value=3.0,
+                format="%.1f",
+                help="1년 만기 적금의 세전 연이율을 입력하세요.",
+            )
+
+        with right:
+            pay_years = st.selectbox(
+                "단기납 납입기간",
+                [5, 7],
+                index=0,
+                format_func=lambda value: f"{value}년납",
+            )
+            refund_rate = st.number_input(
+                "10년 시점 예상 해지환급률 (%)",
+                min_value=100.0,
+                max_value=300.0,
+                step=0.1,
+                value=123.0,
+                format="%.1f",
+                help="해당 상품의 가입설계서에 기재된 10년 시점 환급률을 입력하세요.",
+            )
+
+        submitted = st.form_submit_button("10년 예상 이익 비교", use_container_width=True)
+
+    if submitted:
+        st.session_state["hwarang_ds_result"] = {
+            "monthly": float(monthly),
+            "annual_rate": float(annual_rate),
+            "pay_years": int(pay_years),
+            "refund_rate": float(refund_rate),
+        }
+
+    values = st.session_state.get("hwarang_ds_result")
+    if not values:
+        st.info("네 가지 상담 조건을 확인한 뒤 ‘10년 예상 이익 비교’를 눌러주세요.")
+        return
+
+    with st.spinner("예상 결과를 계산하고 있습니다..."):
+        time.sleep(0.25)
+
+    monthly = values["monthly"]
+    annual_rate = values["annual_rate"]
+    pay_years = values["pay_years"]
+    refund_rate = values["refund_rate"]
+
+    deposit = calculate_deposit(monthly, annual_rate)
+    shortpay = calculate_shortpay(monthly, pay_years, refund_rate)
+    advantage = shortpay["refund_gain"] - deposit["ten_year_interest"]
+
+    if advantage >= 0:
+        headline = f"단기납의 예상 환급차익이 <strong>{format_currency(advantage)} 더 큽니다</strong>"
+    else:
+        headline = f"현재 조건에서는 적금 누적 세후이자가 <strong>{format_currency(abs(advantage))} 더 큽니다</strong>"
+
+    st.markdown(
+        f"""
+        <div class="hw-result-hero">
+            <div class="hw-result-context">같은 월 {format_currency(monthly)}을 활용했을 때</div>
+            <div class="hw-result-title">{headline}</div>
+            <div class="hw-result-basis">적금 1년 만기 10회 반복 · 단기납 {pay_years}년납 후 10년 시점</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    render_bar_chart(
+        monthly,
+        pay_years,
+        deposit["ten_year_interest"],
+        shortpay["refund_gain"],
+        advantage,
+    )
+    render_timeline(pay_years)
+    render_calculation_details(deposit, shortpay, pay_years, refund_rate)
+
+    required_rate = calculate_required_deposit_rate(
+        monthly,
+        shortpay["refund_gain"],
+        deposit["interest_weight"],
+    )
+    required_monthly = calculate_required_monthly_payment(
+        annual_rate,
+        shortpay["refund_gain"],
+        deposit["interest_weight"],
+    )
+
+    st.markdown(
+        f"""
+        <div class="hw-rate-box">
+            단기납과 같은 예상 이익을 내려면 적금금리가 연 <strong>{required_rate:,.2f}%</strong> 필요합니다.
+            <div class="hw-rate-sub">현재 금리 연 {annual_rate:,.1f}%를 유지한다면 월납입액은 약 {format_currency(required_monthly)}이 필요합니다.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        """
+        <div class="hw-note">
+            적금은 1년 만기 상품을 동일 조건으로 10회 반복한 단리 계산이며 원금 재예치에 따른 복리는 반영하지 않습니다.
+            단기납은 10년에 반드시 해지해야 하는 상품이 아니며, 계속 유지하는 경우 상품의 해지환급금 예시표에 따라 환급금이 추가로 증가할 수 있습니다.
+            실제 해지환급금과 비과세 적용 여부는 해당 상품의 설계서, 계약조건 및 관련 요건에 따라 달라질 수 있습니다.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
