@@ -191,7 +191,7 @@ def _inject_style() -> None:
         @media (max-width:760px) {.rn-chart-grid,.rn-metric-grid{grid-template-columns:1fr}.rn-chart-zone{height:220px}}
         @media print {
           .block-container{max-width:none!important;padding:.3cm!important;}
-          [data-testid="stHeader"],[data-testid="stToolbar"],[data-testid="stSidebar"],[data-testid="stStatusWidget"],.stButton,.st-key-rn_input_area{display:none!important;}
+          [data-testid="stHeader"],[data-testid="stToolbar"],[data-testid="stSidebar"],[data-testid="stStatusWidget"],.stButton,.st-key-rn_guide,.st-key-rn_input_area{display:none!important;}
           .rn-result-hero{margin-top:.35rem!important;break-inside:avoid;}
           .rn-metric-grid,.rn-chart-grid,.rn-panel,.rn-metric{break-inside:avoid;}
           [data-testid="stExpander"] details:not([open])>:not(summary){display:block!important;}
@@ -287,6 +287,39 @@ def run() -> None:
         "현재 부담과 앞으로 예상되는 총보험료를 함께 비교합니다.",
         "RN",
     )
+
+    with st.container(key="rn_guide"):
+        with st.expander("📘 사용방법 및 인쇄 안내", expanded=False):
+            guide_use, guide_print = st.columns(2, gap="large")
+            with guide_use:
+                st.markdown("#### 사용방법")
+                st.markdown(
+                    dedent(
+                        """
+                        1. **기본 정보**에서 현재 나이, 보장 종료 나이와 은퇴 예상 연령을 입력합니다.
+                        2. **갱신형 정보**에서 현재 보험료, 갱신주기와 다음 갱신까지 남은 기간을 입력합니다.
+                        3. 간편하게 비교할 때는 **간편 시나리오**를 사용합니다.
+                        4. 가입제안서에 갱신보험료가 기재되어 있다면 **가입제안서 직접 입력**을 선택합니다.
+                        5. 비교하려는 비갱신형 보험료와 납입기간을 입력하면 결과가 자동으로 계산됩니다.
+                        """
+                    ).strip()
+                )
+            with guide_print:
+                st.markdown("#### 인쇄방법")
+                st.markdown(
+                    dedent(
+                        """
+                        1. 모든 정보를 입력하고 결과를 확인합니다.
+                        2. 브라우저에서 **Ctrl + P**를 누릅니다.
+                        3. 용지는 **A4**, 방향은 **세로**로 설정합니다.
+                        4. 배율은 우선 **페이지에 맞춤**을 선택합니다.
+                        5. 그래프 색상을 출력하려면 **배경 그래픽**을 활성화합니다.
+                        6. 입력 영역은 제외되고 **현재 시점의 핵심 비교**부터 인쇄됩니다.
+                        7. 갱신 시점별 상세 보험료 표는 인쇄 시 항상 펼쳐져 표시됩니다.
+                        """
+                    ).strip()
+                )
+            st.caption("브라우저와 프린터에 따라 결과가 달라질 수 있습니다. 내용이 잘리는 경우 배율을 90~95%로 조정해 주세요.")
 
     with st.container(key="rn_input_area"):
         basic_col, renew_col, fixed_col = st.columns(3, gap="medium")
@@ -412,7 +445,7 @@ def run() -> None:
 
     comparison_rows = [
         {"구분": "현재 이후 납입", "갱신형 유지": _won(renew_future), "비갱신형 전환": _won(fixed_total)},
-        {"구분": f"{retirement_age}세 이후 예상 납입", "갱신형 유지": _won(retire_renew), "비갱신형 전환": _won(retire_fixed)},
+        {"구분": f"{retirement_age}세 은퇴 이후 예상 납입", "갱신형 유지": _won(retire_renew), "비갱신형 전환": _won(retire_fixed)},
     ]
     if past_paid > 0:
         comparison_rows.insert(0, {"구분": "현재까지 납입", "갱신형 유지": _won(past_paid), "비갱신형 전환": _won(past_paid)})
@@ -422,9 +455,9 @@ def run() -> None:
     st.table(pd.DataFrame(comparison_rows).set_index("구분"))
 
     if method == "간편 시나리오":
-        note = "간편 시나리오는 처음 첨부된 프로그램의 갱신배수 흐름을 참고해 첫 갱신의 차이는 분명하게, 이후 상승 폭은 점차 완만하게 재설계한 상담용 가정입니다. 갱신 시점의 연령 보정과 시나리오별 최대 배수를 함께 적용합니다."
+        note = "보험업계 평균의 갱신배수 흐름을 참고해 재설계한 상담용 가정입니다."
     elif method == "가입제안서 직접 입력":
         note = "입력한 가입제안서의 보험료 예시를 기준으로 계산했습니다. 실제 갱신보험료는 갱신 시점의 위험률과 손해율 등에 따라 달라질 수 있습니다."
     else:
-        note = "사용자가 직접 설정한 갱신배수를 기준으로 계산했습니다. 실제 갱신보험료와 다를 수 있습니다."
+        note = "보험업계 평균의 갱신배수 흐름을 참고해 재설계한 상담용 가정입니다."
     st.markdown(f'<div class="rn-note">{html.escape(note)}</div>', unsafe_allow_html=True)
