@@ -1,5 +1,6 @@
 import html
 from dataclasses import dataclass
+from textwrap import dedent
 
 import pandas as pd
 import streamlit as st
@@ -147,7 +148,8 @@ def _calculate_periods(
 
 def _inject_style() -> None:
     st.markdown(
-        """
+        dedent(
+            """
         <style>
         .block-container {max-width: 1180px; padding-top: 1.3rem; padding-bottom: 3rem;}
         .rn-section-title {font-size: 1.04rem; font-weight: 750; color: #173451; margin: .25rem 0 .8rem;}
@@ -186,12 +188,15 @@ def _inject_style() -> None:
         @media (max-width:760px) {.rn-chart-grid,.rn-metric-grid{grid-template-columns:1fr}.rn-chart-zone{height:220px}}
         @media print {
           .block-container{max-width:none!important;padding:.3cm!important;}
-          header,[data-testid="stSidebar"],.stButton{display:none!important;}
+          [data-testid="stHeader"],[data-testid="stToolbar"],[data-testid="stSidebar"],[data-testid="stStatusWidget"],.stButton,.st-key-rn_input_area{display:none!important;}
+          .rn-result-hero{margin-top:.35rem!important;break-inside:avoid;}
+          .rn-metric-grid,.rn-chart-grid,.rn-panel,.rn-metric{break-inside:avoid;}
           .rn-note,.rn-panel-copy,.rn-axis,.rn-bar-age,.rn-bar-value{font-size:10pt!important;}
           .rn-result-copy{font-size:15pt!important}.rn-result-value{font-size:21pt!important}
         }
         </style>
-        """,
+        """
+        ).strip(),
         unsafe_allow_html=True,
     )
 
@@ -214,13 +219,15 @@ def _render_chart(
     for period in shown:
         height = 20 + (period.monthly_premium / highest) * 55
         bars.append(
-            f"""
-            <div class="rn-column">
-              <div class="rn-bar-value">{html.escape(_compact_won(period.monthly_premium))}</div>
-              <div class="rn-bar" style="height:{height:.1f}%"></div>
-              <div class="rn-bar-age">{period.start_age}세</div>
-            </div>
-            """
+            dedent(
+                f"""
+                <div class="rn-column">
+                  <div class="rn-bar-value">{html.escape(_compact_won(period.monthly_premium))}</div>
+                  <div class="rn-bar" style="height:{height:.1f}%"></div>
+                  <div class="rn-bar-age">{period.start_age}세</div>
+                </div>
+                """
+            ).strip()
         )
 
     coverage_years = max(1, end_age - current_age)
@@ -231,27 +238,29 @@ def _render_chart(
     end_label = "" if fixed_end_age >= end_age else f'<span class="rn-axis-end">보장 종료 {end_age}세</span>'
 
     st.markdown(
-        f"""
-        <div class="rn-chart-grid">
-          <section class="rn-panel">
-            <div class="rn-panel-title"><span class="rn-dot"></span>갱신형 보험료 변화</div>
-            <div class="rn-chart-zone"><div class="rn-bars">{''.join(bars)}</div></div>
-            <div class="rn-axis"><span class="rn-axis-start">현재 {current_age}세</span><span class="rn-axis-end">{end_age}세까지 납입 예상</span></div>
-            <div class="rn-panel-copy">갱신 시점마다 보험료가 변동되며 보장기간 동안 보험료 납입이 계속됩니다.</div>
-          </section>
-          <section class="rn-panel">
-            <div class="rn-panel-title"><span class="rn-dot fixed"></span>비갱신형 보험료와 보장기간</div>
-            <div class="rn-chart-zone">
-              <div class="rn-fixed-chart" style="--w:{pay_width:.1f}%;--h:{fixed_height:.1f}%">
-                <div class="rn-fixed-block"><span><strong>월 {_won(fixed_premium)}</strong><br>{fixed_end_age}세 납입 완료</span></div>
-                <div class="rn-coverage">{fixed_end_age}세 이후 {end_age}세까지 보장 유지</div>
-              </div>
+        dedent(
+            f"""
+            <div class="rn-chart-grid">
+              <section class="rn-panel">
+                <div class="rn-panel-title"><span class="rn-dot"></span>갱신형 보험료 변화</div>
+                <div class="rn-chart-zone"><div class="rn-bars">{''.join(bars)}</div></div>
+                <div class="rn-axis"><span class="rn-axis-start">현재 {current_age}세</span><span class="rn-axis-end">{end_age}세까지 납입 예상</span></div>
+                <div class="rn-panel-copy">갱신 시점마다 보험료가 변동되며 보장기간 동안 보험료 납입이 계속됩니다.</div>
+              </section>
+              <section class="rn-panel">
+                <div class="rn-panel-title"><span class="rn-dot fixed"></span>비갱신형 보험료와 보장기간</div>
+                <div class="rn-chart-zone">
+                  <div class="rn-fixed-chart" style="--w:{pay_width:.1f}%;--h:{fixed_height:.1f}%">
+                    <div class="rn-fixed-block"><span><strong>월 {_won(fixed_premium)}</strong><br>{fixed_end_age}세 납입 완료</span></div>
+                    <div class="rn-coverage">{fixed_end_age}세 이후 {end_age}세까지 보장 유지</div>
+                  </div>
+                </div>
+                <div class="rn-axis" style="--w:{pay_width:.1f}%"><span class="rn-axis-start">가입 {current_age}세</span><span class="rn-axis-complete">납입 완료 {fixed_end_age}세</span>{end_label}</div>
+                <div class="rn-panel-copy">보험료가 일정하고 정해진 납입기간이 끝난 뒤에도 약정된 보장기간까지 보장이 유지됩니다.</div>
+              </section>
             </div>
-            <div class="rn-axis" style="--w:{pay_width:.1f}%"><span class="rn-axis-start">가입 {current_age}세</span><span class="rn-axis-complete">납입 완료 {fixed_end_age}세</span>{end_label}</div>
-            <div class="rn-panel-copy">보험료가 일정하고 정해진 납입기간이 끝난 뒤에도 약정된 보장기간까지 보장이 유지됩니다.</div>
-          </section>
-        </div>
-        """,
+            """
+        ).strip(),
         unsafe_allow_html=True,
     )
 
@@ -265,61 +274,62 @@ def run() -> None:
         "RN",
     )
 
-    basic_col, renew_col, fixed_col = st.columns(3, gap="medium")
+    with st.container(key="rn_input_area"):
+        basic_col, renew_col, fixed_col = st.columns(3, gap="medium")
 
-    with basic_col:
-        with st.container(border=True):
-            st.markdown('<div class="rn-card-label"><span class="rn-card-number">1</span>기본 정보</div>', unsafe_allow_html=True)
-            current_age = int(st.number_input("현재 나이", min_value=18, max_value=90, value=40, step=1))
-            end_age = int(st.number_input("보장 종료 나이", min_value=current_age + 1, max_value=110, value=max(100, current_age + 1), step=1))
-            retirement_age = int(st.number_input("예상 은퇴 나이", min_value=current_age, max_value=end_age, value=min(max(65, current_age), end_age), step=1))
-            past_paid = float(st.number_input("현재까지 납입한 총액 · 선택", min_value=0, value=0, step=1_000_000, help="모르는 경우 0원으로 두세요."))
+        with basic_col:
+            with st.container(border=True):
+                st.markdown('<div class="rn-card-label"><span class="rn-card-number">1</span>기본 정보</div>', unsafe_allow_html=True)
+                current_age = int(st.number_input("현재 나이", min_value=18, max_value=90, value=40, step=1))
+                end_age = int(st.number_input("보장 종료 나이", min_value=current_age + 1, max_value=110, value=max(100, current_age + 1), step=1))
+                retirement_age = int(st.number_input("예상 은퇴 나이", min_value=current_age, max_value=end_age, value=min(max(65, current_age), end_age), step=1))
+                past_paid = float(st.number_input("현재까지 납입한 총액 · 선택", min_value=0, value=0, step=1_000_000, help="모르는 경우 0원으로 두세요."))
 
-    with renew_col:
-        with st.container(border=True):
-            st.markdown('<div class="rn-card-label"><span class="rn-card-number">2</span>갱신형 정보</div>', unsafe_allow_html=True)
-            current_premium = float(st.number_input("현재 월보험료", min_value=0, value=80_000, step=10_000))
-            cycle = int(st.selectbox("갱신 주기", [5, 10, 15, 20, 30], index=1, format_func=lambda value: f"{value}년"))
-            next_years = int(st.number_input("다음 갱신까지 남은 기간", min_value=1, max_value=min(cycle, end_age - current_age), value=min(5, cycle, end_age - current_age), step=1))
-            method = st.selectbox("갱신보험료 산정 방식", ["간편 시나리오", "가입제안서 직접 입력", "갱신배수 직접 설정"])
-            scenario = st.selectbox("갱신 상승 시나리오", list(SCENARIOS), index=1, disabled=method != "간편 시나리오")
+        with renew_col:
+            with st.container(border=True):
+                st.markdown('<div class="rn-card-label"><span class="rn-card-number">2</span>갱신형 정보</div>', unsafe_allow_html=True)
+                current_premium = float(st.number_input("현재 월보험료", min_value=0, value=80_000, step=10_000))
+                cycle = int(st.selectbox("갱신 주기", [5, 10, 15, 20, 30], index=1, format_func=lambda value: f"{value}년"))
+                next_years = int(st.number_input("다음 갱신까지 남은 기간", min_value=1, max_value=min(cycle, end_age - current_age), value=min(5, cycle, end_age - current_age), step=1))
+                method = st.selectbox("갱신보험료 산정 방식", ["간편 시나리오", "가입제안서 직접 입력", "갱신배수 직접 설정"])
+                scenario = st.selectbox("갱신 상승 시나리오", list(SCENARIOS), index=1, disabled=method != "간편 시나리오")
 
-    with fixed_col:
-        with st.container(border=True):
-            st.markdown('<div class="rn-card-label"><span class="rn-card-number">3</span>비갱신형 정보</div>', unsafe_allow_html=True)
-            fixed_premium = float(st.number_input("월보험료", min_value=0, value=135_000, step=10_000, key="rn_fixed_premium"))
-            fixed_years = int(st.selectbox("납입기간", [10, 15, 20, 25, 30], index=2, format_func=lambda value: f"{value}년"))
+        with fixed_col:
+            with st.container(border=True):
+                st.markdown('<div class="rn-card-label"><span class="rn-card-number">3</span>비갱신형 정보</div>', unsafe_allow_html=True)
+                fixed_premium = float(st.number_input("월보험료", min_value=0, value=135_000, step=10_000, key="rn_fixed_premium"))
+                fixed_years = int(st.selectbox("납입기간", [10, 15, 20, 25, 30], index=2, format_func=lambda value: f"{value}년"))
 
-    ages = _renewal_ages(current_age, end_age, cycle, next_years)
-    custom_values: list[float] = []
-    if method != "간편 시나리오" and ages:
-        title = "가입제안서의 갱신 시점별 월보험료" if method == "가입제안서 직접 입력" else "갱신 시점별 적용 배수"
-        with st.expander(title, expanded=True):
-            input_columns = st.columns(min(4, len(ages)))
-            preview_premium = current_premium
-            reference = REFERENCE_MULTIPLIERS[cycle]
-            for index, age in enumerate(ages):
-                base_multiple = reference[min(index, len(reference) - 1)]
-                preview_premium *= base_multiple
-                with input_columns[index % len(input_columns)]:
-                    if method == "가입제안서 직접 입력":
-                        result = st.number_input(
-                            f"{age}세 월보험료",
-                            min_value=0,
-                            value=int(round(preview_premium / 1_000) * 1_000),
-                            step=1_000,
-                            key=f"rn_proposal_{cycle}_{age}",
-                        )
-                    else:
-                        result = st.number_input(
-                            f"{age}세 갱신배수",
-                            min_value=0.0,
-                            value=float(base_multiple),
-                            step=0.01,
-                            format="%.4f",
-                            key=f"rn_multiple_{cycle}_{age}",
-                        )
-                    custom_values.append(float(result))
+        ages = _renewal_ages(current_age, end_age, cycle, next_years)
+        custom_values: list[float] = []
+        if method != "간편 시나리오" and ages:
+            title = "가입제안서의 갱신 시점별 월보험료" if method == "가입제안서 직접 입력" else "갱신 시점별 적용 배수"
+            with st.expander(title, expanded=True):
+                input_columns = st.columns(min(4, len(ages)))
+                preview_premium = current_premium
+                reference = REFERENCE_MULTIPLIERS[cycle]
+                for index, age in enumerate(ages):
+                    base_multiple = reference[min(index, len(reference) - 1)]
+                    preview_premium *= base_multiple
+                    with input_columns[index % len(input_columns)]:
+                        if method == "가입제안서 직접 입력":
+                            result = st.number_input(
+                                f"{age}세 월보험료",
+                                min_value=0,
+                                value=int(round(preview_premium / 1_000) * 1_000),
+                                step=1_000,
+                                key=f"rn_proposal_{cycle}_{age}",
+                            )
+                        else:
+                            result = st.number_input(
+                                f"{age}세 갱신배수",
+                                min_value=0.0,
+                                value=float(base_multiple),
+                                step=0.01,
+                                format="%.4f",
+                                key=f"rn_multiple_{cycle}_{age}",
+                            )
+                        custom_values.append(float(result))
 
     periods = _calculate_periods(
         current_age=current_age,
@@ -346,16 +356,18 @@ def run() -> None:
 
     source = "상담 예상" if method == "간편 시나리오" else ("가입제안서 입력" if method == "가입제안서 직접 입력" else "사용자 설정")
     st.markdown(
-        f"""
-        <div class="rn-result-hero">
-          <div class="rn-result-kicker">현재 시점의 핵심 비교</div>
-          <div class="rn-result-copy">{result_text}</div>
-        </div>
-        <div class="rn-metric-grid">
-          <div class="rn-metric"><div class="rn-metric-label">갱신형 미래 예상보험료 · {source}</div><div class="rn-metric-value">{_won(renew_future)}</div><div class="rn-metric-sub">최고 예상 월보험료 {_won(highest)}</div></div>
-          <div class="rn-metric"><div class="rn-metric-label">비갱신형 총보험료 · 제안 조건</div><div class="rn-metric-value">{_won(fixed_total)}</div><div class="rn-metric-sub">{fixed_end_age}세 납입 완료</div></div>
-        </div>
-        """,
+        dedent(
+            f"""
+            <div class="rn-result-hero">
+              <div class="rn-result-kicker">현재 시점의 핵심 비교</div>
+              <div class="rn-result-copy">{result_text}</div>
+            </div>
+            <div class="rn-metric-grid">
+              <div class="rn-metric"><div class="rn-metric-label">갱신형 미래 예상보험료 · {source}</div><div class="rn-metric-value">{_won(renew_future)}</div><div class="rn-metric-sub">최고 예상 월보험료 {_won(highest)}</div></div>
+              <div class="rn-metric"><div class="rn-metric-label">비갱신형 총보험료 · 제안 조건</div><div class="rn-metric-value">{_won(fixed_total)}</div><div class="rn-metric-sub">{fixed_end_age}세 납입 완료</div></div>
+            </div>
+            """
+        ).strip(),
         unsafe_allow_html=True,
     )
 
@@ -410,4 +422,3 @@ def run() -> None:
     else:
         note = "사용자가 직접 설정한 갱신배수를 기준으로 계산했습니다. 실제 갱신보험료와 다를 수 있습니다."
     st.markdown(f'<div class="rn-note">{html.escape(note)}</div>', unsafe_allow_html=True)
-
