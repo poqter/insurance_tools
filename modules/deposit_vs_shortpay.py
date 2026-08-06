@@ -204,6 +204,12 @@ def render_styles() -> None:
 
         .hw-bar-group { position: relative; z-index: 1; width: min(176px, 31vw); text-align: center; }
         .hw-bar-value { margin-bottom: 8px; color: var(--hw-navy); font-size: 19px; font-weight: 800; }
+        .hw-bar-value-deposit { color: #58718a; }
+        .hw-bar-value-shortpay {
+            color: var(--hw-gold-deep);
+            font-size: 23px;
+            text-shadow: 0 2px 10px rgba(168,116,34,.16);
+        }
         .hw-bar {
             display: flex;
             align-items: center;
@@ -213,8 +219,16 @@ def render_styles() -> None:
             box-shadow: 0 8px 18px rgba(22,50,79,.10);
         }
         .hw-bar span { font-size: 13px; line-height: 1.38; font-weight: 750; }
-        .hw-deposit-bar { color: white; background: linear-gradient(180deg, #5e91bb, var(--hw-blue)); }
-        .hw-shortpay-bar { color: white; background: linear-gradient(180deg, #ddb766, var(--hw-gold-deep)); }
+        .hw-deposit-bar {
+            color: white;
+            background: linear-gradient(180deg, #8eacc5, #5f83a2);
+            opacity: .84;
+        }
+        .hw-shortpay-bar {
+            color: white;
+            background: linear-gradient(180deg, #e3bc69, var(--hw-gold-deep));
+            box-shadow: 0 13px 28px rgba(168,116,34,.25), 0 0 0 3px rgba(201,150,61,.09);
+        }
         .hw-bar-name { margin-top: 11px; color: var(--hw-navy); font-size: 17px; font-weight: 800; }
         .hw-bar-detail { margin-top: 3px; color: var(--hw-muted); font-size: 12px; }
 
@@ -228,8 +242,33 @@ def render_styles() -> None:
             border-radius: 999px;
             color: #7a5317;
             background: var(--hw-gold-soft);
-            font-size: 12px;
-            font-weight: 750;
+            font-size: 13px;
+            font-weight: 800;
+            box-shadow: 0 8px 18px rgba(168,116,34,.13);
+        }
+
+        .hw-chart-insight {
+            position: absolute;
+            top: 13px;
+            left: 50%;
+            z-index: 2;
+            transform: translateX(-50%);
+            padding: 8px 14px;
+            white-space: nowrap;
+            border: 1px solid rgba(201,150,61,.34);
+            border-radius: 999px;
+            color: var(--hw-text);
+            background: rgba(255,255,255,.94);
+            box-shadow: 0 7px 18px rgba(22,50,79,.07);
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .hw-chart-insight strong {
+            margin-left: 3px;
+            color: var(--hw-gold-deep);
+            font-size: 18px;
+            font-weight: 850;
         }
 
         .hw-timeline {
@@ -281,18 +320,51 @@ def render_styles() -> None:
         .hw-calc-row:last-child { border-bottom: 0; }
         .hw-calc-row span:last-child { color: var(--hw-text); font-weight: 700; text-align: right; }
         .hw-calc-result span { color: var(--hw-navy) !important; font-weight: 800 !important; }
+        .hw-calc-card-deposit { border-top: 3px solid rgba(47,111,163,.58); }
+        .hw-calc-card-shortpay { border-top: 3px solid rgba(201,150,61,.72); }
+        .hw-calc-card-deposit .hw-calc-result span:last-child { color: var(--hw-blue) !important; }
+        .hw-calc-card-shortpay .hw-calc-result span:last-child {
+            color: var(--hw-gold-deep) !important;
+            font-size: 16px;
+        }
 
         .hw-rate-box {
             margin-top: 18px;
-            padding: 18px;
+            padding: 23px 20px 21px;
             text-align: center;
-            border: 1px solid rgba(47,111,163,.17);
-            border-radius: 13px;
+            border: 1px solid rgba(47,111,163,.22);
+            border-radius: 16px;
             color: var(--hw-text);
-            background: var(--hw-blue-soft);
+            background: linear-gradient(135deg, #f4f9fd, var(--hw-blue-soft));
+            box-shadow: 0 9px 22px rgba(22,50,79,.07);
         }
-        .hw-rate-box strong { color: var(--hw-navy); font-size: 21px; }
-        .hw-rate-sub { margin-top: 5px; color: var(--hw-muted); font-size: 12px; }
+        .hw-rate-label { color: var(--hw-muted); font-size: 14px; font-weight: 650; }
+        .hw-rate-main { margin-top: 5px; color: var(--hw-navy); font-size: 18px; font-weight: 750; }
+        .hw-rate-percent {
+            display: inline-block;
+            margin: 0 4px;
+            color: #d83b3b;
+            font-size: 34px;
+            line-height: 1.1;
+            font-weight: 900;
+            letter-spacing: -.5px;
+            text-shadow: 0 3px 13px rgba(216,59,59,.13);
+        }
+        .hw-rate-sub {
+            margin-top: 11px;
+            color: #53667b;
+            font-size: 16px;
+            line-height: 1.55;
+            font-weight: 650;
+        }
+        .hw-current-rate { color: var(--hw-navy); font-weight: 850; }
+        .hw-required-amount {
+            display: inline-block;
+            margin: 0 2px;
+            color: #176fa7;
+            font-size: 20px;
+            font-weight: 900;
+        }
 
         .hw-note { margin-top: 14px; color: var(--hw-muted); font-size: 11px; line-height: 1.55; }
 
@@ -301,8 +373,13 @@ def render_styles() -> None:
             .hw-chart { gap: 36px; padding-left: 8px; padding-right: 8px; }
             .hw-bar-group { width: 132px; }
             .hw-chart-badge { left: auto; right: -14px; top: 10px; font-size: 10px; }
+            .hw-chart-insight { top: 10px; font-size: 11px; }
+            .hw-chart-insight strong { font-size: 15px; }
             .hw-timeline { grid-template-columns: 1fr 1fr; gap: 22px 0; }
             .hw-calc-grid { grid-template-columns: 1fr; }
+            .hw-rate-percent { font-size: 29px; }
+            .hw-rate-sub { font-size: 14px; }
+            .hw-required-amount { font-size: 18px; }
         }
 
         @media print {
@@ -329,6 +406,12 @@ def render_bar_chart(
     chart_max = max(deposit_interest, refund_gain, 1)
     deposit_height = max(56, min(300, deposit_interest / chart_max * 300))
     shortpay_height = max(56, min(300, refund_gain / chart_max * 300))
+    gain_multiple = refund_gain / deposit_interest if deposit_interest > 0 else 0
+
+    if gain_multiple >= 1:
+        insight = f'단기납 예상 이익은 적금의 <strong>약 {gain_multiple:,.1f}배</strong>'
+    else:
+        insight = '현재 조건에서는 <strong>적금 예상 이익이 더 큽니다</strong>'
 
     if advantage >= 0:
         badge = f'<div class="hw-chart-badge">적금 대비 +{format_currency(advantage)}</div>'
@@ -339,8 +422,9 @@ def render_bar_chart(
         f"""
         <div class="hw-chart" role="img" aria-label="적금 10년 누적 세후이자와 단기납 10년 예상 환급차익 비교">
             <div class="hw-chart-grid"></div>
+            <div class="hw-chart-insight">{insight}</div>
             <div class="hw-bar-group">
-                <div class="hw-bar-value">{format_currency(deposit_interest)}</div>
+                <div class="hw-bar-value hw-bar-value-deposit">{format_currency(deposit_interest)}</div>
                 <div class="hw-bar hw-deposit-bar" style="height:{deposit_height:.1f}px">
                     <span>10년 누적<br>세후이자</span>
                 </div>
@@ -349,7 +433,7 @@ def render_bar_chart(
             </div>
             <div class="hw-bar-group">
                 {badge}
-                <div class="hw-bar-value">{format_currency(refund_gain)}</div>
+                <div class="hw-bar-value hw-bar-value-shortpay">{format_currency(refund_gain)}</div>
                 <div class="hw-bar hw-shortpay-bar" style="height:{shortpay_height:.1f}px">
                     <span>10년 시점<br>예상 환급차익</span>
                 </div>
@@ -364,6 +448,12 @@ def render_bar_chart(
 
 def render_timeline(pay_years: int) -> None:
     holding_years = 10 - pay_years
+    if pay_years >= 10:
+        holding_title = "별도 거치 없음"
+        holding_subtitle = "10년까지 보험료 납입"
+    else:
+        holding_title = f"{pay_years + 1}~9년 유지"
+        holding_subtitle = f"추가납입 없이 약 {holding_years}년 유지"
     st.markdown(
         f"""
         <div class="hw-timeline">
@@ -372,8 +462,8 @@ def render_timeline(pay_years: int) -> None:
                 <div class="hw-phase-sub">보험료 납입</div>
             </div>
             <div class="hw-phase">
-                <div class="hw-phase-main">{pay_years + 1}~9년 유지</div>
-                <div class="hw-phase-sub">추가납입 없이 약 {holding_years}년 유지</div>
+                <div class="hw-phase-main">{holding_title}</div>
+                <div class="hw-phase-sub">{holding_subtitle}</div>
             </div>
             <div class="hw-phase hw-phase-point">
                 <div class="hw-phase-main">10년 주요 시점</div>
@@ -393,7 +483,7 @@ def render_calculation_details(deposit: dict, shortpay: dict, pay_years: int, re
     st.markdown(
         f"""
         <div class="hw-calc-grid">
-            <div class="hw-calc-card">
+            <div class="hw-calc-card hw-calc-card-deposit">
                 <div class="hw-calc-title">적금 계산 내역</div>
                 <div class="hw-calc-row"><span>1년 납입원금</span><span>{format_currency(deposit['one_year_principal'])}</span></div>
                 <div class="hw-calc-row"><span>1년 세전이자</span><span>{format_currency(deposit['pretax_interest'])}</span></div>
@@ -401,7 +491,7 @@ def render_calculation_details(deposit: dict, shortpay: dict, pay_years: int, re
                 <div class="hw-calc-row"><span>1년 세후이자</span><span>{format_currency(deposit['aftertax_interest'])}</span></div>
                 <div class="hw-calc-row hw-calc-result"><span>10년 누적 세후이자</span><span>{format_currency(deposit['ten_year_interest'])}</span></div>
             </div>
-            <div class="hw-calc-card">
+            <div class="hw-calc-card hw-calc-card-shortpay">
                 <div class="hw-calc-title">단기납 계산 내역</div>
                 <div class="hw-calc-row"><span>납입기간</span><span>{pay_years}년</span></div>
                 <div class="hw-calc-row"><span>총납입보험료</span><span>{format_currency(shortpay['total_premium'])}</span></div>
@@ -558,8 +648,12 @@ def run():
     st.markdown(
         f"""
         <div class="hw-rate-box">
-            단기납과 같은 예상 이익을 내려면 적금금리가 연 <strong>{required_rate:,.2f}%</strong> 필요합니다.
-            <div class="hw-rate-sub">현재 금리 연 {annual_rate:,.1f}%를 유지한다면 월납입액은 약 {format_currency(required_monthly)}이 필요합니다.</div>
+            <div class="hw-rate-label">단기납과 같은 예상 이익을 내려면</div>
+            <div class="hw-rate-main">적금금리가 연 <span class="hw-rate-percent">{required_rate:,.2f}%</span> 필요합니다.</div>
+            <div class="hw-rate-sub">
+                현재 금리 연 <span class="hw-current-rate">{annual_rate:,.1f}%</span>를 유지한다면<br>
+                월납입액은 약 <span class="hw-required-amount">{format_currency(required_monthly)}</span>이 필요합니다.
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
