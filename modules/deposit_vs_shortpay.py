@@ -753,7 +753,7 @@ def run():
             annual_rate = st.number_input(
                 "적금 연이율 (%)",
                 min_value=0.1,
-                max_value=30.0,
+                max_value=100.0,
                 step=0.1,
                 value=3.0,
                 format="%.1f",
@@ -763,7 +763,7 @@ def run():
         with right:
             pay_years = st.selectbox(
                 "단기납 납입기간",
-                [5, 7],
+                [5, 7, 10],
                 index=0,
                 format_func=lambda value: f"{value}년납",
             )
@@ -772,7 +772,7 @@ def run():
                 min_value=100.0,
                 max_value=300.0,
                 step=0.1,
-                value=123.0,
+                value=120.0,
                 format="%.1f",
                 help="해당 상품의 가입설계서에 기재된 10년 시점 환급률을 입력하세요.",
             )
