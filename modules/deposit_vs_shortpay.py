@@ -278,39 +278,6 @@ def render_styles() -> None:
             text-shadow: 0 3px 12px rgba(196,63,63,.12);
         }
 
-        .hw-profit-arrow {
-            position: absolute;
-            inset: 0;
-            z-index: 2;
-            width: 100%;
-            height: 100%;
-            overflow: visible;
-            pointer-events: none;
-        }
-
-        .hw-profit-arrow-shadow {
-            fill: none;
-            stroke: rgba(22,50,79,.10);
-            stroke-width: 6;
-            stroke-linecap: round;
-        }
-
-        .hw-profit-arrow-line {
-            fill: none;
-            stroke: url(#hwArrowGradient);
-            stroke-width: 3.2;
-            stroke-linecap: round;
-            filter: drop-shadow(0 3px 5px rgba(22,50,79,.13));
-        }
-
-        .hw-arrow-start-ring {
-            fill: rgba(255,255,255,.96);
-            stroke: var(--hw-blue);
-            stroke-width: 2.5;
-        }
-
-        .hw-arrow-start-core { fill: var(--hw-gold); }
-
         .hw-timeline {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -529,8 +496,7 @@ def render_bar_chart(
     shortpay_height = max(56, min(300, refund_gain / chart_max * 300))
     gain_multiple = refund_gain / deposit_interest if deposit_interest > 0 else 0
 
-    # 그래프 내부 SVG 좌표계(1000 × 430)에 막대 상단 위치를 맞춥니다.
-    # 입력값에 따라 막대 높이가 달라져도 화살표가 두 막대 상단을 따라갑니다.
+    # 기존 프리미엄 배지 위치를 막대 높이에 맞춰 유지합니다.
     bar_baseline_y = 358
     deposit_top_y = bar_baseline_y - deposit_height
     shortpay_top_y = bar_baseline_y - shortpay_height
@@ -547,25 +513,6 @@ def render_bar_chart(
         f"""
         <div class="hw-chart" role="img" aria-label="적금 10년 누적 세후이자와 단기납 10년 예상 환급차익 비교">
             <div class="hw-chart-grid"></div>
-            <svg class="hw-profit-arrow" viewBox="0 0 1000 430" preserveAspectRatio="none" aria-hidden="true">
-                <defs>
-                    <linearGradient id="hwArrowGradient" x1="0%" y1="100%" x2="100%" y2="0%">
-                        <stop offset="0%" stop-color="#5f83a2"></stop>
-                        <stop offset="62%" stop-color="#7592aa"></stop>
-                        <stop offset="100%" stop-color="#c9963d"></stop>
-                    </linearGradient>
-                    <marker id="hwArrowHead" markerWidth="15" markerHeight="15" refX="12" refY="7.5" orient="auto" markerUnits="userSpaceOnUse">
-                        <path d="M1,1 L13,7.5 L1,14 Z" fill="#c9963d"></path>
-                    </marker>
-                </defs>
-                <path class="hw-profit-arrow-shadow"
-                    d="M425 {deposit_top_y - 5:.1f} L565 {shortpay_top_y + 6:.1f}"></path>
-                <path class="hw-profit-arrow-line"
-                    d="M425 {deposit_top_y - 5:.1f} L565 {shortpay_top_y + 6:.1f}"
-                    marker-end="url(#hwArrowHead)"></path>
-                <circle class="hw-arrow-start-ring" cx="425" cy="{deposit_top_y - 5:.1f}" r="5.5"></circle>
-                <circle class="hw-arrow-start-core" cx="425" cy="{deposit_top_y - 5:.1f}" r="2.2"></circle>
-            </svg>
             <div class="hw-profit-badge" style="top:{badge_top:.1f}px">
                 <span>{badge_eyebrow}</span>
                 <strong>{badge_value}</strong>
