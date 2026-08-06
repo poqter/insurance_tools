@@ -159,8 +159,8 @@ def _inject_style() -> None:
         .rn-result-hero {margin:1.1rem 0; padding:1.3rem 1.4rem; text-align:center; border:1px solid #d8e5ef; border-radius:18px; background:linear-gradient(135deg,#f8fbfe 0%,#edf5fb 100%); color:#173451;}
         .rn-result-kicker {font-size:.86rem; color:#657f96; margin-bottom:.35rem;}
         .rn-result-copy {font-size:1.18rem; font-weight:700;}
-        .rn-result-value {display:inline-block; margin-left:.25rem; color:#1477ad; font-size:1.72rem; font-weight:850;}
-        .rn-result-value.negative {color:#bd4c45;}
+        .rn-result-value {display:inline-block; margin-left:.25rem; padding:.04rem .42rem .08rem; color:#c83f45; background:rgba(200,63,69,.065); border-bottom:2px solid rgba(200,63,69,.42); border-radius:.42rem; font-size:1.72rem; font-weight:850;}
+        .rn-result-value.negative {color:#a66516; background:rgba(166,101,22,.07); border-bottom-color:rgba(166,101,22,.38);}
         .rn-metric-grid {display:grid; grid-template-columns:1fr 1fr; gap:.85rem; margin:0 0 1.15rem;}
         .rn-metric {padding:1rem 1.1rem; border:1px solid #dce7f0; border-radius:16px; background:#fff; color:#173451;}
         .rn-metric-label {font-size:.86rem; color:#657f96;}
@@ -171,14 +171,16 @@ def _inject_style() -> None:
         .rn-panel-title {display:flex; align-items:center; gap:.5rem; margin-bottom:.65rem; color:#173451; font-weight:800;}
         .rn-dot {width:.68rem; height:.68rem; border-radius:50%; background:#4d86af;}
         .rn-dot.fixed {background:#c79a49;}
-        .rn-chart-zone {height:238px; border-bottom:1px solid #cfdde7; background:repeating-linear-gradient(to bottom,transparent 0,transparent 58px,#edf2f6 59px);}
+        .rn-chart-zone {height:238px; border-bottom:2px solid #cad9e4; background:linear-gradient(180deg,#fbfdff 0%,#f4f8fb 100%); box-shadow:inset 0 -18px 24px rgba(44,80,106,.025);}
         .rn-bars {display:flex; align-items:stretch; gap:7px; height:100%;}
         .rn-column {position:relative; display:flex; flex:1 1 0; flex-direction:column; justify-content:flex-end; min-width:0; padding-bottom:29px; text-align:center;}
-        .rn-bar-value {color:#5c7890; font-size:.78rem; font-weight:700; white-space:nowrap;}
-        .rn-bar {min-height:28px; margin-top:5px; border-top:2px solid #4d86af; border-radius:5px 5px 0 0; background:linear-gradient(180deg,#8eb3cf 0%,#5e8fb2 100%); box-shadow:0 7px 15px rgba(46,91,125,.12);}
+        .rn-bar-value {align-self:center; padding:.08rem .35rem; color:#4e6d85; background:rgba(255,255,255,.78); border:1px solid rgba(92,127,153,.14); border-radius:999px; box-shadow:0 3px 9px rgba(35,70,96,.055); font-size:.78rem; font-weight:700; white-space:nowrap;}
+        .rn-bar {position:relative; min-height:28px; margin-top:5px; overflow:hidden; border-top:1px solid rgba(255,255,255,.7); border-radius:10px 10px 2px 2px; background:linear-gradient(160deg,var(--bar-top) 0%,var(--bar-mid) 46%,var(--bar-bottom) 100%); box-shadow:0 12px 20px rgba(37,76,105,.13),inset 1px 0 rgba(255,255,255,.28),inset -1px 0 rgba(19,51,75,.09);}
+        .rn-bar::before {content:"";position:absolute;top:0;bottom:0;left:0;width:18%;background:linear-gradient(90deg,rgba(255,255,255,.30),rgba(255,255,255,0));}
+        .rn-bar::after {content:"";position:absolute;top:0;right:8%;left:8%;height:2px;border-radius:999px;background:rgba(255,255,255,.55);}
         .rn-bar-age {position:absolute; right:0; bottom:5px; left:0; color:#70879a; font-size:.76rem; white-space:nowrap;}
         .rn-fixed-chart {position:relative; height:calc(100% - 29px);}
-        .rn-fixed-block {position:absolute; left:0; bottom:0; display:flex; align-items:center; justify-content:center; width:var(--w); min-width:24%; height:var(--h); min-height:52px; padding:.45rem; color:#173451; border-top:2px solid #c79a49; border-radius:5px 5px 0 0; background:linear-gradient(180deg,#ead198 0%,#d1a34d 100%); text-align:center; box-shadow:0 7px 15px rgba(151,108,36,.13);}
+        .rn-fixed-block {position:absolute; left:0; bottom:0; display:flex; align-items:center; justify-content:center; width:var(--w); min-width:24%; height:var(--h); min-height:52px; padding:.45rem; overflow:hidden; color:#173451; border-top:1px solid rgba(255,255,255,.72); border-radius:10px 10px 2px 2px; background:linear-gradient(160deg,#f4dfa9 0%,#d9b460 48%,#b7802e 100%); text-align:center; box-shadow:0 12px 20px rgba(135,94,29,.15),inset 1px 0 rgba(255,255,255,.32),inset -1px 0 rgba(93,58,14,.10);}
         .rn-coverage {position:absolute; top:calc(100% - var(--h)); right:0; left:var(--w); padding:.5rem .25rem 0; color:#71889c; border-top:2px solid #d9e2e8; font-size:.79rem; text-align:center;}
         .rn-axis {position:relative; height:2rem; margin-top:.28rem; color:#71889c; font-size:.76rem;}
         .rn-axis span {position:absolute; top:0; white-space:nowrap;}
@@ -191,6 +193,7 @@ def _inject_style() -> None:
           [data-testid="stHeader"],[data-testid="stToolbar"],[data-testid="stSidebar"],[data-testid="stStatusWidget"],.stButton,.st-key-rn_input_area{display:none!important;}
           .rn-result-hero{margin-top:.35rem!important;break-inside:avoid;}
           .rn-metric-grid,.rn-chart-grid,.rn-panel,.rn-metric{break-inside:avoid;}
+          [data-testid="stExpander"] details:not([open])>:not(summary){display:block!important;}
           .rn-note,.rn-panel-copy,.rn-axis,.rn-bar-age,.rn-bar-value{font-size:10pt!important;}
           .rn-result-copy{font-size:15pt!important}.rn-result-value{font-size:21pt!important}
         }
@@ -216,14 +219,22 @@ def _render_chart(
 
     highest = max([fixed_premium, 1] + [period.monthly_premium for period in periods])
     bars = []
-    for period in shown:
+    premium_palette = [
+        ("#b8d0e1", "#83a9c5", "#5f89a8"),
+        ("#a6c5da", "#719dbd", "#497a9f"),
+        ("#91b7d1", "#5e8eaf", "#386d94"),
+        ("#7ca8c6", "#4f819f", "#2d617f"),
+        ("#6899bb", "#407493", "#234f6d"),
+    ]
+    for index, period in enumerate(shown):
         height = 20 + (period.monthly_premium / highest) * 55
+        palette = premium_palette[min(index, len(premium_palette) - 1)]
         bars.append(
             dedent(
                 f"""
                 <div class="rn-column">
                   <div class="rn-bar-value">{html.escape(_compact_won(period.monthly_premium))}</div>
-                  <div class="rn-bar" style="height:{height:.1f}%"></div>
+                  <div class="rn-bar" style="height:{height:.1f}%;--bar-top:{palette[0]};--bar-mid:{palette[1]};--bar-bottom:{palette[2]}"></div>
                   <div class="rn-bar-age">{period.start_age}세</div>
                 </div>
                 """
@@ -289,7 +300,7 @@ def run() -> None:
             with st.container(border=True):
                 st.markdown('<div class="rn-card-label"><span class="rn-card-number">2</span>갱신형 정보</div>', unsafe_allow_html=True)
                 current_premium = float(st.number_input("현재 월보험료", min_value=0, value=80_000, step=10_000))
-                cycle = int(st.selectbox("갱신 주기", [5, 10, 15, 20, 30], index=1, format_func=lambda value: f"{value}년"))
+                cycle = int(st.selectbox("갱신 주기", [5, 10, 15, 20, 30], index=3, format_func=lambda value: f"{value}년"))
                 next_years = int(st.number_input("다음 갱신까지 남은 기간", min_value=1, max_value=min(cycle, end_age - current_age), value=min(5, cycle, end_age - current_age), step=1))
                 method = st.selectbox("갱신보험료 산정 방식", ["간편 시나리오", "가입제안서 직접 입력", "갱신배수 직접 설정"])
                 scenario = st.selectbox("갱신 상승 시나리오", list(SCENARIOS), index=1, disabled=method != "간편 시나리오")
@@ -371,17 +382,9 @@ def run() -> None:
         unsafe_allow_html=True,
     )
 
-    st.markdown('<div class="rn-section-title">보험료 납입 구조 비교</div>', unsafe_allow_html=True)
-    if method == "간편 시나리오":
-        st.caption(f"{scenario} · {cycle}년 갱신주기와 갱신 시점 연령을 함께 반영")
-    elif method == "가입제안서 직접 입력":
-        st.caption("가입제안서에 기재된 갱신 시점별 월보험료 사용")
-    else:
-        st.caption("사용자가 입력한 갱신배수 사용")
-
     _render_chart(periods, current_age, end_age, fixed_premium, fixed_years)
 
-    with st.expander("갱신 시점별 상세 보험료 보기"):
+    with st.expander("갱신 시점별 상세 보험료 보기", expanded=True):
         detail_rows = []
         for index, period in enumerate(periods):
             detail_rows.append(
@@ -393,7 +396,7 @@ def run() -> None:
                     "구간 총액": _won(period.total),
                 }
             )
-        st.dataframe(pd.DataFrame(detail_rows), use_container_width=True, hide_index=True)
+        st.table(pd.DataFrame(detail_rows).set_index("구간"))
 
     retire_renew = sum(
         period.monthly_premium
@@ -413,7 +416,7 @@ def run() -> None:
         comparison_rows.append({"구분": "가입부터 예상 총액", "갱신형 유지": _won(past_paid + renew_future), "비갱신형 전환": _won(past_paid + fixed_total)})
 
     st.markdown('<div class="rn-section-title">예상 보험료 비교</div>', unsafe_allow_html=True)
-    st.dataframe(pd.DataFrame(comparison_rows), use_container_width=True, hide_index=True)
+    st.table(pd.DataFrame(comparison_rows).set_index("구분"))
 
     if method == "간편 시나리오":
         note = "간편 시나리오는 처음 첨부된 프로그램의 갱신배수 흐름을 참고해 첫 갱신의 차이는 분명하게, 이후 상승 폭은 점차 완만하게 재설계한 상담용 가정입니다. 갱신 시점의 연령 보정과 시나리오별 최대 배수를 함께 적용합니다."

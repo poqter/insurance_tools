@@ -64,10 +64,12 @@ APP_DEFINITIONS = {
     },
     "inheritance_tax": {
         "name": "상속세 계산기", "icon": "🧾", "code": "IT", "category": "고객 상담",
+        "badge": {"text": "NEW", "tone": "new"},
         "description": "예상 상속세와 부족한 현금성 납부재원을 계산합니다.", "action": "상속세 계산 시작", "run": inheritance_tax.run,
     },
     "insurer_portal": {
         "name": "원수사 전산 포털", "icon": "↗", "code": "IP", "category": "고객 상담",
+        "badge": {"text": "NEW", "tone": "new"},
         "description": "생명·손해보험사 원수사 전산을 한 화면에서 연결합니다.", "action": "전산 포털 열기", "run": insurer_portal.run,
     },
     "convention": {
