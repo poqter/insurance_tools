@@ -291,7 +291,7 @@ def render_styles() -> None:
         .hw-profit-arrow-shadow {
             fill: none;
             stroke: rgba(22,50,79,.10);
-            stroke-width: 9;
+            stroke-width: 6;
             stroke-linecap: round;
         }
 
@@ -310,12 +310,6 @@ def render_styles() -> None:
         }
 
         .hw-arrow-start-core { fill: var(--hw-gold); }
-
-        .hw-arrow-end-halo {
-            fill: none;
-            stroke: rgba(201,150,61,.18);
-            stroke-width: 9;
-        }
 
         .hw-timeline {
             display: grid;
@@ -451,13 +445,71 @@ def render_styles() -> None:
             .hw-required-amount { font-size: 29px; }
         }
 
+        @page { size: A4 portrait; margin: 9mm; }
+
         @media print {
             header, footer, [data-testid="stSidebar"], [data-testid="stForm"], [data-testid="stExpander"] {
                 display: none !important;
             }
-            .block-container { padding: .35rem 1rem 0 !important; }
-            .hw-chart { min-height: 380px; }
-            .hw-calc-card { box-shadow: none; }
+
+            html, body {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            .block-container {
+                max-width: none !important;
+                padding: 0 !important;
+            }
+
+            .hw-result-hero {
+                margin-top: 0;
+                padding: 18px 16px 16px;
+                break-inside: avoid;
+            }
+            .hw-result-context { font-size: 11pt; }
+            .hw-result-title { font-size: 23pt; }
+            .hw-result-basis { font-size: 10.5pt; }
+
+            .hw-chart {
+                min-height: 365px;
+                padding-top: 28px;
+                break-inside: avoid;
+            }
+            .hw-bar-value { font-size: 15pt; }
+            .hw-bar-value-shortpay { font-size: 18pt; }
+            .hw-bar span { font-size: 10.5pt; }
+            .hw-bar-name { font-size: 14pt; }
+            .hw-bar-detail { font-size: 10pt; }
+            .hw-profit-badge span { font-size: 10pt; }
+            .hw-profit-badge strong { font-size: 18pt; }
+
+            .hw-timeline {
+                margin: 18px 0 20px;
+                break-inside: avoid;
+            }
+            .hw-phase-main { font-size: 10.5pt; }
+            .hw-phase-sub { font-size: 9.5pt; }
+
+            .hw-calc-grid,
+            .hw-rate-box { break-inside: avoid; }
+            .hw-calc-card {
+                padding: 14px 16px 12px;
+                box-shadow: none;
+            }
+            .hw-calc-title { font-size: 12pt; }
+            .hw-calc-row {
+                padding: 5px 0;
+                font-size: 10.5pt;
+            }
+            .hw-calc-card-shortpay .hw-calc-result span:last-child { font-size: 12.5pt; }
+
+            .hw-rate-panel { padding: 16px 18px 14px; }
+            .hw-rate-label { font-size: 11pt; }
+            .hw-rate-main { font-size: 14pt; }
+            .hw-rate-percent,
+            .hw-required-amount { font-size: 25pt; }
+            .hw-note { font-size: 9.5pt; line-height: 1.5; }
         }
         </style>
         """,
@@ -502,18 +554,17 @@ def render_bar_chart(
                         <stop offset="62%" stop-color="#7592aa"></stop>
                         <stop offset="100%" stop-color="#c9963d"></stop>
                     </linearGradient>
-                    <marker id="hwArrowHead" markerWidth="13" markerHeight="13" refX="10" refY="6.5" orient="auto" markerUnits="strokeWidth">
-                        <path d="M1,1 L11,6.5 L1,12 Z" fill="#c9963d"></path>
+                    <marker id="hwArrowHead" markerWidth="15" markerHeight="15" refX="12" refY="7.5" orient="auto" markerUnits="userSpaceOnUse">
+                        <path d="M1,1 L13,7.5 L1,14 Z" fill="#c9963d"></path>
                     </marker>
                 </defs>
                 <path class="hw-profit-arrow-shadow"
-                    d="M350 {deposit_top_y:.1f} L650 {shortpay_top_y:.1f}"></path>
+                    d="M425 {deposit_top_y - 5:.1f} L565 {shortpay_top_y + 6:.1f}"></path>
                 <path class="hw-profit-arrow-line"
-                    d="M350 {deposit_top_y:.1f} L650 {shortpay_top_y:.1f}"
+                    d="M425 {deposit_top_y - 5:.1f} L565 {shortpay_top_y + 6:.1f}"
                     marker-end="url(#hwArrowHead)"></path>
-                <circle class="hw-arrow-start-ring" cx="350" cy="{deposit_top_y:.1f}" r="7"></circle>
-                <circle class="hw-arrow-start-core" cx="350" cy="{deposit_top_y:.1f}" r="2.7"></circle>
-                <circle class="hw-arrow-end-halo" cx="650" cy="{shortpay_top_y:.1f}" r="7"></circle>
+                <circle class="hw-arrow-start-ring" cx="425" cy="{deposit_top_y - 5:.1f}" r="5.5"></circle>
+                <circle class="hw-arrow-start-core" cx="425" cy="{deposit_top_y - 5:.1f}" r="2.2"></circle>
             </svg>
             <div class="hw-profit-badge" style="top:{badge_top:.1f}px">
                 <span>{badge_eyebrow}</span>
