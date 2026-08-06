@@ -460,6 +460,15 @@ def render_styles() -> None:
             .block-container {
                 max-width: none !important;
                 padding: 0 !important;
+                font-size: 10.5pt !important;
+                line-height: 1.48;
+            }
+
+            /* 공통 Markdown으로 출력되는 일반 문구까지 인쇄 최소 크기에 포함 */
+            .block-container [data-testid="stMarkdownContainer"] p,
+            .block-container [data-testid="stMarkdownContainer"] li {
+                font-size: 10.5pt !important;
+                line-height: 1.48 !important;
             }
 
             .hw-result-hero {
@@ -467,9 +476,9 @@ def render_styles() -> None:
                 padding: 18px 16px 16px;
                 break-inside: avoid;
             }
-            .hw-result-context { font-size: 11pt; }
+            .hw-result-context { font-size: 11.5pt; }
             .hw-result-title { font-size: 23pt; }
-            .hw-result-basis { font-size: 10.5pt; }
+            .hw-result-basis { font-size: 11pt; }
 
             .hw-chart {
                 min-height: 365px;
@@ -478,18 +487,18 @@ def render_styles() -> None:
             }
             .hw-bar-value { font-size: 15pt; }
             .hw-bar-value-shortpay { font-size: 18pt; }
-            .hw-bar span { font-size: 10.5pt; }
+            .hw-bar span { font-size: 11pt; }
             .hw-bar-name { font-size: 14pt; }
-            .hw-bar-detail { font-size: 10pt; }
-            .hw-profit-badge span { font-size: 10pt; }
+            .hw-bar-detail { font-size: 10.5pt; }
+            .hw-profit-badge span { font-size: 10.5pt; }
             .hw-profit-badge strong { font-size: 18pt; }
 
             .hw-timeline {
                 margin: 18px 0 20px;
                 break-inside: avoid;
             }
-            .hw-phase-main { font-size: 10.5pt; }
-            .hw-phase-sub { font-size: 9.5pt; }
+            .hw-phase-main { font-size: 11pt; }
+            .hw-phase-sub { font-size: 10.5pt; line-height: 1.42; }
 
             .hw-calc-grid,
             .hw-rate-box { break-inside: avoid; }
@@ -501,15 +510,16 @@ def render_styles() -> None:
             .hw-calc-row {
                 padding: 5px 0;
                 font-size: 10.5pt;
+                line-height: 1.42;
             }
             .hw-calc-card-shortpay .hw-calc-result span:last-child { font-size: 12.5pt; }
 
             .hw-rate-panel { padding: 16px 18px 14px; }
-            .hw-rate-label { font-size: 11pt; }
+            .hw-rate-label { font-size: 11pt; line-height: 1.45; }
             .hw-rate-main { font-size: 14pt; }
             .hw-rate-percent,
             .hw-required-amount { font-size: 25pt; }
-            .hw-note { font-size: 9.5pt; line-height: 1.5; }
+            .hw-note { font-size: 10.5pt; line-height: 1.55; }
         }
         </style>
         """,
