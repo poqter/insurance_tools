@@ -184,14 +184,14 @@ def render_styles() -> None:
             justify-content: center;
             align-items: flex-end;
             gap: clamp(64px, 13vw, 145px);
-            padding: 54px 28px 18px;
-            margin: 4px 0 12px;
+            padding: 38px 28px 18px;
+            margin: 0 0 12px;
             border-bottom: 1px solid var(--hw-line);
         }
 
         .hw-chart-grid {
             position: absolute;
-            inset: 54px 0 64px;
+            inset: 38px 0 64px;
             z-index: 0;
             background: repeating-linear-gradient(
                 to bottom,
@@ -232,43 +232,89 @@ def render_styles() -> None:
         .hw-bar-name { margin-top: 11px; color: var(--hw-navy); font-size: 17px; font-weight: 800; }
         .hw-bar-detail { margin-top: 3px; color: var(--hw-muted); font-size: 12px; }
 
-        .hw-chart-badge {
+        .hw-profit-badge {
             position: absolute;
-            left: calc(100% + 13px);
-            top: 35px;
-            padding: 7px 11px;
-            white-space: nowrap;
-            border: 1px solid rgba(201,150,61,.55);
-            border-radius: 999px;
-            color: #7a5317;
-            background: var(--hw-gold-soft);
-            font-size: 13px;
-            font-weight: 800;
-            box-shadow: 0 8px 18px rgba(168,116,34,.13);
-        }
-
-        .hw-chart-insight {
-            position: absolute;
-            top: 13px;
-            left: 50%;
-            z-index: 2;
+            left: 38%;
+            z-index: 4;
+            width: max-content;
+            max-width: 230px;
+            padding: 12px 18px 11px;
             transform: translateX(-50%);
-            padding: 8px 14px;
+            overflow: hidden;
             white-space: nowrap;
-            border: 1px solid rgba(201,150,61,.34);
-            border-radius: 999px;
-            color: var(--hw-text);
-            background: rgba(255,255,255,.94);
-            box-shadow: 0 7px 18px rgba(22,50,79,.07);
-            font-size: 13px;
-            font-weight: 700;
+            border: 1px solid rgba(47,111,163,.30);
+            border-radius: 15px;
+            color: var(--hw-navy);
+            background: linear-gradient(145deg, rgba(255,253,248,.98), rgba(244,248,252,.98));
+            box-shadow:
+                0 12px 28px rgba(22,50,79,.12),
+                inset 0 1px 0 rgba(255,255,255,.96);
+            text-align: center;
         }
 
-        .hw-chart-insight strong {
-            margin-left: 3px;
-            color: var(--hw-gold-deep);
-            font-size: 18px;
-            font-weight: 850;
+        .hw-profit-badge::before {
+            content: "";
+            position: absolute;
+            inset: 0 0 auto;
+            height: 3px;
+            background: linear-gradient(90deg, var(--hw-blue), var(--hw-gold), var(--hw-gold-deep));
+        }
+
+        .hw-profit-badge span {
+            display: block;
+            color: #61758a;
+            font-size: 12px;
+            font-weight: 750;
+            letter-spacing: -.15px;
+        }
+
+        .hw-profit-badge strong {
+            display: block;
+            margin-top: 2px;
+            color: #c43f3f;
+            font-size: 23px;
+            font-weight: 900;
+            letter-spacing: -.6px;
+            text-shadow: 0 3px 12px rgba(196,63,63,.12);
+        }
+
+        .hw-profit-arrow {
+            position: absolute;
+            inset: 0;
+            z-index: 2;
+            width: 100%;
+            height: 100%;
+            overflow: visible;
+            pointer-events: none;
+        }
+
+        .hw-profit-arrow-shadow {
+            fill: none;
+            stroke: rgba(22,50,79,.10);
+            stroke-width: 9;
+            stroke-linecap: round;
+        }
+
+        .hw-profit-arrow-line {
+            fill: none;
+            stroke: url(#hwArrowGradient);
+            stroke-width: 3.2;
+            stroke-linecap: round;
+            filter: drop-shadow(0 3px 5px rgba(22,50,79,.13));
+        }
+
+        .hw-arrow-start-ring {
+            fill: rgba(255,255,255,.96);
+            stroke: var(--hw-blue);
+            stroke-width: 2.5;
+        }
+
+        .hw-arrow-start-core { fill: var(--hw-gold); }
+
+        .hw-arrow-end-halo {
+            fill: none;
+            stroke: rgba(201,150,61,.18);
+            stroke-width: 9;
         }
 
         .hw-timeline {
@@ -387,9 +433,13 @@ def render_styles() -> None:
             .hw-result-title { font-size: 23px; }
             .hw-chart { gap: 36px; padding-left: 8px; padding-right: 8px; }
             .hw-bar-group { width: 132px; }
-            .hw-chart-badge { left: auto; right: -14px; top: 10px; font-size: 10px; }
-            .hw-chart-insight { top: 10px; font-size: 11px; }
-            .hw-chart-insight strong { font-size: 15px; }
+            .hw-profit-badge {
+                left: 34%;
+                max-width: 174px;
+                padding: 9px 11px 8px;
+            }
+            .hw-profit-badge span { font-size: 10px; }
+            .hw-profit-badge strong { font-size: 18px; }
             .hw-timeline { grid-template-columns: 1fr 1fr; gap: 22px 0; }
             .hw-calc-grid { grid-template-columns: 1fr; }
             .hw-rate-box { grid-template-columns: 1fr; }
@@ -427,21 +477,48 @@ def render_bar_chart(
     shortpay_height = max(56, min(300, refund_gain / chart_max * 300))
     gain_multiple = refund_gain / deposit_interest if deposit_interest > 0 else 0
 
-    if gain_multiple >= 1:
-        insight = f'단기납 예상 이익은 적금의 <strong>약 {gain_multiple:,.1f}배</strong>'
-    else:
-        insight = '현재 조건에서는 <strong>적금 예상 이익이 더 큽니다</strong>'
+    # 그래프 내부 SVG 좌표계(1000 × 430)에 막대 상단 위치를 맞춥니다.
+    # 입력값에 따라 막대 높이가 달라져도 화살표가 두 막대 상단을 따라갑니다.
+    bar_baseline_y = 358
+    deposit_top_y = bar_baseline_y - deposit_height
+    shortpay_top_y = bar_baseline_y - shortpay_height
+    badge_top = max(64, min(184, (deposit_top_y + shortpay_top_y) / 2 - 62))
 
-    if advantage >= 0:
-        badge = f'<div class="hw-chart-badge">적금 대비 +{format_currency(advantage)}</div>'
+    if gain_multiple >= 1:
+        badge_eyebrow = "단기납 예상 이익"
+        badge_value = f"적금의 약 {gain_multiple:,.1f}배"
     else:
-        badge = '<div class="hw-chart-badge">현재 조건은 적금 우위</div>'
+        badge_eyebrow = "현재 조건의 예상 이익"
+        badge_value = "적금이 더 큽니다"
 
     st.markdown(
         f"""
         <div class="hw-chart" role="img" aria-label="적금 10년 누적 세후이자와 단기납 10년 예상 환급차익 비교">
             <div class="hw-chart-grid"></div>
-            <div class="hw-chart-insight">{insight}</div>
+            <svg class="hw-profit-arrow" viewBox="0 0 1000 430" preserveAspectRatio="none" aria-hidden="true">
+                <defs>
+                    <linearGradient id="hwArrowGradient" x1="0%" y1="100%" x2="100%" y2="0%">
+                        <stop offset="0%" stop-color="#5f83a2"></stop>
+                        <stop offset="62%" stop-color="#7592aa"></stop>
+                        <stop offset="100%" stop-color="#c9963d"></stop>
+                    </linearGradient>
+                    <marker id="hwArrowHead" markerWidth="13" markerHeight="13" refX="10" refY="6.5" orient="auto" markerUnits="strokeWidth">
+                        <path d="M1,1 L11,6.5 L1,12 Z" fill="#c9963d"></path>
+                    </marker>
+                </defs>
+                <path class="hw-profit-arrow-shadow"
+                    d="M350 {deposit_top_y:.1f} L650 {shortpay_top_y:.1f}"></path>
+                <path class="hw-profit-arrow-line"
+                    d="M350 {deposit_top_y:.1f} L650 {shortpay_top_y:.1f}"
+                    marker-end="url(#hwArrowHead)"></path>
+                <circle class="hw-arrow-start-ring" cx="350" cy="{deposit_top_y:.1f}" r="7"></circle>
+                <circle class="hw-arrow-start-core" cx="350" cy="{deposit_top_y:.1f}" r="2.7"></circle>
+                <circle class="hw-arrow-end-halo" cx="650" cy="{shortpay_top_y:.1f}" r="7"></circle>
+            </svg>
+            <div class="hw-profit-badge" style="top:{badge_top:.1f}px">
+                <span>{badge_eyebrow}</span>
+                <strong>{badge_value}</strong>
+            </div>
             <div class="hw-bar-group">
                 <div class="hw-bar-value hw-bar-value-deposit">{format_currency(deposit_interest)}</div>
                 <div class="hw-bar hw-deposit-bar" style="height:{deposit_height:.1f}px">
@@ -451,7 +528,6 @@ def render_bar_chart(
                 <div class="hw-bar-detail">월 {format_currency(monthly)} · 1년 적금 10회</div>
             </div>
             <div class="hw-bar-group">
-                {badge}
                 <div class="hw-bar-value hw-bar-value-shortpay">{format_currency(refund_gain)}</div>
                 <div class="hw-bar hw-shortpay-bar" style="height:{shortpay_height:.1f}px">
                     <span>10년 시점<br>예상 환급차익</span>
@@ -540,7 +616,7 @@ def run():
             **인쇄 안내**
 
             - Ctrl + P -> 설정 더보기를 누릅니다. 
-            - 배율을 맞춤설정으로 변경 후 73으로 조정.
+            - 배율을 맞춤설정으로 변경 후 76으로 조정.
             - 머리글과 바닥글, 배경그래픽 해제 후 인쇄.
             """
         )
