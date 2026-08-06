@@ -54,6 +54,7 @@ APP_DEFINITIONS = {
     },
     "deposit_vs_shortpay": {
         "name": "적금 vs 단기납", "icon": "💰", "code": "DS", "category": "고객 상담",
+        "badge": {"text": "UPDATE", "tone": "update"},
         "description": "10년 기준 적금과 단기납의 예상 결과를 비교합니다.", "action": "비교 계산 시작", "run": deposit_vs_shortpay.run,
     },
     "renewal_vs_nonrenewal": {
@@ -396,6 +397,7 @@ def render_home(allowed_ids: list[str]) -> None:
             border-radius:999px; font-size:.62rem; line-height:1; font-weight:850; letter-spacing:.055em; }
         .hw-badge-best { background:#F6C453; color:#4A3100; border:1px solid #E7AE2B; box-shadow:0 4px 10px rgba(231,174,43,.2); }
         .hw-badge-new { background:#0EA5A8; color:#FFFFFF; border:1px solid #079195; box-shadow:0 4px 10px rgba(14,165,168,.22); }
+        .hw-badge-update { background:linear-gradient(135deg,#2F73E0,#205CC3); color:#FFFFFF; border:1px solid #1B55B6; box-shadow:0 4px 11px rgba(37,99,217,.22); }
         .hw-badge-default { background:#1769DC; color:#FFFFFF; border:1px solid #0E5BC4; }
         .hw-card-lock { position:absolute; z-index:4; top:.88rem; right:.88rem; padding:.25rem .55rem;
             border-radius:999px; background:#E5EAEE; color:#697A87; font-size:.6rem; font-weight:750; }
