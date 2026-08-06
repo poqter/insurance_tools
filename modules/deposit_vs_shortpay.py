@@ -1,4 +1,6 @@
 import time
+from datetime import datetime
+from io import BytesIO
 
 import streamlit as st
 
@@ -89,6 +91,276 @@ def calculate_required_monthly_payment(
     return target_gain_manwon / denominator
 
 
+def create_result_pdf(
+    monthly: float,
+    annual_rate: float,
+    pay_years: int,
+    refund_rate: float,
+    deposit: dict,
+    shortpay: dict,
+    advantage: float,
+    required_rate: float,
+) -> bytes:
+    """현재 상담 결과를 화랑 WORKSPACE 스타일의 A4 한 장 PDF로 생성합니다."""
+    from reportlab.lib.colors import HexColor
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+    from reportlab.pdfgen import canvas
+
+    font_name = "HYSMyeongJo-Medium"
+    if font_name not in pdfmetrics.getRegisteredFontNames():
+        pdfmetrics.registerFont(UnicodeCIDFont(font_name))
+
+    navy = HexColor("#16324F")
+    blue = HexColor("#2F6FA3")
+    blue_soft = HexColor("#EAF2F8")
+    gold = HexColor("#C9963D")
+    gold_deep = HexColor("#A87422")
+    gold_soft = HexColor("#FBF5E9")
+    text = HexColor("#203247")
+    muted = HexColor("#6E7E90")
+    line = HexColor("#DCE4EC")
+    white = HexColor("#FFFFFF")
+
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=A4, pageCompression=1)
+    width, height = A4
+    margin = 34
+
+    def set_font(size: float) -> None:
+        pdf.setFont(font_name, size)
+
+    def rounded_box(x, y, w, h, fill, stroke=line, radius=9):
+        pdf.setFillColor(fill)
+        pdf.setStrokeColor(stroke)
+        pdf.setLineWidth(0.7)
+        pdf.roundRect(x, y, w, h, radius, fill=1, stroke=1)
+
+    def draw_right(value: str, x: float, y: float, size: float = 8.4, color=text):
+        set_font(size)
+        pdf.setFillColor(color)
+        pdf.drawRightString(x, y, value)
+
+    def draw_wrapped(value: str, x: float, y: float, max_width: float, size: float, leading: float, color=muted):
+        set_font(size)
+        pdf.setFillColor(color)
+        words = value.split()
+        lines = []
+        current = ""
+        for word in words:
+            candidate = word if not current else f"{current} {word}"
+            if pdfmetrics.stringWidth(candidate, font_name, size) <= max_width:
+                current = candidate
+            else:
+                if current:
+                    lines.append(current)
+                current = word
+        if current:
+            lines.append(current)
+        for index, line_text in enumerate(lines):
+            pdf.drawString(x, y - index * leading, line_text)
+        return y - len(lines) * leading
+
+    # 상단 브랜드와 제목
+    set_font(8.5)
+    pdf.setFillColor(gold_deep)
+    pdf.drawString(margin, height - 31, "화랑 WORKSPACE")
+    set_font(17)
+    pdf.setFillColor(navy)
+    pdf.drawString(margin, height - 53, "적금 vs 단기납 10년 예상 이익 비교")
+    set_font(7.5)
+    pdf.setFillColor(muted)
+    pdf.drawRightString(width - margin, height - 50, datetime.now().strftime("%Y.%m.%d"))
+    pdf.setStrokeColor(line)
+    pdf.line(margin, height - 64, width - margin, height - 64)
+
+    # 핵심 결론
+    hero_y, hero_h = height - 136, 57
+    rounded_box(margin, hero_y, width - margin * 2, hero_h, gold_soft, HexColor("#E8D5AE"), 11)
+    set_font(8.2)
+    pdf.setFillColor(muted)
+    pdf.drawCentredString(width / 2, hero_y + 39, f"같은 월 {format_currency(monthly)}을 활용했을 때")
+    set_font(14.2)
+    pdf.setFillColor(gold_deep if advantage >= 0 else navy)
+    if advantage >= 0:
+        hero_text = f"단기납 예상 환급차익이 {format_currency(advantage)} 더 큽니다"
+    else:
+        hero_text = f"현재 조건에서는 적금 세후이자가 {format_currency(abs(advantage))} 더 큽니다"
+    pdf.drawCentredString(width / 2, hero_y + 19, hero_text)
+    set_font(6.9)
+    pdf.setFillColor(muted)
+    pdf.drawCentredString(
+        width / 2,
+        hero_y + 7,
+        f"적금 1년 만기 10회 반복 · 단기납 {pay_years}년납 후 10년 시점",
+    )
+
+    # 예상 이익 비교 막대그래프
+    chart_bottom = 463
+    chart_top = 672
+    chart_max = max(deposit["ten_year_interest"], shortpay["refund_gain"], 1)
+    available_bar_height = 142
+    deposit_h = max(31, deposit["ten_year_interest"] / chart_max * available_bar_height)
+    shortpay_h = max(31, shortpay["refund_gain"] / chart_max * available_bar_height)
+    bar_w = 105
+    deposit_x = 121
+    shortpay_x = width - 121 - bar_w
+
+    pdf.setStrokeColor(line)
+    pdf.setLineWidth(0.45)
+    for offset in (0, 47, 94, 141):
+        pdf.line(margin + 25, chart_bottom + offset, width - margin - 25, chart_bottom + offset)
+
+    def draw_bar(x, bar_h, fill, amount, inside_label, name, detail):
+        pdf.setFillColor(fill)
+        pdf.setStrokeColor(fill)
+        pdf.roundRect(x, chart_bottom, bar_w, bar_h, 5, fill=1, stroke=0)
+        set_font(8.5)
+        pdf.setFillColor(navy)
+        pdf.drawCentredString(x + bar_w / 2, chart_bottom + bar_h + 10, amount)
+        set_font(7.3)
+        pdf.setFillColor(white)
+        label_lines = inside_label.split("|")
+        label_y = chart_bottom + max(10, bar_h / 2 + 2)
+        for index, label in enumerate(label_lines):
+            pdf.drawCentredString(x + bar_w / 2, label_y - index * 9, label)
+        set_font(9.2)
+        pdf.setFillColor(navy)
+        pdf.drawCentredString(x + bar_w / 2, chart_bottom - 14, name)
+        set_font(6.4)
+        pdf.setFillColor(muted)
+        pdf.drawCentredString(x + bar_w / 2, chart_bottom - 25, detail)
+
+    draw_bar(
+        deposit_x,
+        deposit_h,
+        blue,
+        format_currency(deposit["ten_year_interest"]),
+        "10년 누적|세후이자",
+        "적금",
+        f"월 {format_currency(monthly)} · 1년 적금 10회",
+    )
+    draw_bar(
+        shortpay_x,
+        shortpay_h,
+        gold_deep,
+        format_currency(shortpay["refund_gain"]),
+        "10년 시점|예상 환급차익",
+        "단기납",
+        f"월 {format_currency(monthly)} · {pay_years}년납 후 유지",
+    )
+
+    if advantage >= 0:
+        badge_text = f"적금 대비 +{format_currency(advantage)}"
+        badge_w = pdfmetrics.stringWidth(badge_text, font_name, 7.2) + 18
+        badge_x = min(width - margin - badge_w, shortpay_x + bar_w + 7)
+        badge_y = chart_bottom + shortpay_h - 5
+        rounded_box(badge_x, badge_y, badge_w, 19, gold_soft, gold, 9)
+        set_font(7.2)
+        pdf.setFillColor(gold_deep)
+        pdf.drawCentredString(badge_x + badge_w / 2, badge_y + 6, badge_text)
+
+    # 단기납 타임라인
+    timeline_y = 409
+    start_x = margin + 31
+    end_x = width - margin - 31
+    segment_w = (end_x - start_x) / 3
+    pdf.setStrokeColor(line)
+    pdf.setLineWidth(1.1)
+    pdf.line(start_x, timeline_y + 26, end_x, timeline_y + 26)
+    phases = [
+        (f"1~{pay_years}년 납입", "보험료 납입"),
+        (f"{pay_years + 1}~9년 유지", "추가납입 없이 유지"),
+        ("10년 주요 시점", "환급률·비과세 요건 확인"),
+        ("해지 또는 계속 유지", "환급금 추가 증가 가능"),
+    ]
+    for index, (main, sub) in enumerate(phases):
+        x = start_x + segment_w * index
+        pdf.setFillColor(gold if index == 2 else line)
+        pdf.circle(x, timeline_y + 26, 4.2, fill=1, stroke=0)
+        set_font(7.2)
+        pdf.setFillColor(navy)
+        pdf.drawCentredString(x, timeline_y + 11, main)
+        set_font(5.9)
+        pdf.setFillColor(muted)
+        pdf.drawCentredString(x, timeline_y + 1, sub)
+
+    # 계산 내역 카드
+    card_y, card_h = 210, 174
+    gap = 14
+    card_w = (width - margin * 2 - gap) / 2
+    left_x = margin
+    right_x = margin + card_w + gap
+
+    def draw_calc_card(x, title_text, rows, accent):
+        rounded_box(x, card_y, card_w, card_h, white, line, 9)
+        pdf.setFillColor(accent)
+        pdf.roundRect(x, card_y + card_h - 29, card_w, 29, 9, fill=1, stroke=0)
+        pdf.rect(x, card_y + card_h - 29, card_w, 9, fill=1, stroke=0)
+        set_font(9.1)
+        pdf.setFillColor(white)
+        pdf.drawString(x + 13, card_y + card_h - 19, title_text)
+        row_y = card_y + card_h - 48
+        for index, (label, value) in enumerate(rows):
+            set_font(7.6)
+            pdf.setFillColor(muted)
+            pdf.drawString(x + 13, row_y, label)
+            draw_right(value, x + card_w - 13, row_y, 7.8, navy if index == len(rows) - 1 else text)
+            if index < len(rows) - 1:
+                pdf.setStrokeColor(line)
+                pdf.setLineWidth(0.35)
+                pdf.line(x + 13, row_y - 7, x + card_w - 13, row_y - 7)
+            row_y -= 24
+
+    deposit_rows = [
+        ("1년 납입원금", format_currency(deposit["one_year_principal"])),
+        ("1년 세전이자", format_currency(deposit["pretax_interest"])),
+        ("이자소득세 15.4%", format_currency(deposit["tax"])),
+        ("1년 세후이자", format_currency(deposit["aftertax_interest"])),
+        ("10년 누적 세후이자", format_currency(deposit["ten_year_interest"])),
+    ]
+    shortpay_rows = [
+        ("납입기간", f"{pay_years}년"),
+        ("총납입보험료", format_currency(shortpay["total_premium"])),
+        ("10년 예상 환급률", f"{refund_rate:,.1f}%"),
+        ("10년 예상 해지환급금", format_currency(shortpay["refund_amount"])),
+        ("예상 환급차익", format_currency(shortpay["refund_gain"])),
+    ]
+    draw_calc_card(left_x, "적금 계산 내역", deposit_rows, blue)
+    draw_calc_card(right_x, "단기납 계산 내역", shortpay_rows, gold_deep)
+
+    # 필요 적금금리
+    rate_y, rate_h = 145, 47
+    rounded_box(margin, rate_y, width - margin * 2, rate_h, blue_soft, HexColor("#C9DBE9"), 9)
+    set_font(8.1)
+    pdf.setFillColor(text)
+    pdf.drawCentredString(width / 2, rate_y + 29, "단기납과 같은 예상 이익을 내려면")
+    set_font(13)
+    pdf.setFillColor(navy)
+    pdf.drawCentredString(width / 2, rate_y + 12, f"적금금리 연 {required_rate:,.2f}% 필요")
+
+    # 하단 안내
+    note = (
+        "적금은 1년 만기 상품을 동일 조건으로 10회 반복한 단리 계산이며 원금 재예치에 따른 복리는 반영하지 않습니다. "
+        "단기납은 10년에 반드시 해지해야 하는 상품이 아니며, 계속 유지할 경우 상품의 해지환급금 예시표에 따라 환급금이 추가로 증가할 수 있습니다. "
+        "실제 해지환급금과 비과세 적용 여부는 상품의 설계서, 계약조건 및 관련 요건에 따라 달라질 수 있습니다."
+    )
+    draw_wrapped(note, margin, 119, width - margin * 2, 6.3, 9.2, muted)
+
+    pdf.setStrokeColor(line)
+    pdf.line(margin, 42, width - margin, 42)
+    set_font(6.3)
+    pdf.setFillColor(muted)
+    pdf.drawString(margin, 29, "비전본부 드림지점 박병선 팀장")
+    pdf.drawRightString(width - margin, 29, "화랑 WORKSPACE")
+
+    pdf.showPage()
+    pdf.save()
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
 def render_styles() -> None:
     st.markdown(
         """
@@ -143,6 +415,22 @@ def render_styles() -> None:
         div[data-testid="stFormSubmitButton"] button:hover {
             transform: translateY(-1px);
             box-shadow: 0 11px 24px rgba(22, 50, 79, 0.24);
+        }
+
+        div[data-testid="stDownloadButton"] button {
+            min-height: 47px;
+            border: 1px solid rgba(201,150,61,.52);
+            border-radius: 12px;
+            color: #704b16;
+            font-weight: 750;
+            background: linear-gradient(135deg, #fffaf0, var(--hw-gold-soft));
+            box-shadow: 0 7px 18px rgba(122,83,23,.09);
+        }
+
+        div[data-testid="stDownloadButton"] button:hover {
+            border-color: var(--hw-gold);
+            color: #5f3f12;
+            background: #fff8e8;
         }
 
         .hw-input-heading {
@@ -475,7 +763,7 @@ def run():
         with right:
             pay_years = st.selectbox(
                 "단기납 납입기간",
-                [5, 7, 10],
+                [5, 7],
                 index=0,
                 format_func=lambda value: f"{value}년납",
             )
@@ -484,7 +772,7 @@ def run():
                 min_value=100.0,
                 max_value=300.0,
                 step=0.1,
-                value=120.0,
+                value=123.0,
                 format="%.1f",
                 help="해당 상품의 가입설계서에 기재된 10년 시점 환급률을 입력하세요.",
             )
@@ -573,3 +861,27 @@ def run():
         """,
         unsafe_allow_html=True,
     )
+
+    try:
+        pdf_bytes = create_result_pdf(
+            monthly,
+            annual_rate,
+            pay_years,
+            refund_rate,
+            deposit,
+            shortpay,
+            advantage,
+            required_rate,
+        )
+        download_name = f"적금_단기납_비교결과_{datetime.now():%Y%m%d}.pdf"
+        st.download_button(
+            "A4 상담 결과 PDF 다운로드",
+            data=pdf_bytes,
+            file_name=download_name,
+            mime="application/pdf",
+            use_container_width=True,
+        )
+    except ImportError:
+        st.warning(
+            "PDF 다운로드 기능을 사용하려면 requirements.txt에 reportlab을 추가해 주세요."
+        )
