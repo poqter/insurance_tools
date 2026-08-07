@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-# 전달용 파일: 보유계약 자동 연결·검토 흐름 적용본 v7
+# 전달용 파일: 보유계약 자동 연결·검토 흐름 적용본 v8
 
 import hashlib
 import io
@@ -866,16 +866,33 @@ def run() -> None:
                 st.markdown(f"**{customer_name} · {holding['insurer']}**")
                 st.caption(f"{_holding_caption(holding)} · {reason}")
                 st.write(f"보유계약 상품: {holding['product_raw']}")
-                selected_product = st.selectbox(
-                    f"상품 및 세부 조건 · 유사 후보 {len(candidates)}개", candidates,
-                    index=None, key=f"candidate_{holding['row_key']}",
-                    placeholder="적용할 조건을 선택해 주세요.",
-                    format_func=lambda p: (
-                        f"{p.product} · {p.conditions or '기본 조건'} · "
-                        f"익월 {_format_rate(p.first_year_rate * payout_rate)} / "
-                        f"총 {_format_rate(p.total_rate * payout_rate)}"
-                    ),
+                product_groups: dict[str, list[ProductRate]] = defaultdict(list)
+                for candidate in candidates:
+                    product_groups[candidate.product].append(candidate)
+                product_names = list(product_groups)
+                selected_product_name = st.selectbox(
+                    f"연결할 상품 · 유사 상품 {len(product_names)}개",
+                    product_names,
+                    index=0 if len(product_names) == 1 else None,
+                    key=f"review_product_{holding['row_key']}",
+                    placeholder="수수료표의 상품을 선택해 주세요.",
                 )
+                selected_product = None
+                if selected_product_name:
+                    condition_candidates = product_groups[selected_product_name]
+                    product_key = hashlib.sha1(selected_product_name.encode("utf-8")).hexdigest()[:8]
+                    selected_product = st.selectbox(
+                        f"납입기간 및 세부 조건 · 후보 {len(condition_candidates)}개",
+                        condition_candidates,
+                        index=0 if len(condition_candidates) == 1 else None,
+                        key=f"review_condition_{holding['row_key']}_{product_key}",
+                        placeholder="납입기간과 세부 조건을 선택해 주세요.",
+                        format_func=lambda p: (
+                            f"{p.conditions or '기본 조건'} · "
+                            f"익월 {_format_rate(p.first_year_rate * payout_rate)} / "
+                            f"총 {_format_rate(p.total_rate * payout_rate)}"
+                        ),
+                    )
                 recruiter_type = ""
                 if holding.get("share_rate", 100.0) < 100:
                     recruiter_type = st.selectbox(
