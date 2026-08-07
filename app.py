@@ -4,6 +4,7 @@ import streamlit as st
 
 from modules import (
     analyzer,
+    commission_calculator,
     convention,
     deposit_vs_shortpay,
     inheritance_tax,
@@ -84,6 +85,12 @@ APP_DEFINITIONS = {
         "name": "매니저 업적 환산", "icon": "📈", "code": "MR", "category": "실적 관리",
         "description": "지점 실적 환산금액을 집계합니다.", "action": "매니저 실적 확인", "run": manager_results.run,
     },
+    "commission_calculator": {
+        "name": "수수료 계산기", "icon": "💼", "code": "CC", "category": "실적 관리",
+        "badge": {"text": "NEW", "tone": "new"},
+        "description": "생보·손보 예시표에서 상품별 수수료율을 찾아 예상 수당을 계산합니다.",
+        "action": "수수료 계산 시작", "run": commission_calculator.run,
+    },
 }
 
 
@@ -98,29 +105,45 @@ HOME_ICONS = {
     "convention": '<svg viewBox="0 0 24 24"><path d="M8 4h8v4a4 4 0 01-8 0V4z"/><path d="M8 6H4c0 4 2 6 5 6M16 6h4c0 4-2 6-5 6"/><path d="M12 12v5M8 21h8M9 17h6v4"/></svg>',
     "summer": '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9L7 7M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/></svg>',
     "manager_results": '<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V6M16 20V3M22 20H2"/><path d="M4 8l5-4 5 2 6-5"/><path d="M17 1h3v3"/></svg>',
+    "commission_calculator": '<svg viewBox="0 0 24 24"><path d="M4 7h16v13H4z"/><path d="M8 7V4h8v3M4 11h16"/><path d="M9 15h6M12 13v4"/></svg>',
 }
 
 
 USER_PERMISSIONS = {
-    "Admin": {app_id: True for app_id in APP_DEFINITIONS},
-    "Manager1": {app_id: True for app_id in APP_DEFINITIONS},
+    "Admin": {
+        "analyzer": True, "remodeling": True, "deposit_vs_shortpay": True,
+        "renewal_vs_nonrenewal": True, "inheritance_tax": True,
+        "insurer_portal": True,
+        "convention": True, "summer": True, "manager_results": True,
+        "commission_calculator": True,
+    },
+    "Manager1": {
+        "analyzer": True, "remodeling": True, "deposit_vs_shortpay": True,
+        "renewal_vs_nonrenewal": True, "inheritance_tax": True,
+        "insurer_portal": True,
+        "convention": True, "summer": True, "manager_results": True,
+        "commission_calculator": False,
+    },
     "Basic": {
         "analyzer": True, "remodeling": False, "deposit_vs_shortpay": False,
         "renewal_vs_nonrenewal": False, "inheritance_tax": False,
         "insurer_portal": True,
         "convention": True, "summer": True, "manager_results": False,
+        "commission_calculator": False,
     },
     "Crew": {
         "analyzer": True, "remodeling": False, "deposit_vs_shortpay": True,
         "renewal_vs_nonrenewal": True, "inheritance_tax": False,
         "insurer_portal": True,
         "convention": True, "summer": True, "manager_results": False,
+        "commission_calculator": False,
     },
     "Dream": {
         "analyzer": True, "remodeling": True, "deposit_vs_shortpay": True,
         "renewal_vs_nonrenewal": True, "inheritance_tax": True,
         "insurer_portal": True,
         "convention": True, "summer": True, "manager_results": False,
+        "commission_calculator": False,
     },
 }
 
