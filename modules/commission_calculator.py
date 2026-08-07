@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-# 전달용 파일: 보유계약 자동 연결·검토 흐름 적용본 v10
+# 전달용 파일: 보유계약 자동 연결·검토 흐름 적용본 v11
 
 import hashlib
 import io
@@ -685,10 +685,20 @@ def _render_manual_entry(all_products: list[ProductRate]) -> None:
         product_names = sorted(product_groups)
         product_name = st.selectbox("상품", product_names, index=None, key="manual_product")
         candidates = product_groups.get(product_name, [])
-        selected = st.selectbox(
-            "납입기간 및 세부 조건", candidates, index=None,
-            format_func=_condition_display, key="manual_condition",
-        ) if candidates else None
+        if candidates:
+            selected = st.selectbox(
+                "납입기간 및 세부 조건", candidates, index=None,
+                format_func=_condition_display, key="manual_condition",
+                placeholder="납입기간과 세부 조건을 선택해 주세요.",
+            )
+        else:
+            selected = None
+            st.selectbox(
+                "납입기간 및 세부 조건",
+                ["먼저 상품을 선택해 주세요."],
+                disabled=True,
+                key="manual_condition_disabled",
+            )
         col1, col2 = st.columns(2)
         customer = col1.text_input("고객명", key="manual_customer")
         policy = col2.text_input("증권번호", key="manual_policy")
@@ -771,13 +781,22 @@ def _render_contract_editor(all_products: list[ProductRate]) -> None:
             ),
             None,
         )
-        selected_product = st.selectbox(
-            "납입기간 및 세부 조건", matching,
-            index=current_position,
-            placeholder="납입기간과 세부 조건을 선택해 주세요.",
-            format_func=_condition_display,
-            key=f"edit_condition_{edit_index}_{hashlib.sha1(str(selected_product_name).encode()).hexdigest()[:8]}",
-        ) if matching else None
+        if matching:
+            selected_product = st.selectbox(
+                "납입기간 및 세부 조건", matching,
+                index=current_position,
+                placeholder="납입기간과 세부 조건을 선택해 주세요.",
+                format_func=_condition_display,
+                key=f"edit_condition_{edit_index}_{hashlib.sha1(str(selected_product_name).encode()).hexdigest()[:8]}",
+            )
+        else:
+            selected_product = None
+            st.selectbox(
+                "납입기간 및 세부 조건",
+                ["먼저 상품을 선택해 주세요."],
+                disabled=True,
+                key=f"edit_condition_disabled_{edit_index}_{selected_insurer}",
+            )
 
         recruiter_type = contract.get("recruiter_type", "")
         if share_rate < 100:
@@ -1026,6 +1045,13 @@ def run() -> None:
                             f"익월 {_format_rate(p.first_year_rate * payout_rate)} / "
                             f"총 {_format_rate(p.total_rate * payout_rate)}"
                         ),
+                    )
+                else:
+                    st.selectbox(
+                        "납입기간 및 세부 조건",
+                        ["먼저 상품을 선택해 주세요."],
+                        disabled=True,
+                        key=f"review_condition_disabled_{holding['row_key']}",
                     )
                 recruiter_type = ""
                 if holding.get("share_rate", 100.0) < 100:
