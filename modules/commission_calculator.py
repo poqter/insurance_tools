@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-# 전달용 파일: 보유계약 자동 연결·검토 흐름 적용본 v8
+# 전달용 파일: 보유계약 자동 연결·검토 흐름 적용본 v9
 
 import hashlib
 import io
@@ -440,6 +440,24 @@ def _holding_product_name(value: Any) -> str:
     return re.sub(r"[^0-9a-z가-힣]", "", text)
 
 
+def _product_display_parts(product_name: str) -> tuple[str, str]:
+    """상품명 셀 뒤에 붙은 납입 안내 문구를 화면용 상품명에서 분리합니다."""
+    text = _clean_text(product_name)
+    split_match = re.search(
+        r"\s+(?=(?:\d+(?:\.\d+)?\s*구좌|\d+\s*년납(?:초과|이상|이하)))",
+        text,
+    )
+    if not split_match:
+        return text, ""
+    return text[:split_match.start()].strip(), text[split_match.end():].strip()
+
+
+def _condition_display(product: ProductRate) -> str:
+    _, product_note = _product_display_parts(product.product)
+    parts = [part for part in (product_note, product.conditions) if part]
+    return " / ".join(dict.fromkeys(parts)) or "기본 조건"
+
+
 @st.cache_data(show_spinner=False)
 def parse_holding_workbook(file_bytes: bytes) -> list[dict]:
     """보유계약 장기 파일을 읽습니다. 잘못된 dimension=A1 파일도 처리합니다."""
@@ -625,12 +643,16 @@ def _render_manual_entry(all_products: list[ProductRate]) -> None:
         insurers = sorted({p.insurer for p in all_products if p.source_type == source_type})
         insurer = st.selectbox("보험회사", insurers, index=None, key="manual_insurer")
         products = [p for p in all_products if p.source_type == source_type and p.insurer == insurer]
-        product_names = sorted({p.product for p in products})
+        product_groups: dict[str, list[ProductRate]] = defaultdict(list)
+        for product in products:
+            display_name, _ = _product_display_parts(product.product)
+            product_groups[display_name].append(product)
+        product_names = sorted(product_groups)
         product_name = st.selectbox("상품", product_names, index=None, key="manual_product")
-        candidates = [p for p in products if p.product == product_name]
+        candidates = product_groups.get(product_name, [])
         selected = st.selectbox(
-            "세부 조건", candidates, index=None,
-            format_func=lambda p: p.conditions or "기본 조건", key="manual_condition",
+            "납입기간 및 세부 조건", candidates, index=None,
+            format_func=_condition_display, key="manual_condition",
         ) if candidates else None
         col1, col2 = st.columns(2)
         customer = col1.text_input("고객명", key="manual_customer")
@@ -690,7 +712,7 @@ def _render_contract_editor(all_products: list[ProductRate]) -> None:
             f"세부 조건 · {contract.get('insurer', '')} · {contract.get('product', '')}",
             matching,
             index=current_position if matching else None,
-            format_func=lambda product: product.conditions or "기본 조건",
+            format_func=_condition_display,
             key=f"edit_condition_{edit_index}",
         ) if matching else None
 
@@ -868,7 +890,8 @@ def run() -> None:
                 st.write(f"보유계약 상품: {holding['product_raw']}")
                 product_groups: dict[str, list[ProductRate]] = defaultdict(list)
                 for candidate in candidates:
-                    product_groups[candidate.product].append(candidate)
+                    display_name, _ = _product_display_parts(candidate.product)
+                    product_groups[display_name].append(candidate)
                 product_names = list(product_groups)
                 selected_product_name = st.selectbox(
                     f"연결할 상품 · 유사 상품 {len(product_names)}개",
@@ -888,7 +911,7 @@ def run() -> None:
                         key=f"review_condition_{holding['row_key']}_{product_key}",
                         placeholder="납입기간과 세부 조건을 선택해 주세요.",
                         format_func=lambda p: (
-                            f"{p.conditions or '기본 조건'} · "
+                            f"{_condition_display(p)} · "
                             f"익월 {_format_rate(p.first_year_rate * payout_rate)} / "
                             f"총 {_format_rate(p.total_rate * payout_rate)}"
                         ),
