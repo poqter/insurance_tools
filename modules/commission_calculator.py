@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-# 전달용 파일: 보유계약 자동 연결·검토 흐름 적용본 v9
+# 전달용 파일: 보유계약 자동 연결·검토 흐름 적용본 v10
 
 import hashlib
 import io
@@ -600,6 +600,41 @@ def _initialize_state() -> None:
     st.session_state.setdefault("commission_payout_rate", DEFAULT_PAYOUT_RATE)
     st.session_state.setdefault("commission_edit_index", None)
     st.session_state.setdefault("commission_edit_request", None)
+    st.session_state.setdefault("commission_ratebook_signature", "")
+
+
+def _reconnect_contract_rates(contracts: list[dict], products: list[ProductRate]) -> tuple[int, int]:
+    """새 수수료표에서 기존 상품·세부 조건이 같은 계약의 요율을 다시 연결합니다."""
+    updated_count = 0
+    unresolved_count = 0
+    for contract in contracts:
+        same_product = [
+            product for product in products
+            if product.source_type == contract.get("source_type")
+            and product.insurer == contract.get("insurer")
+            and _holding_product_name(product.product) == _holding_product_name(contract.get("product", ""))
+        ]
+        same_condition = [
+            product for product in same_product
+            if _normalize(_condition_display(product)) == _normalize(contract.get("conditions", "") or "기본 조건")
+        ]
+        candidates = same_condition or same_product
+        unique_rates = {
+            (round(product.first_year_rate, 8), round(product.total_rate, 8)) for product in candidates
+        }
+        if not candidates or len(unique_rates) != 1:
+            contract["rate_recheck_required"] = True
+            unresolved_count += 1
+            continue
+        selected = candidates[0]
+        contract.update({
+            "product": selected.product, "conditions": selected.conditions,
+            "first_year_rate": selected.first_year_rate, "total_rate": selected.total_rate,
+            "sheet_name": selected.sheet_name, "row_number": selected.row_number,
+            "rate_recheck_required": False,
+        })
+        updated_count += 1
+    return updated_count, unresolved_count
 
 
 def _contract_data(holding: dict, product: ProductRate, recruiter_type: str = "") -> dict:
@@ -697,23 +732,51 @@ def _render_contract_editor(all_products: list[ProductRate]) -> None:
             key=f"edit_share_{edit_index}",
         )
 
-        matching = [
+        source_options = [source for source in ("생보", "손보") if any(p.source_type == source for p in all_products)]
+        current_source = contract.get("source_type")
+        source_index = source_options.index(current_source) if current_source in source_options else 0
+        selected_source = st.radio(
+            "보험 구분", source_options, index=source_index, horizontal=True,
+            key=f"edit_source_{edit_index}",
+        )
+        insurer_options = sorted({p.insurer for p in all_products if p.source_type == selected_source})
+        current_insurer = contract.get("insurer")
+        insurer_index = insurer_options.index(current_insurer) if current_insurer in insurer_options else None
+        selected_insurer = st.selectbox(
+            "보험회사", insurer_options, index=insurer_index,
+            placeholder="보험회사를 선택해 주세요.", key=f"edit_insurer_{edit_index}",
+        )
+
+        insurer_products = [
             product for product in all_products
-            if product.insurer == contract.get("insurer") and product.product == contract.get("product")
+            if product.source_type == selected_source and product.insurer == selected_insurer
         ]
+        product_groups: dict[str, list[ProductRate]] = defaultdict(list)
+        for product in insurer_products:
+            display_name, _ = _product_display_parts(product.product)
+            product_groups[display_name].append(product)
+        product_names = sorted(product_groups)
+        current_product_name, _ = _product_display_parts(contract.get("product", ""))
+        product_index = product_names.index(current_product_name) if current_product_name in product_names else None
+        selected_product_name = st.selectbox(
+            "상품", product_names, index=product_index,
+            placeholder="상품을 선택해 주세요.", key=f"edit_product_{edit_index}_{selected_insurer}",
+        ) if product_names else None
+
+        matching = product_groups.get(selected_product_name, [])
         current_position = next(
             (
                 index for index, product in enumerate(matching)
                 if product.sheet_name == contract.get("sheet_name") and product.row_number == contract.get("row_number")
             ),
-            0,
+            None,
         )
         selected_product = st.selectbox(
-            f"세부 조건 · {contract.get('insurer', '')} · {contract.get('product', '')}",
-            matching,
-            index=current_position if matching else None,
+            "납입기간 및 세부 조건", matching,
+            index=current_position,
+            placeholder="납입기간과 세부 조건을 선택해 주세요.",
             format_func=_condition_display,
-            key=f"edit_condition_{edit_index}",
+            key=f"edit_condition_{edit_index}_{hashlib.sha1(str(selected_product_name).encode()).hexdigest()[:8]}",
         ) if matching else None
 
         recruiter_type = contract.get("recruiter_type", "")
@@ -742,11 +805,15 @@ def _render_contract_editor(all_products: list[ProductRate]) -> None:
                 })
                 if selected_product is not None:
                     updated.update({
+                        "insurer": selected_product.insurer,
+                        "product": selected_product.product,
                         "conditions": selected_product.conditions,
+                        "source_type": selected_product.source_type,
                         "first_year_rate": selected_product.first_year_rate,
                         "total_rate": selected_product.total_rate,
                         "sheet_name": selected_product.sheet_name,
                         "row_number": selected_product.row_number,
+                        "rate_recheck_required": False,
                     })
                 contracts[edit_index] = updated
                 st.session_state["commission_edit_index"] = None
@@ -773,11 +840,15 @@ def run() -> None:
     all_products: list[ProductRate] = []
     parse_warnings: list[str] = []
     reference_months: dict[str, str] = {}
+    ratebook_hash = hashlib.sha256()
     for uploaded, source_type in ((life_file, "생보"), (nonlife_file, "손보")):
         if uploaded is None:
             continue
         try:
-            parsed, warnings = parse_commission_workbook(uploaded.getvalue(), source_type)
+            uploaded_bytes = uploaded.getvalue()
+            ratebook_hash.update(source_type.encode("utf-8"))
+            ratebook_hash.update(uploaded_bytes)
+            parsed, warnings = parse_commission_workbook(uploaded_bytes, source_type)
             all_products.extend(_to_product_rate(item) for item in parsed)
             parse_warnings.extend(warnings)
             reference_months[source_type] = _month_from_filename(uploaded.name)
@@ -796,6 +867,35 @@ def run() -> None:
 
     for warning in parse_warnings:
         st.warning(warning)
+
+    current_ratebook_signature = ratebook_hash.hexdigest() if all_products else ""
+    saved_ratebook_signature = st.session_state.get("commission_ratebook_signature", "")
+    contracts = st.session_state["commission_contracts"]
+    if current_ratebook_signature and not saved_ratebook_signature:
+        st.session_state["commission_ratebook_signature"] = current_ratebook_signature
+    elif (
+        current_ratebook_signature and saved_ratebook_signature
+        and current_ratebook_signature != saved_ratebook_signature and contracts
+    ):
+        st.warning(
+            "수수료 예시표가 변경되었습니다. 기존 수당 계산 대상 계약의 요율을 "
+            "새 수수료표 기준으로 재검증해야 합니다."
+        )
+        reconnect_col, clear_col = st.columns(2)
+        if reconnect_col.button("새 수수료표로 다시 연결", type="primary", use_container_width=True):
+            updated, unresolved = _reconnect_contract_rates(contracts, all_products)
+            st.session_state["commission_ratebook_signature"] = current_ratebook_signature
+            st.session_state["commission_edit_index"] = None
+            st.toast(f"{updated}건 재연결 · {unresolved}건 직접 확인 필요")
+            st.rerun()
+        if clear_col.button("기존 계약 초기화", use_container_width=True):
+            st.session_state["commission_contracts"] = []
+            st.session_state["commission_ratebook_signature"] = current_ratebook_signature
+            st.session_state["commission_edit_index"] = None
+            st.rerun()
+        st.stop()
+    elif current_ratebook_signature and current_ratebook_signature != saved_ratebook_signature:
+        st.session_state["commission_ratebook_signature"] = current_ratebook_signature
 
     st.markdown("### ② 지급율 및 계약 불러오기")
     payout_rate_percent = st.number_input(
@@ -877,6 +977,10 @@ def run() -> None:
                     st.markdown(f"**{customer_name} · {product.insurer}**")
                     st.caption(_holding_caption(holding))
                     st.write(f"{product.product} · {product.conditions or '기본 조건'}")
+                    reason = "상품명 일치"
+                    if holding.get("payment_label"):
+                        reason += f" · {holding['payment_label']} 조건 일치"
+                    st.caption(f"자동 연결 근거: {reason}")
                 if selected:
                     pending.append(_contract_data(holding, product))
 
@@ -892,12 +996,19 @@ def run() -> None:
                 for candidate in candidates:
                     display_name, _ = _product_display_parts(candidate.product)
                     product_groups[display_name].append(candidate)
-                product_names = list(product_groups)
+                all_product_names = list(product_groups)
+                show_more = False
+                if len(all_product_names) > 3:
+                    show_more = st.checkbox(
+                        f"다른 유사 상품 보기 ({len(all_product_names) - 3}개 더 있음)",
+                        value=False, key=f"show_more_{holding['row_key']}",
+                    )
+                product_names = all_product_names if show_more else all_product_names[:3]
                 selected_product_name = st.selectbox(
-                    f"연결할 상품 · 유사 상품 {len(product_names)}개",
+                    f"연결할 상품 · {'전체 후보' if show_more else '추천 후보'} {len(product_names)}개",
                     product_names,
                     index=0 if len(product_names) == 1 else None,
-                    key=f"review_product_{holding['row_key']}",
+                    key=f"review_product_{holding['row_key']}_{'all' if show_more else 'recommended'}",
                     placeholder="수수료표의 상품을 선택해 주세요.",
                 )
                 selected_product = None
@@ -924,10 +1035,16 @@ def run() -> None:
                         placeholder="모집 형태를 선택해 주세요.",
                     ) or ""
                 include = st.checkbox("이 계약 등록", value=True, key=f"review_include_{holding['row_key']}")
-                if include and selected_product is not None and (holding.get("share_rate", 100.0) >= 100 or recruiter_type):
+                ready = include and selected_product is not None and (
+                    holding.get("share_rate", 100.0) >= 100 or recruiter_type
+                )
+                if ready:
                     pending.append(_contract_data(holding, selected_product, recruiter_type))
+                    st.success("등록 준비 완료")
                 elif not include:
                     review_records.append({**holding, "product": holding["product_raw"], "reason": "사용자가 등록 대상에서 제외"})
+                else:
+                    st.caption("상품·납입기간·모집 형태 중 필요한 항목을 선택해 주세요.")
                 st.divider()
 
         if excluded:
@@ -991,14 +1108,22 @@ def run() -> None:
 
     _render_contract_editor(all_products)
 
-    total_premium = sum(contract["premium"] for contract in contracts)
+    calculation_contracts = [contract for contract in contracts if not contract.get("rate_recheck_required")]
+    recheck_count = len(contracts) - len(calculation_contracts)
+    if recheck_count:
+        st.warning(
+            f"새 수수료표에서 요율을 확정하지 못한 계약 {recheck_count}건은 합계와 다운로드에서 제외했습니다. "
+            "해당 계약의 수정 버튼을 눌러 상품과 세부 조건을 다시 선택해 주세요."
+        )
+
+    total_premium = sum(contract["premium"] for contract in calculation_contracts)
     total_first = sum(
         contract["premium"] * contract["first_year_rate"] * payout_rate
-        for contract in contracts
+        for contract in calculation_contracts
     )
     total_commission = sum(
         contract["premium"] * contract["total_rate"] * payout_rate
-        for contract in contracts
+        for contract in calculation_contracts
     )
     metric_cols = st.columns(3)
     metric_cols[0].metric("월보험료 합계", _format_won(total_premium))
@@ -1029,6 +1154,8 @@ def run() -> None:
             if contract.get("share_rate", 100) < 100:
                 recruiting = f" · {contract['share_rate']:g}% · {contract.get('recruiter_type') or '모집 형태 확인'}"
             st.caption(f"증권번호 {policy}{recruiting} · {product_detail}")
+            if contract.get("rate_recheck_required"):
+                st.warning("요율 재확인 필요")
         row_columns[1].write(_format_won(contract["premium"]))
         row_columns[2].write(_format_rate(first_rate))
         row_columns[3].write(_format_rate(total_rate))
@@ -1064,7 +1191,7 @@ def run() -> None:
     with download_col:
         months = sorted({month for month in reference_months.values() if month})
         reference_month = ", ".join(months)
-        excel_bytes = _make_excel(contracts, payout_rate, reference_month, review_records)
+        excel_bytes = _make_excel(calculation_contracts, payout_rate, reference_month, review_records)
         st.download_button(
             "엑셀 다운로드",
             data=excel_bytes,
