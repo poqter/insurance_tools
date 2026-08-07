@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-# 전달용 파일: 개별 계약 간소화 목록 적용본 v5
+# 전달용 파일: 개별 계약 수정 기능 적용본 v6
 
 import hashlib
 import io
@@ -331,6 +331,8 @@ def _make_excel(contracts: list[dict], payout_rate: float) -> bytes:
 def _initialize_state() -> None:
     st.session_state.setdefault("commission_contracts", [])
     st.session_state.setdefault("commission_payout_rate", DEFAULT_PAYOUT_RATE)
+    st.session_state.setdefault("commission_edit_index", None)
+    st.session_state.setdefault("commission_edit_request", None)
 
 
 def run() -> None:
@@ -367,6 +369,31 @@ def run() -> None:
 
     for warning in parse_warnings:
         st.warning(warning)
+
+    edit_request = st.session_state.pop("commission_edit_request", None)
+    if isinstance(edit_request, int) and 0 <= edit_request < len(st.session_state["commission_contracts"]):
+        edit_contract = st.session_state["commission_contracts"][edit_request]
+        matched_product = next(
+            (
+                product for product in all_products
+                if product.insurer == edit_contract["insurer"]
+                and product.product == edit_contract["product"]
+                and product.sheet_name == edit_contract["sheet_name"]
+                and product.row_number == edit_contract["row_number"]
+            ),
+            None,
+        )
+        if matched_product is not None:
+            st.session_state["commission_source_type"] = matched_product.source_type
+            st.session_state["commission_insurer"] = matched_product.insurer
+            st.session_state["commission_product_name"] = matched_product.product
+            st.session_state["commission_condition"] = matched_product.key
+            st.session_state["commission_customer"] = edit_contract.get("customer", "")
+            st.session_state["commission_premium"] = int(edit_contract["premium"])
+            st.session_state["commission_edit_index"] = edit_request
+        else:
+            st.session_state["commission_edit_index"] = None
+            st.warning("현재 업로드한 예시표에서 수정할 계약의 상품 조건을 찾지 못했습니다.")
 
     st.markdown("### ② 지급율 및 계약 입력")
     payout_rate_percent = st.number_input(
@@ -469,13 +496,26 @@ def run() -> None:
             key="commission_premium",
         )
 
-    if st.button("계약 추가", type="primary", use_container_width=True):
+    editing_index = st.session_state.get("commission_edit_index")
+    if isinstance(editing_index, int):
+        st.info(f"{editing_index + 1}번 계약을 수정하고 있습니다.")
+        submit_col, cancel_col = st.columns([3, 1])
+        with submit_col:
+            submitted = st.button("계약 수정 완료", type="primary", use_container_width=True)
+        with cancel_col:
+            if st.button("수정 취소", use_container_width=True):
+                st.session_state["commission_edit_index"] = None
+                st.rerun()
+    else:
+        submitted = st.button("계약 추가", type="primary", use_container_width=True)
+
+    if submitted:
         if selected_product is None:
             st.warning("보험회사와 상품을 선택해 주세요.")
         elif premium <= 0:
             st.warning("월보험료를 입력해 주세요.")
         else:
-            st.session_state["commission_contracts"].append({
+            contract_data = {
                 "customer": customer.strip(),
                 "insurer": selected_product.insurer,
                 "product": selected_product.product,
@@ -485,7 +525,12 @@ def run() -> None:
                 "total_rate": selected_product.total_rate,
                 "sheet_name": selected_product.sheet_name,
                 "row_number": selected_product.row_number,
-            })
+            }
+            if isinstance(editing_index, int) and 0 <= editing_index < len(st.session_state["commission_contracts"]):
+                st.session_state["commission_contracts"][editing_index] = contract_data
+                st.session_state["commission_edit_index"] = None
+            else:
+                st.session_state["commission_contracts"].append(contract_data)
             st.rerun()
 
     contracts = st.session_state["commission_contracts"]
@@ -508,10 +553,10 @@ def run() -> None:
     metric_cols[1].metric("예상 익월수당", _format_won(total_first))
     metric_cols[2].metric("예상 총수당", _format_won(total_commission))
 
-    header_columns = st.columns([3.4, 1, 1.15, 1.15, 1.25, 1.25, 0.55])
+    header_columns = st.columns([3.4, 1, 1.15, 1.15, 1.25, 1.25, 1.1])
     for column, label in zip(
         header_columns,
-        ("계약 정보", "월보험료", "익월 수수료율", "총 수수료율", "예상 익월수당", "예상 총수당", ""),
+        ("계약 정보", "월보험료", "익월 수수료율", "총 수수료율", "예상 익월수당", "예상 총수당", "관리"),
     ):
         column.caption(label)
 
@@ -524,7 +569,7 @@ def run() -> None:
         if contract["conditions"]:
             product_detail += f" · {contract['conditions']}"
 
-        row_columns = st.columns([3.4, 1, 1.15, 1.15, 1.25, 1.25, 0.55])
+        row_columns = st.columns([3.4, 1, 1.15, 1.15, 1.25, 1.25, 1.1])
         with row_columns[0]:
             st.markdown(
                 f"**{index + 1}. {contract.get('customer') or '고객명 없음'}** · {contract['insurer']}"
@@ -536,8 +581,17 @@ def run() -> None:
         row_columns[4].write(_format_won(expected_first))
         row_columns[5].write(_format_won(expected_total))
         with row_columns[6]:
-            if st.button("✕", key=f"delete_commission_{index}", help="이 계약 삭제"):
+            edit_col, delete_col = st.columns(2)
+            if edit_col.button("수정", key=f"edit_commission_{index}", help="이 계약 수정"):
+                st.session_state["commission_edit_request"] = index
+                st.rerun()
+            if delete_col.button("✕", key=f"delete_commission_{index}", help="이 계약 삭제"):
                 contracts.pop(index)
+                current_edit = st.session_state.get("commission_edit_index")
+                if current_edit == index:
+                    st.session_state["commission_edit_index"] = None
+                elif isinstance(current_edit, int) and current_edit > index:
+                    st.session_state["commission_edit_index"] = current_edit - 1
                 st.rerun()
 
         if index < len(contracts) - 1:
@@ -551,6 +605,7 @@ def run() -> None:
     with clear_col:
         if st.button("전체 계약 지우기", use_container_width=True):
             st.session_state["commission_contracts"] = []
+            st.session_state["commission_edit_index"] = None
             st.rerun()
     with download_col:
         excel_bytes = _make_excel(contracts, payout_rate)
