@@ -592,6 +592,11 @@ def _holding_caption(holding: dict) -> str:
     return f"증권번호 {policy} · 월보험료 {_format_won(holding['premium'])}{payment}"
 
 
+def _markdown_text(value: Any) -> str:
+    """마스킹 이름의 ** 등이 Markdown 문법으로 해석되지 않도록 처리합니다."""
+    return str(value or "").replace("\\", "\\\\").replace("*", "\\*").replace("_", "\\_")
+
+
 def _render_manual_entry(all_products: list[ProductRate]) -> None:
     with st.expander("계약 직접 추가", expanded=False):
         if not all_products:
@@ -741,7 +746,8 @@ def run() -> None:
                 col1, col2 = st.columns([0.08, 0.92])
                 selected = col1.checkbox("선택", value=True, key=f"auto_{holding['row_key']}", label_visibility="collapsed")
                 with col2:
-                    st.markdown(f"**{holding.get('customer') or '고객명 없음'} · {product.insurer}**")
+                    customer_name = _markdown_text(holding.get("customer") or "고객명 없음")
+                    st.markdown(f"**{customer_name} · {product.insurer}**")
                     st.caption(_holding_caption(holding))
                     st.write(f"{product.product} · {product.conditions or '기본 조건'}")
                 if selected:
@@ -751,8 +757,10 @@ def run() -> None:
             if not needs_review:
                 st.caption("확인이 필요한 계약이 없습니다.")
             for holding, candidates, reason in needs_review:
-                st.markdown(f"**{holding.get('customer') or '고객명 없음'} · {holding['insurer']}**")
+                customer_name = _markdown_text(holding.get("customer") or "고객명 없음")
+                st.markdown(f"**{customer_name} · {holding['insurer']}**")
                 st.caption(f"{_holding_caption(holding)} · {reason}")
+                st.write(f"보유계약 상품: {holding['product_raw']}")
                 selected_product = st.selectbox(
                     "세부 조건", candidates, index=None, key=f"candidate_{holding['row_key']}",
                     placeholder="적용할 조건을 선택해 주세요.",
@@ -776,7 +784,8 @@ def run() -> None:
             with st.expander(f"기준월·계약상태·중복으로 제외 {len(excluded)}건", expanded=False):
                 st.info("기본적으로 제외됩니다. 필요한 경우에만 계약을 펼쳐 포함해 주세요.")
                 for holding, reason in excluded:
-                    st.markdown(f"**{holding.get('customer') or '고객명 없음'} · {holding['insurer']}**")
+                    customer_name = _markdown_text(holding.get("customer") or "고객명 없음")
+                    st.markdown(f"**{customer_name} · {holding['insurer']}**")
                     st.caption(f"{_holding_caption(holding)} · {reason}")
                     include = st.checkbox("이번 계산에 포함", value=False, key=f"excluded_include_{holding['row_key']}")
                     if include:
@@ -800,7 +809,8 @@ def run() -> None:
         if unmatched:
             with st.expander(f"연결되지 않은 계약 {len(unmatched)}건", expanded=bool(unmatched)):
                 for holding, reason in unmatched:
-                    st.markdown(f"**{holding.get('customer') or '고객명 없음'} · {holding['insurer']}**")
+                    customer_name = _markdown_text(holding.get("customer") or "고객명 없음")
+                    st.markdown(f"**{customer_name} · {holding['insurer']}**")
                     st.caption(_holding_caption(holding))
                     st.write(f"{holding['product_raw']} · {reason}")
                     review_records.append({**holding, "product": holding["product_raw"], "reason": reason})
@@ -860,9 +870,8 @@ def run() -> None:
 
         row_columns = st.columns([3.6, 1, 1.15, 1.15, 1.25, 1.25, 0.65])
         with row_columns[0]:
-            st.markdown(
-                f"**{index + 1}. {contract.get('customer') or '고객명 없음'}** · {contract['insurer']}"
-            )
+            customer_name = _markdown_text(contract.get("customer") or "고객명 없음")
+            st.markdown(f"**{index + 1}. {customer_name}** · {contract['insurer']}")
             policy = contract.get("policy_number") or "증권번호 없음"
             recruiting = ""
             if contract.get("share_rate", 100) < 100:
