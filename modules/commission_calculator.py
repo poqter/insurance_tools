@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-# 전달용 파일: 보험회사·상품·세부 조건 단계형 선택 적용본 v4
+# 전달용 파일: 개별 계약 간소화 목록 적용본 v5
 
 import hashlib
 import io
@@ -508,21 +508,43 @@ def run() -> None:
     metric_cols[1].metric("예상 익월수당", _format_won(total_first))
     metric_cols[2].metric("예상 총수당", _format_won(total_commission))
 
+    header_columns = st.columns([3.4, 1, 1.15, 1.15, 1.25, 1.25, 0.55])
+    for column, label in zip(
+        header_columns,
+        ("계약 정보", "월보험료", "익월 수수료율", "총 수수료율", "예상 익월수당", "예상 총수당", ""),
+    ):
+        column.caption(label)
+
     for index, contract in enumerate(contracts):
         first_rate = contract["first_year_rate"] * payout_rate
         total_rate = contract["total_rate"] * payout_rate
-        title = f"{index + 1}. {contract.get('customer') or '고객명 없음'} · {contract['insurer']}"
-        with st.container(border=True):
-            st.markdown(f"**{title}**")
-            st.caption(contract["product"] + (f" · {contract['conditions']}" if contract["conditions"] else ""))
-            columns = st.columns(4)
-            columns[0].metric("월보험료", _format_won(contract["premium"]))
-            columns[1].metric("1차년계", _format_rate(first_rate))
-            columns[2].metric("총수수료율", _format_rate(total_rate))
-            columns[3].metric("예상 총수당", _format_won(contract["premium"] * total_rate))
-            if st.button("삭제", key=f"delete_commission_{index}"):
+        expected_first = contract["premium"] * first_rate
+        expected_total = contract["premium"] * total_rate
+        product_detail = contract["product"]
+        if contract["conditions"]:
+            product_detail += f" · {contract['conditions']}"
+
+        row_columns = st.columns([3.4, 1, 1.15, 1.15, 1.25, 1.25, 0.55])
+        with row_columns[0]:
+            st.markdown(
+                f"**{index + 1}. {contract.get('customer') or '고객명 없음'}** · {contract['insurer']}"
+            )
+            st.caption(product_detail)
+        row_columns[1].write(_format_won(contract["premium"]))
+        row_columns[2].write(_format_rate(first_rate))
+        row_columns[3].write(_format_rate(total_rate))
+        row_columns[4].write(_format_won(expected_first))
+        row_columns[5].write(_format_won(expected_total))
+        with row_columns[6]:
+            if st.button("✕", key=f"delete_commission_{index}", help="이 계약 삭제"):
                 contracts.pop(index)
                 st.rerun()
+
+        if index < len(contracts) - 1:
+            st.markdown(
+                '<hr style="margin:.25rem 0 .45rem;border:0;border-top:1px solid rgba(128,128,128,.18);">',
+                unsafe_allow_html=True,
+            )
 
     st.divider()
     clear_col, download_col = st.columns([1, 2])
