@@ -548,6 +548,24 @@ def _candidate_products(holding: dict, products: list[ProductRate]) -> list[Prod
     return list(unique.values())[:12]
 
 
+def _review_candidate_products(holding: dict, products: list[ProductRate]) -> list[ProductRate]:
+    """확인 화면에는 최상위 상품뿐 아니라 가까운 유사 상품·조건도 함께 보여줍니다."""
+    primary = _candidate_products(holding, products)
+    ranked = _rank_products(holding, products)
+    if not ranked:
+        return primary
+    threshold = max(0.48, ranked[0][0] - 0.24)
+    combined = primary + [product for score, product in ranked if score >= threshold][:30]
+    unique: dict[tuple, ProductRate] = {}
+    for product in combined:
+        key = (
+            _holding_product_name(product.product), product.conditions,
+            round(product.first_year_rate, 8), round(product.total_rate, 8),
+        )
+        unique.setdefault(key, product)
+    return list(unique.values())[:18]
+
+
 def _auto_candidate(holding: dict, products: list[ProductRate]) -> ProductRate | None:
     ranked = _rank_products(holding, products)
     candidates = _candidate_products(holding, products)
@@ -630,6 +648,92 @@ def _render_manual_entry(all_products: list[ProductRate]) -> None:
                 st.rerun()
 
 
+def _render_contract_editor(all_products: list[ProductRate]) -> None:
+    edit_index = st.session_state.get("commission_edit_index")
+    contracts = st.session_state["commission_contracts"]
+    if not isinstance(edit_index, int) or not (0 <= edit_index < len(contracts)):
+        return
+
+    contract = contracts[edit_index]
+    st.info(f"{edit_index + 1}번 계약을 수정하고 있습니다.")
+    with st.container(border=True):
+        customer_col, policy_col = st.columns(2)
+        customer = customer_col.text_input(
+            "고객명", value=contract.get("customer", ""), key=f"edit_customer_{edit_index}"
+        )
+        policy_number = policy_col.text_input(
+            "증권번호", value=contract.get("policy_number", ""), key=f"edit_policy_{edit_index}"
+        )
+        premium_col, share_col = st.columns(2)
+        premium = premium_col.number_input(
+            "월보험료", min_value=0, step=1000, value=int(contract.get("premium", 0)),
+            format="%d", key=f"edit_premium_{edit_index}",
+        )
+        share_rate = share_col.number_input(
+            "쉐어율 (%)", min_value=0.0, max_value=100.0,
+            value=float(contract.get("share_rate", 100.0)), step=1.0, format="%.0f",
+            key=f"edit_share_{edit_index}",
+        )
+
+        matching = [
+            product for product in all_products
+            if product.insurer == contract.get("insurer") and product.product == contract.get("product")
+        ]
+        current_position = next(
+            (
+                index for index, product in enumerate(matching)
+                if product.sheet_name == contract.get("sheet_name") and product.row_number == contract.get("row_number")
+            ),
+            0,
+        )
+        selected_product = st.selectbox(
+            f"세부 조건 · {contract.get('insurer', '')} · {contract.get('product', '')}",
+            matching,
+            index=current_position if matching else None,
+            format_func=lambda product: product.conditions or "기본 조건",
+            key=f"edit_condition_{edit_index}",
+        ) if matching else None
+
+        recruiter_type = contract.get("recruiter_type", "")
+        if share_rate < 100:
+            recruiter_options = ["주모집", "공동모집"]
+            recruiter_index = recruiter_options.index(recruiter_type) if recruiter_type in recruiter_options else None
+            recruiter_type = st.selectbox(
+                "모집 형태", recruiter_options, index=recruiter_index,
+                placeholder="모집 형태를 선택해 주세요.", key=f"edit_recruiter_{edit_index}",
+            ) or ""
+        else:
+            recruiter_type = ""
+
+        save_col, cancel_col = st.columns([3, 1])
+        if save_col.button("수정 완료", type="primary", use_container_width=True, key=f"save_edit_{edit_index}"):
+            if premium <= 0:
+                st.warning("월보험료를 확인해 주세요.")
+            elif share_rate < 100 and not recruiter_type:
+                st.warning("모집 형태를 선택해 주세요.")
+            else:
+                updated = dict(contract)
+                updated.update({
+                    "customer": customer.strip(), "policy_number": policy_number.strip(),
+                    "premium": int(premium), "share_rate": float(share_rate),
+                    "recruiter_type": recruiter_type,
+                })
+                if selected_product is not None:
+                    updated.update({
+                        "conditions": selected_product.conditions,
+                        "first_year_rate": selected_product.first_year_rate,
+                        "total_rate": selected_product.total_rate,
+                        "sheet_name": selected_product.sheet_name,
+                        "row_number": selected_product.row_number,
+                    })
+                contracts[edit_index] = updated
+                st.session_state["commission_edit_index"] = None
+                st.rerun()
+        if cancel_col.button("취소", use_container_width=True, key=f"cancel_edit_{edit_index}"):
+            st.session_state["commission_edit_index"] = None
+            st.rerun()
+
+
 def run() -> None:
     _initialize_state()
 
@@ -676,10 +780,10 @@ def run() -> None:
         "공통 지급율 (%)",
         min_value=0.0,
         max_value=100.0,
-        value=float(st.session_state["commission_payout_rate"]),
-        step=0.1,
-        format="%.1f",
-        help="변경한 지급율은 현재 작성 중인 모든 계약에 일괄 적용됩니다.",
+        value=float(round(st.session_state["commission_payout_rate"])),
+        step=1.0,
+        format="%.0f",
+        help="변경한 지급율은 현재 수당 계산 대상 계약에 일괄 적용됩니다.",
     )
     st.session_state["commission_payout_rate"] = payout_rate_percent
     payout_rate = payout_rate_percent / 100
@@ -727,7 +831,8 @@ def run() -> None:
                     reason_parts.append("세부 조건 확인")
                 if holding.get("share_rate", 100.0) < 100:
                     reason_parts.append("모집 형태 확인")
-                needs_review.append((holding, candidates, " · ".join(reason_parts)))
+                review_candidates = _review_candidate_products(holding, all_products)
+                needs_review.append((holding, review_candidates, " · ".join(reason_parts)))
 
         st.markdown("### ③ 연결 결과 확인")
         metric_cols = st.columns(4)
@@ -762,9 +867,14 @@ def run() -> None:
                 st.caption(f"{_holding_caption(holding)} · {reason}")
                 st.write(f"보유계약 상품: {holding['product_raw']}")
                 selected_product = st.selectbox(
-                    "세부 조건", candidates, index=None, key=f"candidate_{holding['row_key']}",
+                    f"상품 및 세부 조건 · 유사 후보 {len(candidates)}개", candidates,
+                    index=None, key=f"candidate_{holding['row_key']}",
                     placeholder="적용할 조건을 선택해 주세요.",
-                    format_func=lambda p: f"{p.product} · {p.conditions or '기본 조건'}",
+                    format_func=lambda p: (
+                        f"{p.product} · {p.conditions or '기본 조건'} · "
+                        f"익월 {_format_rate(p.first_year_rate * payout_rate)} / "
+                        f"총 {_format_rate(p.total_rate * payout_rate)}"
+                    ),
                 )
                 recruiter_type = ""
                 if holding.get("share_rate", 100.0) < 100:
@@ -834,10 +944,12 @@ def run() -> None:
     _render_manual_entry(all_products)
 
     contracts = st.session_state["commission_contracts"]
-    st.markdown("### ④ 작성 중인 계약")
+    st.markdown("### ④ 수당 계산 대상 계약")
     if not contracts:
         st.info("추가된 계약이 없습니다.")
         return
+
+    _render_contract_editor(all_products)
 
     total_premium = sum(contract["premium"] for contract in contracts)
     total_first = sum(
@@ -853,7 +965,7 @@ def run() -> None:
     metric_cols[1].metric("예상 익월수당", _format_won(total_first))
     metric_cols[2].metric("예상 총수당", _format_won(total_commission))
 
-    header_columns = st.columns([3.6, 1, 1.15, 1.15, 1.25, 1.25, 0.65])
+    header_columns = st.columns([3.6, 1, 1.15, 1.15, 1.25, 1.25, 1.05])
     for column, label in zip(
         header_columns, ("계약 정보", "월보험료", "익월 수수료율", "총 수수료율", "예상 익월수당", "예상 총수당", "관리"),
     ):
@@ -868,7 +980,7 @@ def run() -> None:
         if contract["conditions"]:
             product_detail += f" · {contract['conditions']}"
 
-        row_columns = st.columns([3.6, 1, 1.15, 1.15, 1.25, 1.25, 0.65])
+        row_columns = st.columns([3.6, 1, 1.15, 1.15, 1.25, 1.25, 1.05])
         with row_columns[0]:
             customer_name = _markdown_text(contract.get("customer") or "고객명 없음")
             st.markdown(f"**{index + 1}. {customer_name}** · {contract['insurer']}")
@@ -883,8 +995,17 @@ def run() -> None:
         row_columns[4].write(_format_won(expected_first))
         row_columns[5].write(_format_won(expected_total))
         with row_columns[6]:
-            if st.button("✕", key=f"delete_commission_{index}", help="이 계약 삭제"):
+            edit_col, delete_col = st.columns(2)
+            if edit_col.button("수정", key=f"edit_commission_{index}", help="이 계약 수정"):
+                st.session_state["commission_edit_index"] = index
+                st.rerun()
+            if delete_col.button("✕", key=f"delete_commission_{index}", help="이 계약 삭제"):
                 contracts.pop(index)
+                current_edit = st.session_state.get("commission_edit_index")
+                if current_edit == index:
+                    st.session_state["commission_edit_index"] = None
+                elif isinstance(current_edit, int) and current_edit > index:
+                    st.session_state["commission_edit_index"] = current_edit - 1
                 st.rerun()
 
         if index < len(contracts) - 1:
