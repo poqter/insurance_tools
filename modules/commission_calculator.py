@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-# 전달용 파일: 보유계약 자동 연결·검토 흐름 적용본 v11
+# 전달용 파일: 보유계약 자동 연결·검토 흐름 적용본 v12
 
 import hashlib
 import io
@@ -290,6 +290,30 @@ def _format_won(value: float) -> str:
     return f"{round(value):,}원"
 
 
+def _compact_excel_product(contract: dict) -> str:
+    """다운로드용으로 상품명과 세부 조건의 반복 문구를 정리합니다."""
+    product_name, product_note = _product_display_parts(contract.get("product", ""))
+    insurer = _clean_text(contract.get("insurer", ""))
+    for token in ("(무배당)", "무배당", "(무)", insurer):
+        if token:
+            product_name = product_name.replace(token, "")
+    product_name = re.sub(r"\((?:\s*|(?:20)?\d{2}[.\-]\d{2})\)", "", product_name)
+    product_name = product_name.replace("_", " ")
+    product_name = re.sub(r"\s+", " ", product_name).strip(" _·-/")
+
+    raw_condition = " / ".join(
+        part for part in (product_note, _clean_text(contract.get("conditions", ""))) if part
+    )
+    condition_parts: list[str] = []
+    for part in re.split(r"\s*/\s*", raw_condition):
+        cleaned = _clean_text(part)
+        if not cleaned or cleaned in {"Y", "단일", "기본 조건"} or cleaned in condition_parts:
+            continue
+        condition_parts.append(cleaned)
+    concise_condition = " / ".join(condition_parts[:4])
+    return f"{product_name}\n{concise_condition}" if concise_condition else product_name
+
+
 def _make_excel(
     contracts: list[dict], payout_rate: float, reference_month: str, excluded: list[dict]
 ) -> bytes:
@@ -312,9 +336,7 @@ def _make_excel(
         first_rate = contract["first_year_rate"] * payout_rate
         total_rate = contract["total_rate"] * payout_rate
         premium = contract["premium"]
-        product_detail = contract["product"]
-        if contract.get("conditions"):
-            product_detail += f"\n{contract['conditions']}"
+        product_detail = _compact_excel_product(contract)
         share_rate = contract.get("share_rate", 100.0)
         recruiter_type = contract.get("recruiter_type", "")
         recruiting = f"{share_rate:g}%"
@@ -337,26 +359,31 @@ def _make_excel(
     ws.merge_cells("A1:J1")
     ws["A1"].font = Font(size=16, bold=True, color="FFFFFF")
     ws["A1"].fill = PatternFill("solid", fgColor="1E3A8A")
-    ws["A1"].alignment = Alignment(horizontal="center")
+    ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
     for cell in ws[6]:
         cell.fill = header_fill
         cell.font = Font(color="FFFFFF", bold=True)
         cell.alignment = Alignment(horizontal="center", vertical="center")
 
-    ws["D2"].number_format = "0.0%"
+    ws["D2"].number_format = "0%"
     for cell in (ws["D3"], ws["A4"], ws["C4"]):
         cell.font = Font(bold=True)
+    ws["B3"].number_format = '0"건"'
     for cell in (ws["D3"], ws["B4"], ws["D4"]):
-        cell.number_format = "#,##0"
+        cell.number_format = '#,##0"원"'
     for row in range(7, ws.max_row + 1):
-        ws.cell(row, 4).alignment = Alignment(wrap_text=True, vertical="top")
-        ws.cell(row, 5).number_format = "#,##0"
+        ws.cell(row, 5).number_format = '#,##0"원"'
         for col in range(7, 9):
             ws.cell(row, col).number_format = "0.0%"
         for col in range(9, 11):
-            ws.cell(row, col).number_format = "#,##0"
+            ws.cell(row, col).number_format = '#,##0"원"'
+        ws.row_dimensions[row].height = 42
 
-    widths = [13, 19, 15, 48, 14, 18, 15, 15, 17, 17]
+    for row in ws.iter_rows():
+        for cell in row:
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    widths = [15, 22, 18, 64, 18, 20, 18, 18, 21, 21]
     for col, width in enumerate(widths, start=1):
         ws.column_dimensions[get_column_letter(col)].width = width
     ws.freeze_panes = "A7"
@@ -369,17 +396,20 @@ def _make_excel(
     for item in excluded:
         review_ws.append([
             item.get("customer", ""), item.get("policy_number", ""), item.get("insurer", ""),
-            item.get("product", ""), item.get("status", ""), item.get("reason", ""),
+            _compact_excel_product({"product": item.get("product", ""), "insurer": item.get("insurer", "")}),
+            item.get("status", ""), item.get("reason", ""),
         ])
     for cell in review_ws[1]:
         cell.fill = PatternFill("solid", fgColor="64748B")
         cell.font = Font(color="FFFFFF", bold=True)
         cell.alignment = Alignment(horizontal="center")
-    for col, width in enumerate([13, 19, 15, 52, 13, 45], start=1):
+    for col, width in enumerate([15, 22, 18, 64, 15, 55], start=1):
         review_ws.column_dimensions[get_column_letter(col)].width = width
     for row in range(2, review_ws.max_row + 1):
-        review_ws.cell(row, 4).alignment = Alignment(wrap_text=True, vertical="top")
-        review_ws.cell(row, 6).alignment = Alignment(wrap_text=True, vertical="top")
+        review_ws.row_dimensions[row].height = 36
+    for row in review_ws.iter_rows():
+        for cell in row:
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
     review_ws.freeze_panes = "A2"
     if review_ws.max_row > 1:
         review_ws.auto_filter.ref = review_ws.dimensions
