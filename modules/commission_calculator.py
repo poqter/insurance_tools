@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-# 전달용 파일: 보유계약 자동 연결·검토 흐름 적용본 v12
+# 전달용 파일: 보유계약 자동 연결·검토 흐름 적용본 v13
 
 import hashlib
 import io
@@ -12,6 +12,7 @@ from difflib import SequenceMatcher
 from typing import Any
 
 import streamlit as st
+import streamlit.components.v1 as components
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
@@ -752,6 +753,23 @@ def _render_contract_editor(all_products: list[ProductRate]) -> None:
         return
 
     contract = contracts[edit_index]
+    st.markdown(
+        '<div id="commission-edit-anchor" style="scroll-margin-top:5rem;"></div>',
+        unsafe_allow_html=True,
+    )
+    components.html(
+        """
+        <script>
+        setTimeout(function () {
+            const target = window.parent.document.getElementById('commission-edit-anchor');
+            if (target) {
+                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }, 180);
+        </script>
+        """,
+        height=0,
+    )
     st.info(f"{edit_index + 1}번 계약을 수정하고 있습니다.")
     with st.container(border=True):
         customer_col, policy_col = st.columns(2)
