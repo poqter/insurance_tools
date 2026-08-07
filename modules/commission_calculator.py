@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-# 버전: 단계형 선택 UI v2 (생보/손보 → 보험회사 → 상품 → 세부 조건)
+# 전달용 파일: 보험회사·상품·세부 조건 단계형 선택 적용본 v4
 
 import hashlib
 import io

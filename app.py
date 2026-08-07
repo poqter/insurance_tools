@@ -1,10 +1,10 @@
 import textwrap
 
 import streamlit as st
+import modules.commission_calculator as commission_calculator
 
 from modules import (
     analyzer,
-    commission_calculator,
     convention,
     deposit_vs_shortpay,
     inheritance_tax,
