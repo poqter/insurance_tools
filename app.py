@@ -122,7 +122,7 @@ USER_PERMISSIONS = {
         "renewal_vs_nonrenewal": True, "inheritance_tax": True,
         "insurer_portal": True,
         "convention": True, "summer": True, "manager_results": True,
-        "commission_calculator": False,
+        "commission_calculator": True,
     },
     "Basic": {
         "analyzer": True, "remodeling": False, "deposit_vs_shortpay": False,
