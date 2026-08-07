@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# 버전: 단계형 선택 UI v2 (생보/손보 → 보험회사 → 상품 → 세부 조건)
+
 import hashlib
 import io
 import re
@@ -379,30 +381,71 @@ def run() -> None:
     st.session_state["commission_payout_rate"] = payout_rate_percent
     payout_rate = payout_rate_percent / 100
 
-    insurer_names = sorted({product.insurer for product in all_products})
-    insurer = st.text_input(
-        "보험회사",
-        placeholder="예: KB손보, 라이나생명",
-        help="업로드한 예시표의 시트명과 같게 입력해 주세요.",
-    ).strip()
-
-    matching_products = [product for product in all_products if product.insurer == insurer]
-    if insurer and not matching_products:
-        partial_matches = [name for name in insurer_names if insurer.lower() in name.lower()]
-        if partial_matches:
-            st.caption("일치하는 보험회사: " + ", ".join(partial_matches[:8]))
-        elif all_products:
-            st.warning("입력한 보험회사와 일치하는 시트를 찾지 못했습니다.")
-
+    source_options = [source for source in ("생보", "손보") if any(
+        product.source_type == source for product in all_products
+    )]
+    source_type: str | None = None
     selected_product: ProductRate | None = None
-    if matching_products:
-        product_map = {product.key: product for product in matching_products}
-        selected_key = st.selectbox(
-            "상품",
-            options=list(product_map),
-            format_func=lambda key: product_map[key].label,
+
+    if source_options:
+        source_type = st.radio(
+            "보험 구분",
+            options=source_options,
+            format_func=lambda value: "생명보험" if value == "생보" else "손해보험",
+            horizontal=True,
+            key="commission_source_type",
         )
-        selected_product = product_map[selected_key]
+        insurer_names = sorted({
+            product.insurer for product in all_products
+            if product.source_type == source_type
+        })
+        insurer = st.selectbox(
+            "보험회사",
+            options=insurer_names,
+            index=None,
+            placeholder="보험회사를 선택하거나 검색해 주세요.",
+            key="commission_insurer",
+        )
+    else:
+        st.radio("보험 구분", options=["예시표를 먼저 올려 주세요."], disabled=True)
+        insurer = None
+        st.selectbox("보험회사", options=["예시표를 먼저 올려 주세요."], disabled=True)
+
+    insurer_products = [
+        product for product in all_products
+        if insurer and product.source_type == source_type and product.insurer == insurer
+    ]
+    product_names = sorted({product.product for product in insurer_products})
+
+    if product_names:
+        product_name = st.selectbox(
+            "상품",
+            options=product_names,
+            index=None,
+            placeholder="상품명을 선택하거나 검색해 주세요.",
+            key="commission_product_name",
+        )
+    else:
+        product_name = None
+        st.selectbox(
+            "상품",
+            options=["보험회사를 먼저 선택해 주세요."],
+            disabled=True,
+            key="commission_product_disabled",
+        )
+
+    condition_products = [
+        product for product in insurer_products if product.product == product_name
+    ]
+    if condition_products:
+        condition_map = {product.key: product for product in condition_products}
+        selected_key = st.selectbox(
+            "세부 조건",
+            options=list(condition_map),
+            format_func=lambda key: condition_map[key].conditions or "기본 조건",
+            key="commission_condition",
+        )
+        selected_product = condition_map[selected_key]
         first_applied = selected_product.first_year_rate * payout_rate
         total_applied = selected_product.total_rate * payout_rate
         st.caption(
@@ -410,7 +453,12 @@ def run() -> None:
             f"총수수료율 {_format_rate(total_applied)}"
         )
     else:
-        st.selectbox("상품", options=["보험회사를 먼저 입력해 주세요."], disabled=True)
+        st.selectbox(
+            "세부 조건",
+            options=["상품을 먼저 선택해 주세요."],
+            disabled=True,
+            key="commission_condition_disabled",
+        )
 
     customer_col, premium_col = st.columns(2)
     with customer_col:
