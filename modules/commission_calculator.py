@@ -853,7 +853,8 @@ def _payment_matches(product: ProductRate, years: int | None) -> bool:
     if years is None:
         return True
     condition = _normalize(product.conditions)
-    if not condition:
+    # 납기 구분 자체가 없는 기본·단일 조건은 특정 납기와 충돌하지 않습니다.
+    if not condition or not _has_payment_condition(product):
         return True
     if re.search(rf"(?<!\d){years}년(?:납|갱신|만기)", condition):
         return True
@@ -869,6 +870,21 @@ def _has_payment_condition(product: ProductRate) -> bool:
         re.search(r"\d+(?:~\d+)?년(?:납|갱신|만기)", condition)
         or re.search(r"(?:납기|납입기간)\d+(?:년|년납)?", condition)
     )
+
+
+def _payment_condition_label(product: ProductRate) -> str:
+    """불일치 안내에 사용할 수수료표의 납기 문구를 간결하게 반환합니다."""
+    condition = _normalize(product.conditions)
+    labels: list[str] = []
+    for years, suffix in re.findall(r"(?<!\d)(\d+)년(납|갱신|만기)", condition):
+        label = f"{int(years)}년{suffix}"
+        if label not in labels:
+            labels.append(label)
+    for years in re.findall(r"(?:납기|납입기간)(\d+)(?:년|년납)?", condition):
+        label = f"{int(years)}년납"
+        if label not in labels:
+            labels.append(label)
+    return " / ".join(labels) or "납기 표기 없음"
 
 
 def _payment_threshold(product: ProductRate) -> int | None:
@@ -1434,7 +1450,29 @@ def _render_smart_product_picker(
     condition_candidates = matched_payment_candidates
     condition_key = hashlib.sha1(str(selected_name).encode("utf-8")).hexdigest()[:10]
     if selected_name and payment_years is not None and not matched_payment_candidates:
-        st.warning(f"원본의 {payment_years}년납과 일치하는 조건이 없습니다.")
+        if len(all_condition_candidates) == 1:
+            only_condition = all_condition_candidates[0]
+            st.warning(
+                "⚠️ 납입기간 불일치\n\n"
+                f"원본 {payment_years}년납 · "
+                f"수수료표 {_payment_condition_label(only_condition)}\n\n"
+                "적용할 조건을 직접 확인해 주세요."
+            )
+            return st.selectbox(
+                "납입기간 및 세부 조건 · 직접 확인",
+                all_condition_candidates,
+                index=None,
+                placeholder="불일치 내용을 확인한 후 적용할 조건을 선택해 주세요.",
+                format_func=lambda product: _condition_option_label(
+                    product, payout_rate, all_condition_candidates
+                ),
+                key=f"{key_prefix}_condition_mismatch_{condition_key}",
+            )
+        st.warning(
+            "⚠️ 납입기간 확인 필요\n\n"
+            f"원본 {payment_years}년납과 일치하는 조건이 없습니다. "
+            "다른 납기 조건을 확인해 주세요."
+        )
         show_other_payment = st.checkbox(
             "다른 납기 조건 보기",
             value=False,
