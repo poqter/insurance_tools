@@ -52,6 +52,7 @@ class HoldingContract:
     policy_number: str
     product_raw: str
     customer: str
+    recruiter: str
     premium: int
     payment_years: int | None
     payment_label: str
@@ -350,28 +351,140 @@ def _format_won(value: float) -> str:
     return f"{round(value):,}원"
 
 
-def _compact_excel_product(contract: dict) -> str:
-    """다운로드용으로 상품명과 세부 조건의 반복 문구를 정리합니다."""
-    product_name, product_note = _product_display_parts(contract.get("product", ""))
+OUTPUT_INSURER_PREFIXES = {
+    "KB라이프": ("KB라이프생명", "KB라이프", "KB"),
+    "KB손보": ("KB손해보험", "KB손보", "KB"),
+    "DB생명": ("DB생명보험", "DB생명", "DB"),
+    "DB손보": ("DB손해보험", "DB손보", "DB"),
+    "신한라이프": ("신한라이프", "신한"),
+    "한화생명": ("한화생명", "한화"),
+    "한화손보": ("한화손해보험", "한화손보", "한화"),
+    "삼성생명": ("삼성생명", "삼성"),
+    "삼성화재": ("삼성화재해상보험", "삼성화재", "삼성"),
+    "미래에셋": ("미래에셋생명", "미래에셋"),
+    "메리츠": ("메리츠화재", "메리츠"),
+    "현대해상": ("현대해상화재보험", "현대해상"),
+    "라이나생명": ("라이나생명", "라이나"),
+    "교보생명": ("교보생명", "교보"),
+    "농협생명": ("NH농협생명", "농협생명", "NH"),
+    "농협손보": ("NH농협손해보험", "NH농협손보", "농협손해보험", "농협손보", "NH"),
+    "흥국생명": ("흥국생명",),
+    "흥국화재": ("흥국화재해상보험", "흥국화재"),
+    "롯데손보": ("롯데손해보험", "롯데손보", "롯데"),
+    "메트라이프": ("메트라이프생명", "메트라이프"),
+    "ABL생명": ("ABL생명", "ABL"),
+    "KDB생명": ("KDB생명", "KDB"),
+    "IBK연금": ("IBK연금보험", "IBK연금", "IBK"),
+    # '하나로라이트'처럼 상품명 자체가 하나로 시작할 수 있어 '하나' 단독은 제거하지 않습니다.
+    "하나생명": ("하나생명",),
+    "하나손보": ("하나손해보험", "하나손보"),
+}
+
+
+def _remove_output_insurer_prefix(product_name: str, insurer: str) -> str:
+    standard = _standard_insurer(insurer)
+    prefixes = OUTPUT_INSURER_PREFIXES.get(standard, (insurer,))
+    result = product_name.strip()
+    for prefix in sorted({_clean_text(value) for value in prefixes if value}, key=len, reverse=True):
+        match = re.match(rf"^\s*{re.escape(prefix)}(?:\s*[-_:·]?\s*)", result, flags=re.I)
+        if match:
+            result = result[match.end():].strip()
+            break
+    return result
+
+
+def _output_product_name(contract: dict) -> str:
+    """화면과 다운로드에 공통으로 사용할 간결한 상품명을 만듭니다."""
+    product_name, _ = _product_display_parts(contract.get("product", ""))
     insurer = _clean_text(contract.get("insurer", ""))
     for token in ("(무배당)", "무배당", "(무)", insurer):
         if token:
             product_name = product_name.replace(token, "")
+    product_name = _remove_output_insurer_prefix(product_name, insurer)
+    product_name = re.sub(
+        r"\([^)]*(?:갱신|비갱신|심사|고지|해약|해지|환급|납입면제|세만기|연만기)[^)]*\)",
+        "", product_name,
+    )
+    product_name = re.sub(
+        r"(?:해약|해지)환급금[^\s_/)]*|납입면제형|갱신형|비갱신형|"
+        r"일반심사형|간편심사형|건강고지형|세만기형?|연만기형?|무해지형|일반해지형",
+        "", product_name,
+    )
+    product_name = re.sub(
+        r"간편가입|보험가입금액형|보험료형|납입면제적용형",
+        "", product_name,
+    )
+    product_name = re.sub(r"(?<!\d)\d{1,2}(?:종|형)(?!\d)", "", product_name)
+    product_name = re.sub(r"\(+\s*\d+(?:\.\d+)+\s*\)+", "", product_name)
+    product_name = re.sub(r"\(\s*\)", "", product_name)
+    product_name = product_name.replace(")", "").replace("(", "")
+    product_name = re.sub(
+        r"(?:20)?(?:2[4-9]|3\d)(?:0[1-9]|1[0-2])\s*$",
+        "", product_name,
+    )
     product_name = re.sub(r"\((?:\s*|(?:20)?\d{2}[.\-]\d{2})\)", "", product_name)
     product_name = product_name.replace("_", " ")
     product_name = re.sub(r"\s+", " ", product_name).strip(" _·-/")
+    return product_name
 
-    raw_condition = " / ".join(
-        part for part in (product_note, _clean_text(contract.get("conditions", ""))) if part
-    )
-    condition_parts: list[str] = []
-    for part in re.split(r"\s*/\s*", raw_condition):
-        cleaned = _clean_text(part)
-        if not cleaned or cleaned in {"Y", "단일", "기본 조건"} or cleaned in condition_parts:
-            continue
-        condition_parts.append(cleaned)
-    concise_condition = " / ".join(condition_parts[:4])
-    return f"{product_name}\n{concise_condition}" if concise_condition else product_name
+
+def _contract_payment_label(contract: dict) -> str:
+    label = _clean_text(contract.get("payment_label", ""))
+    if label:
+        return label
+    detail = _clean_text(f"{contract.get('product', '')} {contract.get('conditions', '')}")
+    match = re.search(r"(?<!\d)(\d+)\s*년\s*(납|갱신|만기)", detail)
+    return f"{match.group(1)}년{match.group(2)}" if match else ""
+
+
+def _contract_renewal_label(contract: dict) -> str:
+    text = _normalize(f"{contract.get('product', '')} {contract.get('conditions', '')}")
+    if "비갱신" in text:
+        return "비갱신"
+    if "갱신" in text:
+        return "갱신"
+    if "세만기" in text:
+        return "세만기"
+    if "연만기" in text:
+        return "연만기"
+    return ""
+
+
+def _rate_distinguishing_labels(contract: dict) -> list[str]:
+    tags = _selection_tags(f"{contract.get('product', '')} {contract.get('conditions', '')}")
+    labels: list[str] = []
+    for category in ("type", "form", "underwriting", "surrender", "plan"):
+        for value in sorted(tags.get(category, set())):
+            if value not in labels:
+                labels.append(value)
+    return labels[:3]
+
+
+def _compact_product_display(contract: dict, peers: list[dict] | None = None) -> str:
+    """첫 줄 상품명, 둘째 줄 납기·갱신 여부와 꼭 필요한 구분값만 표시합니다."""
+    product_name = _output_product_name(contract)
+    payment = _contract_payment_label(contract)
+    renewal = _contract_renewal_label(contract)
+    condition_labels = [value for value in (payment, renewal) if value]
+
+    peer_rows = peers or [contract]
+    same_basic = [
+        peer for peer in peer_rows
+        if _output_product_name(peer) == product_name
+        and _contract_payment_label(peer) == payment
+        and _contract_renewal_label(peer) == renewal
+    ]
+    rate_pairs = {
+        (round(float(peer.get("first_year_rate", 0)), 8), round(float(peer.get("total_rate", 0)), 8))
+        for peer in same_basic
+    }
+    if len(rate_pairs) > 1:
+        condition_labels.extend(
+            label for label in _rate_distinguishing_labels(contract)
+            if label not in condition_labels
+        )
+    condition_line = " · ".join(condition_labels)
+    return f"{product_name}\n{condition_line}" if condition_line else product_name
 
 
 def _make_excel(
@@ -396,7 +509,7 @@ def _make_excel(
         first_rate = contract["first_year_rate"] * payout_rate
         total_rate = contract["total_rate"] * payout_rate
         premium = contract["premium"]
-        product_detail = _compact_excel_product(contract)
+        product_detail = _compact_product_display(contract, contracts)
         share_rate = contract.get("share_rate", 100.0)
         recruiter_type = contract.get("recruiter_type", "")
         recruiting = f"{share_rate:g}%"
@@ -456,7 +569,7 @@ def _make_excel(
     for item in excluded:
         review_ws.append([
             item.get("customer", ""), item.get("policy_number", ""), item.get("insurer", ""),
-            _compact_excel_product({"product": item.get("product", ""), "insurer": item.get("insurer", "")}),
+            _compact_product_display({"product": item.get("product", ""), "insurer": item.get("insurer", "")}),
             item.get("status", ""), item.get("reason", ""),
         ])
     for cell in review_ws[1]:
@@ -706,6 +819,7 @@ def parse_holding_workbook(file_bytes: bytes) -> list[dict]:
             policy_number=policy_number,
             product_raw=product,
             customer=_clean_text(value(row, "계약자")),
+            recruiter=_clean_text(value(row, "모집자명", "모집자", "모집인명", "모집인", "설계사명", "설계사")),
             premium=int(_number(value(row, "계속보험료", "초회보험료")) or 0),
             payment_years=payment_years,
             payment_label=payment_label,
@@ -1140,11 +1254,13 @@ def _reconnect_contract_rates(contracts: list[dict], products: list[ProductRate]
 def _contract_data(holding: dict, product: ProductRate, recruiter_type: str = "") -> dict:
     return {
         "customer": holding.get("customer", ""),
+        "recruiter": holding.get("recruiter", ""),
         "policy_number": holding.get("policy_number", ""),
         "insurer": product.insurer,
         "product": product.product,
         "conditions": product.conditions,
         "premium": int(holding.get("premium", 0)),
+        "payment_label": holding.get("payment_label", ""),
         "share_rate": float(holding.get("share_rate", 100.0)),
         "recruiter_type": recruiter_type,
         "contract_date": holding.get("contract_date", ""),
@@ -1155,6 +1271,36 @@ def _contract_data(holding: dict, product: ProductRate, recruiter_type: str = ""
         "sheet_name": product.sheet_name,
         "row_number": product.row_number,
     }
+
+
+def _commission_download_filename(contracts: list[dict]) -> str:
+    """모집자와 계약일의 연월을 사용해 Windows에서도 안전한 파일명을 만듭니다."""
+    recruiters: list[str] = []
+    for contract in contracts:
+        name = _clean_text(contract.get("recruiter", ""))
+        if name and name not in recruiters:
+            recruiters.append(name)
+    months = sorted({
+        match.group(1)
+        for contract in contracts
+        if (match := re.match(r"(20\d{2}-\d{2})", _clean_text(contract.get("contract_date", ""))))
+    })
+    if recruiters:
+        recruiter_label = recruiters[0]
+        if len(recruiters) > 1:
+            recruiter_label += f" 외 {len(recruiters) - 1}명"
+        recruiter_label = re.sub(r'[\\/:*?"<>|]+', "", recruiter_label).strip(" ._")
+        base_name = f"{recruiter_label}FP_수수료 계산 결과"
+    else:
+        base_name = "수수료 계산 결과"
+    if len(months) == 1:
+        year, month = months[0].split("-")
+        base_name += f"_{year}년 {month}월"
+    elif len(months) > 1:
+        start_year, start_month = months[0].split("-")
+        end_year, end_month = months[-1].split("-")
+        base_name += f"_{start_year}년 {start_month}월-{end_year}년 {end_month}월"
+    return f"{base_name}.xlsx"
 
 
 def _holding_caption(holding: dict) -> str:
@@ -1791,9 +1937,7 @@ def run() -> None:
         total_rate = contract["total_rate"] * payout_rate
         expected_first = contract["premium"] * first_rate
         expected_total = contract["premium"] * total_rate
-        product_detail = contract["product"]
-        if contract["conditions"]:
-            product_detail += f" · {contract['conditions']}"
+        product_detail = _compact_product_display(contract, contracts)
 
         row_columns = st.columns([3.6, 1, 1.15, 1.15, 1.25, 1.25, 1.05])
         with row_columns[0]:
@@ -1803,7 +1947,8 @@ def run() -> None:
             recruiting = ""
             if contract.get("share_rate", 100) < 100:
                 recruiting = f" · {contract['share_rate']:g}% · {contract.get('recruiter_type') or '모집 형태 확인'}"
-            st.caption(f"증권번호 {policy}{recruiting} · {product_detail}")
+            st.caption(f"증권번호 {policy}{recruiting}")
+            st.markdown(_markdown_text(product_detail).replace("\n", "  \n"))
             if contract.get("rate_recheck_required"):
                 st.warning("요율 재확인 필요")
         row_columns[1].write(_format_won(contract["premium"]))
@@ -1845,7 +1990,7 @@ def run() -> None:
         st.download_button(
             "엑셀 다운로드",
             data=excel_bytes,
-            file_name="수수료_계산결과.xlsx",
+            file_name=_commission_download_filename(calculation_contracts),
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             type="primary",
             use_container_width=True,
