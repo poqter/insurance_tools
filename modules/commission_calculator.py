@@ -52,7 +52,7 @@ class HoldingContract:
     policy_number: str
     product_raw: str
     customer: str
-    recruiter: str
+    collector: str
     premium: int
     payment_years: int | None
     payment_label: str
@@ -819,7 +819,7 @@ def parse_holding_workbook(file_bytes: bytes) -> list[dict]:
             policy_number=policy_number,
             product_raw=product,
             customer=_clean_text(value(row, "계약자")),
-            recruiter=_clean_text(value(row, "모집자명", "모집자", "모집인명", "모집인", "설계사명", "설계사")),
+            collector=_clean_text(value(row, "수금자명", "수금자")),
             premium=int(_number(value(row, "계속보험료", "초회보험료")) or 0),
             payment_years=payment_years,
             payment_label=payment_label,
@@ -1215,6 +1215,8 @@ def _initialize_state() -> None:
     st.session_state.setdefault("commission_edit_index", None)
     st.session_state.setdefault("commission_edit_request", None)
     st.session_state.setdefault("commission_ratebook_signature", "")
+    st.session_state.setdefault("commission_import_collectors", [])
+    st.session_state.setdefault("commission_import_contract_months", [])
 
 
 def _reconnect_contract_rates(contracts: list[dict], products: list[ProductRate]) -> tuple[int, int]:
@@ -1254,7 +1256,7 @@ def _reconnect_contract_rates(contracts: list[dict], products: list[ProductRate]
 def _contract_data(holding: dict, product: ProductRate, recruiter_type: str = "") -> dict:
     return {
         "customer": holding.get("customer", ""),
-        "recruiter": holding.get("recruiter", ""),
+        "collector": holding.get("collector", ""),
         "policy_number": holding.get("policy_number", ""),
         "insurer": product.insurer,
         "product": product.product,
@@ -1273,24 +1275,39 @@ def _contract_data(holding: dict, product: ProductRate, recruiter_type: str = ""
     }
 
 
-def _commission_download_filename(contracts: list[dict]) -> str:
-    """모집자와 계약일의 연월을 사용해 Windows에서도 안전한 파일명을 만듭니다."""
-    recruiters: list[str] = []
+def _commission_download_filename(
+    contracts: list[dict],
+    fallback_collectors: list[str] | None = None,
+    fallback_months: list[str] | None = None,
+) -> str:
+    """수금자명과 계약일의 연월을 사용해 Windows에서도 안전한 파일명을 만듭니다."""
+    collectors: list[str] = []
     for contract in contracts:
-        name = _clean_text(contract.get("recruiter", ""))
-        if name and name not in recruiters:
-            recruiters.append(name)
+        name = _clean_text(contract.get("collector", ""))
+        if name and name not in collectors:
+            collectors.append(name)
+    if not collectors:
+        for name in fallback_collectors or []:
+            cleaned = _clean_text(name)
+            if cleaned and cleaned not in collectors:
+                collectors.append(cleaned)
     months = sorted({
         match.group(1)
         for contract in contracts
         if (match := re.match(r"(20\d{2}-\d{2})", _clean_text(contract.get("contract_date", ""))))
     })
-    if recruiters:
-        recruiter_label = recruiters[0]
-        if len(recruiters) > 1:
-            recruiter_label += f" 외 {len(recruiters) - 1}명"
-        recruiter_label = re.sub(r'[\\/:*?"<>|]+', "", recruiter_label).strip(" ._")
-        base_name = f"{recruiter_label}FP_수수료 계산 결과"
+    if not months:
+        for month in fallback_months or []:
+            cleaned = _clean_text(month)
+            if re.fullmatch(r"20\d{2}-\d{2}", cleaned) and cleaned not in months:
+                months.append(cleaned)
+    months.sort()
+    if collectors:
+        collector_label = collectors[0]
+        if len(collectors) > 1:
+            collector_label += f" 외 {len(collectors) - 1}명"
+        collector_label = re.sub(r'[\\/:*?"<>|]+', "", collector_label).strip(" ._")
+        base_name = f"{collector_label}FP_수수료 계산 결과"
     else:
         base_name = "수수료 계산 결과"
     if len(months) == 1:
@@ -1691,6 +1708,16 @@ def run() -> None:
             holdings = []
             st.error(f"보유계약 파일을 읽지 못했습니다: {exc}")
 
+        st.session_state["commission_import_collectors"] = list(dict.fromkeys(
+            _clean_text(holding.get("collector", ""))
+            for holding in holdings if _clean_text(holding.get("collector", ""))
+        ))
+        st.session_state["commission_import_contract_months"] = sorted({
+            _clean_text(holding.get("contract_month", ""))
+            for holding in holdings
+            if re.fullmatch(r"20\d{2}-\d{2}", _clean_text(holding.get("contract_month", "")))
+        })
+
         product_by_key = {product.key: product for product in all_products}
         product_rows = [product.__dict__ for product in all_products]
         link_decisions = _analyze_product_links(holdings, product_rows)
@@ -1990,7 +2017,11 @@ def run() -> None:
         st.download_button(
             "엑셀 다운로드",
             data=excel_bytes,
-            file_name=_commission_download_filename(calculation_contracts),
+            file_name=_commission_download_filename(
+                calculation_contracts,
+                st.session_state.get("commission_import_collectors", []),
+                st.session_state.get("commission_import_contract_months", []),
+            ),
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             type="primary",
             use_container_width=True,
