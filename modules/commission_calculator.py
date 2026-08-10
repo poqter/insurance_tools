@@ -782,8 +782,18 @@ def _condition_option_label(
     payout_rate: float | None = None,
     candidates: list[ProductRate] | None = None,
 ) -> str:
-    """선택 목록에는 납입기간과 실제 구분에 필요한 세부조건만 표시합니다."""
-    return _short_condition_label(product, candidates)
+    """선택 조건과 공통 지급율이 반영된 익월·총 수수료율을 표시합니다."""
+    applied_rate = payout_rate
+    if applied_rate is None:
+        applied_rate = (
+            float(st.session_state.get("commission_payout_rate", DEFAULT_PAYOUT_RATE))
+            / 100
+        )
+    return (
+        f"{_short_condition_label(product, candidates)} · "
+        f"익월 {_format_rate(product.first_year_rate * applied_rate)} · "
+        f"총 {_format_rate(product.total_rate * applied_rate)}"
+    )
 
 
 @st.cache_data(show_spinner=False)
