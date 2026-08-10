@@ -192,15 +192,21 @@ def _condition_text(
         if col == product_col:
             continue
         header = _condition_header(ws, header_row, col)
-        normalized_header = _normalize(header)
-        if not header or normalized_header in {_normalize(item) for item in ignored_headers}:
-            continue
         value = ws.cell(row_no, col).value
         if value not in (None, ""):
             inherited[col] = value
         else:
             value = inherited.get(col)
         if isinstance(value, str) and value.startswith("="):
+            continue
+        # 병합표의 보조 열은 제목이 비어 있어도 '3년 보증·5년 보증'처럼
+        # 선택에 필요한 조건을 담을 수 있습니다. 문자값만 세부조건으로 보존합니다.
+        if not header:
+            if not isinstance(value, str) or not _clean_text(value):
+                continue
+            header = f"세부조건{col}"
+        normalized_header = _normalize(header)
+        if normalized_header in {_normalize(item) for item in ignored_headers}:
             continue
         text = _condition_value(header, value)
         if not text or text in ignored_values:
@@ -549,16 +555,78 @@ def _condition_display(product: ProductRate) -> str:
     return " / ".join(dict.fromkeys(parts)) or "기본 조건"
 
 
-def _condition_option_label(product: ProductRate, payout_rate: float | None = None) -> str:
-    """조건과 요율을 함께 보여줘 동일 문구의 서로 다른 원본 행을 구분합니다."""
+def _condition_pairs(product: ProductRate) -> list[tuple[str, str]]:
+    """저장된 원본 조건 문구를 화면 표시용 제목·값으로 분리합니다."""
+    pairs: list[tuple[str, str]] = []
+    for part in re.split(r"\s*/\s*", _condition_display(product)):
+        if ":" in part:
+            header, value = part.split(":", 1)
+            pairs.append((_clean_text(header), _clean_text(value)))
+        elif part and part != "기본 조건":
+            pairs.append(("세부조건", _clean_text(part)))
+    return pairs
+
+
+def _short_condition_label(product: ProductRate, candidates: list[ProductRate] | None = None) -> str:
+    """선택에 필요한 조건만 남기고 반복되는 원본 설명은 숨깁니다."""
+    pairs = _condition_pairs(product)
+    candidate_pairs = [_condition_pairs(item) for item in (candidates or [product])]
+    values_by_header: dict[str, set[str]] = defaultdict(set)
+    for item_pairs in candidate_pairs:
+        for header, value in item_pairs:
+            values_by_header[_normalize(header)].add(_normalize(value))
+
+    always_tokens = ("납기", "납입기간")
+    useful_tokens = (
+        "구분", "종형", "형구분", "종구분", "만기", "담보", "보험기간",
+        "납입주기", "규정", "연령", "기준",
+        "특약유형", "보종구분", "상품군", "세부조건",
+    )
+    hidden_tokens = (
+        "랩포탈상품군", "고성과수수료지급대상여부", "장기유지수수료",
+        "특정상품보너스", "commissionrate", "retentionbonus",
+        "수정율", "수정률", "환산", "환산율",
+    )
+    selected: list[tuple[int, str]] = []
+    for header, value in pairs:
+        normalized_header = _normalize(header)
+        normalized_value = _normalize(value)
+        if any(token in normalized_header for token in hidden_tokens):
+            continue
+        if normalized_value in {"", "0", "0.0", "y", "단일"}:
+            continue
+        is_payment = any(token in normalized_header for token in always_tokens)
+        differs = len(values_by_header.get(normalized_header, set())) > 1
+        if not is_payment and not differs:
+            continue
+        if not is_payment and not any(token in normalized_header for token in useful_tokens):
+            continue
+        concise_header = header.replace("*평균 ", "").replace(" (보장+적립)", "")
+        if concise_header.startswith("세부조건"):
+            concise_header = "세부조건"
+        priority = 0 if is_payment else 1
+        selected.append((priority, f"{concise_header} {value}"))
+
+    labels: list[str] = []
+    for _, label in sorted(selected, key=lambda item: item[0]):
+        if label not in labels:
+            labels.append(label)
+    return " · ".join(labels) or "기본 조건"
+
+
+def _condition_option_label(
+    product: ProductRate,
+    payout_rate: float | None = None,
+    candidates: list[ProductRate] | None = None,
+) -> str:
+    """납입기간과 후보 간 차이, 최종 요율만 간결하게 표시합니다."""
     applied = payout_rate
     if applied is None:
         applied = float(st.session_state.get("commission_payout_rate", DEFAULT_PAYOUT_RATE)) / 100
     return (
-        f"{_condition_display(product)} · "
+        f"{_short_condition_label(product, candidates)} · "
         f"익월 {_format_rate(product.first_year_rate * applied)} / "
-        f"총 {_format_rate(product.total_rate * applied)} · "
-        f"원본 {product.row_number}행"
+        f"총 {_format_rate(product.total_rate * applied)}"
     )
 
 
@@ -632,6 +700,42 @@ def _has_payment_condition(product: ProductRate) -> bool:
     return bool(re.search(r"\d+(?:~\d+)?년(?:납|갱신|만기)", condition))
 
 
+def _condition_sort_key(product: ProductRate) -> tuple:
+    """같은 해지·갱신 유형끼리 묶고 납입기간 순으로 정렬합니다."""
+    text = _normalize(f"{product.product} {product.conditions}")
+
+    if "무해지" in text or "해약환급금미지급" in text or "해지환급금미지급" in text:
+        surrender_rank = 0
+    elif "일반해지" in text or "일반형" in text:
+        surrender_rank = 1
+    elif "유해지" in text or "일부지급" in text or "50%지급" in text:
+        surrender_rank = 2
+    else:
+        surrender_rank = 3
+
+    if "비갱신" in text or "세만기" in text:
+        renewal_rank = 0
+    elif "연만기" in text:
+        renewal_rank = 1
+    elif "갱신" in text:
+        renewal_rank = 2
+    else:
+        renewal_rank = 3
+
+    condition_values = dict((_normalize(h), _normalize(v)) for h, v in _condition_pairs(product))
+    category = "".join(
+        value for header, value in condition_values.items()
+        if any(token in header for token in ("구분", "종형", "형구분", "종구분", "담보"))
+    )
+    payment_match = re.search(r"(?<!\d)(\d+)(?:년)?(?:납|갱신)", text)
+    payment_years = int(payment_match.group(1)) if payment_match else 999
+    return surrender_rank, renewal_rank, category, payment_years, text, product.row_number
+
+
+def _sort_condition_candidates(products: list[ProductRate]) -> list[ProductRate]:
+    return sorted(products, key=_condition_sort_key)
+
+
 def _rank_products(holding: dict, products: list[ProductRate]) -> list[tuple[float, ProductRate]]:
     source = _holding_product_name(holding["product_raw"])
     ranked: list[tuple[float, ProductRate]] = []
@@ -678,7 +782,7 @@ def _candidate_products(holding: dict, products: list[ProductRate]) -> list[Prod
     for product in candidates:
         key = (product.conditions, round(product.first_year_rate, 8), round(product.total_rate, 8))
         unique.setdefault(key, product)
-    return list(unique.values())[:12]
+    return _sort_condition_candidates(list(unique.values()))[:12]
 
 
 def _review_candidate_products(holding: dict, products: list[ProductRate]) -> list[ProductRate]:
@@ -696,7 +800,7 @@ def _review_candidate_products(holding: dict, products: list[ProductRate]) -> li
             round(product.first_year_rate, 8), round(product.total_rate, 8),
         )
         unique.setdefault(key, product)
-    return list(unique.values())[:18]
+    return _sort_condition_candidates(list(unique.values()))[:18]
 
 
 def _auto_candidate(holding: dict, products: list[ProductRate]) -> ProductRate | None:
@@ -799,11 +903,12 @@ def _render_manual_entry(all_products: list[ProductRate]) -> None:
             product_groups[display_name].append(product)
         product_names = sorted(product_groups)
         product_name = st.selectbox("상품", product_names, index=None, key="manual_product")
-        candidates = product_groups.get(product_name, [])
+        candidates = _sort_condition_candidates(product_groups.get(product_name, []))
         if candidates:
             selected = st.selectbox(
                 "납입기간 및 세부 조건", candidates, index=None,
-                format_func=_condition_option_label, key="manual_condition",
+                format_func=lambda p: _condition_option_label(p, candidates=candidates),
+                key="manual_condition",
                 placeholder="납입기간과 세부 조건을 선택해 주세요.",
             )
         else:
@@ -905,7 +1010,7 @@ def _render_contract_editor(all_products: list[ProductRate]) -> None:
             placeholder="상품을 선택해 주세요.", key=f"edit_product_{edit_index}_{selected_insurer}",
         ) if product_names else None
 
-        matching = product_groups.get(selected_product_name, [])
+        matching = _sort_condition_candidates(product_groups.get(selected_product_name, []))
         current_position = next(
             (
                 index for index, product in enumerate(matching)
@@ -918,7 +1023,7 @@ def _render_contract_editor(all_products: list[ProductRate]) -> None:
                 "납입기간 및 세부 조건", matching,
                 index=current_position,
                 placeholder="납입기간과 세부 조건을 선택해 주세요.",
-                format_func=_condition_option_label,
+                format_func=lambda p: _condition_option_label(p, candidates=matching),
                 key=f"edit_condition_{edit_index}_{hashlib.sha1(str(selected_product_name).encode()).hexdigest()[:8]}",
             )
         else:
@@ -1164,7 +1269,9 @@ def run() -> None:
                 )
                 selected_product = None
                 if selected_product_name:
-                    condition_candidates = product_groups[selected_product_name]
+                    condition_candidates = _sort_condition_candidates(
+                        product_groups[selected_product_name]
+                    )
                     product_key = hashlib.sha1(selected_product_name.encode("utf-8")).hexdigest()[:8]
                     selected_product = st.selectbox(
                         f"납입기간 및 세부 조건 · 후보 {len(condition_candidates)}개",
@@ -1172,7 +1279,9 @@ def run() -> None:
                         index=0 if len(condition_candidates) == 1 else None,
                         key=f"review_condition_{holding['row_key']}_{product_key}",
                         placeholder="납입기간과 세부 조건을 선택해 주세요.",
-                        format_func=lambda p: _condition_option_label(p, payout_rate),
+                        format_func=lambda p: _condition_option_label(
+                            p, payout_rate, condition_candidates
+                        ),
                     )
                 else:
                     st.selectbox(
@@ -1213,7 +1322,10 @@ def run() -> None:
                         candidates = _candidate_products(holding, all_products)
                         selected_product = st.selectbox(
                             "적용할 상품 및 조건", candidates, index=None, key=f"excluded_product_{holding['row_key']}",
-                            format_func=lambda p: f"{p.product} · {_condition_option_label(p, payout_rate)}",
+                            format_func=lambda p: (
+                                f"{p.product} · "
+                                f"{_condition_option_label(p, payout_rate, candidates)}"
+                            ),
                         ) if candidates else None
                         confirmed = st.checkbox(
                             "제외 사유를 확인했으며 이번 계산에 포함합니다.",
@@ -1267,13 +1379,17 @@ def run() -> None:
                             placeholder="수수료표의 상품을 선택해 주세요.",
                             key=f"unmatched_product_{holding['row_key']}_{direct_insurer}",
                         ) if product_groups else None
-                        direct_candidates = product_groups.get(direct_product_name, [])
+                        direct_candidates = _sort_condition_candidates(
+                            product_groups.get(direct_product_name, [])
+                        )
                         direct_product = st.selectbox(
                             "납입기간 및 세부 조건",
                             direct_candidates,
                             index=None,
                             placeholder="납입기간과 세부 조건을 선택해 주세요.",
-                            format_func=lambda p: _condition_option_label(p, payout_rate),
+                            format_func=lambda p: _condition_option_label(
+                                p, payout_rate, direct_candidates
+                            ),
                             key=f"unmatched_condition_{holding['row_key']}_{hashlib.sha1(str(direct_product_name).encode()).hexdigest()[:8]}",
                         ) if direct_candidates else None
                         if direct_product is not None:
