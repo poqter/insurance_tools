@@ -533,8 +533,44 @@ def _holding_product_name(value: Any) -> str:
     for token in replacements:
         text = text.replace(token, "")
     text = re.sub(r"\(?(?:20\d{2}|2\d)[.\-](?:0?[1-9]|1[0-2])\)?", "", text)
-    text = re.sub(r"^kb|한화생명", "", text)
-    return re.sub(r"[^0-9a-z가-힣]", "", text)
+    # 보험회사는 별도 항목에서 먼저 일치시키므로 상품명 앞의 브랜드 표기는 비교에서 제외합니다.
+    brand_prefixes = (
+        "kb라이프생명", "kb라이프", "kb손해보험", "kb손보", "kb",
+        "db손해보험", "db손보", "db생명", "db",
+        "nh농협생명", "nh농협손해보험", "농협생명", "농협손보", "nh",
+        "신한라이프", "신한", "한화생명", "한화손해보험", "한화손보", "한화",
+        "삼성생명", "삼성화재", "삼성", "흥국생명", "흥국화재", "흥국",
+        "미래에셋생명", "미래에셋", "메트라이프생명", "메트라이프",
+        "abl생명", "abl", "ibk연금", "ibk", "kdb생명", "kdb",
+        "교보생명", "교보", "라이나생명", "라이나", "카디프생명", "카디프",
+        "현대해상", "현대", "메리츠화재", "메리츠", "롯데손보", "롯데",
+        "하나손보", "하나생명", "하나", "aig손보", "aig", "mg손보", "mg",
+    )
+    normalized_prefixes = sorted(
+        (re.sub(r"[^0-9a-z가-힣]", "", token.lower()) for token in brand_prefixes),
+        key=len,
+        reverse=True,
+    )
+    compact = re.sub(r"[^0-9a-z가-힣]", "", text)
+    for prefix in normalized_prefixes:
+        if compact.startswith(prefix):
+            compact = compact[len(prefix):]
+            break
+    # 한 셀에 보험사명이 두 번 반복된 원본도 있어, 명확한 회사명만 추가 제거합니다.
+    for brand in (
+        "한화생명", "한화손해보험", "신한라이프", "미래에셋생명",
+        "메트라이프생명", "kb라이프생명", "db손해보험", "kb손해보험",
+    ):
+        compact = compact.replace(brand, "")
+    return compact
+
+
+def _product_family_name(value: Any) -> str:
+    """갱신 여부처럼 별도 확인해야 할 표지만 제외한 기본 상품군 이름입니다."""
+    text = _holding_product_name(value)
+    for token in ("비갱신형", "갱신형", "세만기형", "연만기형", "비갱신", "갱신", "세만기", "연만기"):
+        text = text.replace(token, "")
+    return text
 
 
 def _product_display_parts(product_name: str) -> tuple[str, str]:
@@ -700,6 +736,123 @@ def _has_payment_condition(product: ProductRate) -> bool:
     return bool(re.search(r"\d+(?:~\d+)?년(?:납|갱신|만기)", condition))
 
 
+def _payment_threshold(product: ProductRate) -> int | None:
+    condition = re.sub(r"\s+", "", product.conditions)
+    match = re.search(r"(?<!\d)(\d+)년납(?:이상|↑)", condition)
+    return int(match.group(1)) if match else None
+
+
+def _most_specific_payment_candidates(
+    products: list[ProductRate], years: int | None
+) -> list[ProductRate]:
+    """'10년납 이상'처럼 겹치는 구간에서는 계약 납기에 가장 가까운 하한만 남깁니다."""
+    if years is None or not products:
+        return products
+    thresholds = [
+        threshold for product in products
+        if (threshold := _payment_threshold(product)) is not None and threshold <= years
+    ]
+    if not thresholds:
+        return products
+    best_threshold = max(thresholds)
+    narrowed = [
+        product for product in products
+        if _payment_threshold(product) == best_threshold
+    ]
+    return narrowed or products
+
+
+def _selection_tags(value: Any) -> dict[str, set[str]]:
+    """상품명과 세부조건에서 자동 연결에 신뢰할 수 있는 핵심 표지를 찾습니다."""
+    text = _normalize(value)
+    tags: dict[str, set[str]] = defaultdict(set)
+
+    # 해지환급금 유형
+    if any(token in text for token in ("무해지", "해약환급금미지급", "해지환급금미지급", "환급금이없는")):
+        tags["surrender"].add("무해지")
+    if "일반해지" in text:
+        tags["surrender"].add("일반해지")
+    if any(token in text for token in ("유해지", "일부지급", "50%지급", "일부환급")):
+        tags["surrender"].add("일부지급")
+
+    # 갱신·만기 유형. '비갱신'을 단순 '갱신'으로 중복 인식하지 않습니다.
+    if "비갱신" in text:
+        tags["renewal"].add("비갱신")
+    elif "갱신" in text:
+        tags["renewal"].add("갱신")
+    if "세만기" in text:
+        tags["maturity"].add("세만기")
+    if "연만기" in text:
+        tags["maturity"].add("연만기")
+
+    # 심사·고지 유형
+    for token, canonical in (
+        ("초경증", "초경증"), ("통합간편", "통합간편"),
+        ("간편심사", "간편"), ("간편가입", "간편"),
+        ("일반심사", "일반심사"), ("건강고지", "건강고지"),
+    ):
+        if token in text:
+            tags["underwriting"].add(canonical)
+    if "간편" in text and "underwriting" not in tags:
+        tags["underwriting"].add("간편")
+
+    # 종형과 설계 형태
+    for match in re.finditer(r"(?<!\d)(\d{1,2})종(?!\d)", text):
+        tags["type"].add(f"{int(match.group(1))}종")
+    for match in re.finditer(r"(?<!\d)(\d{1,2})형(?!\d)", text):
+        tags["form"].add(f"{int(match.group(1))}형")
+    for token in ("납입면제형", "보험가입금액형", "보험료형", "기본형", "보장강화형"):
+        if token in text:
+            tags["plan"].add(token)
+
+    # 보증기간은 상품명의 다른 숫자와 혼동하지 않도록 '보증' 단위만 사용합니다.
+    for match in re.finditer(r"(?<!\d)(\d+)년보증", text):
+        tags["guarantee"].add(f"{int(match.group(1))}년보증")
+    return {category: values for category, values in tags.items() if values}
+
+
+def _tag_match_summary(holding: dict, product: ProductRate) -> tuple[int, int, list[str]]:
+    """일치·충돌 개수와 사용자가 이해할 수 있는 일치 근거를 반환합니다."""
+    source_tags = _selection_tags(holding.get("product_raw", ""))
+    target_tags = _selection_tags(f"{product.product} {product.conditions}")
+    matched = 0
+    conflicts = 0
+    reasons: list[str] = []
+    for category, expected in source_tags.items():
+        actual = target_tags.get(category, set())
+        if expected & actual:
+            matched += 1
+            reasons.extend(sorted(expected & actual))
+        elif actual:
+            conflicts += 1
+    return matched, conflicts, reasons
+
+
+def _filter_by_holding_tags(holding: dict, products: list[ProductRate]) -> list[ProductRate]:
+    """보유계약에 명시된 조건과 충돌하는 후보를 제거하되, 근거가 없으면 억지 제거하지 않습니다."""
+    filtered = list(products)
+    source_tags = _selection_tags(holding.get("product_raw", ""))
+    for category, expected in source_tags.items():
+        matching = []
+        conflicting = []
+        unspecified = []
+        for product in filtered:
+            actual = _selection_tags(f"{product.product} {product.conditions}").get(category, set())
+            if expected & actual:
+                matching.append(product)
+            elif actual:
+                conflicting.append(product)
+            else:
+                unspecified.append(product)
+        # 같은 조건을 명시한 후보가 있을 때만 반대 조건을 제거합니다.
+        # 조건이 비어 있는 후보는 자동 확정에 사용하지 않도록 일치 후보를 우선합니다.
+        if matching:
+            filtered = matching
+        elif conflicting and not unspecified:
+            return []
+    return filtered
+
+
 def _condition_sort_key(product: ProductRate) -> tuple:
     """같은 해지·갱신 유형끼리 묶고 납입기간 순으로 정렬합니다."""
     text = _normalize(f"{product.product} {product.conditions}")
@@ -752,6 +905,9 @@ def _rank_products(holding: dict, products: list[ProductRate]) -> list[tuple[flo
             score += 0.04
         elif holding.get("payment_years") is not None and _has_payment_condition(product):
             score -= 0.12
+        matched_tags, conflicting_tags, _ = _tag_match_summary(holding, product)
+        score += min(matched_tags, 4) * 0.035
+        score -= conflicting_tags * 0.14
         # 세만기·갱신형·간편형 등 핵심 유형이 서로 충돌하면 자동 확정을 방지합니다.
         raw = _normalize(holding["product_raw"])
         detail = _normalize(product.product + " " + product.conditions)
@@ -768,14 +924,23 @@ def _candidate_products(holding: dict, products: list[ProductRate]) -> list[Prod
     if not ranked or ranked[0][0] < 0.58:
         return []
     best_name = _holding_product_name(ranked[0][1].product)
+    best_family = _product_family_name(ranked[0][1].product)
     same_product = [
         product for score, product in ranked
-        if score >= max(0.55, ranked[0][0] - 0.14) and _holding_product_name(product.product) == best_name
+        if score >= max(0.55, ranked[0][0] - 0.14)
+        and (
+            _holding_product_name(product.product) == best_name
+            or _product_family_name(product.product) == best_family
+        )
     ]
     payment_years = holding.get("payment_years")
     payment_filtered = [p for p in same_product if _payment_matches(p, payment_years)]
     # 보유계약에 납입기간이 있으면 다른 납기의 상품을 억지 후보로 되돌리지 않습니다.
     candidates = payment_filtered if payment_years is not None else same_product
+    if not candidates:
+        return []
+    candidates = _most_specific_payment_candidates(candidates, payment_years)
+    candidates = _filter_by_holding_tags(holding, candidates)
     if not candidates:
         return []
     unique: dict[tuple, ProductRate] = {}
@@ -806,7 +971,21 @@ def _review_candidate_products(holding: dict, products: list[ProductRate]) -> li
 def _auto_candidate(holding: dict, products: list[ProductRate]) -> ProductRate | None:
     ranked = _rank_products(holding, products)
     candidates = _candidate_products(holding, products)
-    if not ranked or ranked[0][0] < 0.78 or not candidates:
+    if not ranked or not candidates:
+        return None
+    candidate_scores = {
+        product.key: score for score, product in ranked
+        if any(product.key == candidate.key for candidate in candidates)
+    }
+    best_candidate_score = max(candidate_scores.values(), default=0.0)
+    matched_tags, conflicting_tags, _ = _tag_match_summary(holding, candidates[0])
+    strong_condition_evidence = (
+        len(candidates) == 1
+        and best_candidate_score >= 0.70
+        and matched_tags >= 2
+        and conflicting_tags == 0
+    )
+    if best_candidate_score < 0.78 and not strong_condition_evidence:
         return None
     rate_pairs = {(round(p.first_year_rate, 8), round(p.total_rate, 8)) for p in candidates}
     if len(candidates) == 1 or len(rate_pairs) == 1:
@@ -1236,6 +1415,9 @@ def run() -> None:
                     reason = "상품명 일치"
                     if holding.get("payment_label"):
                         reason += f" · {holding['payment_label']} 조건 일치"
+                    _, _, tag_reasons = _tag_match_summary(holding, product)
+                    if tag_reasons:
+                        reason += " · " + " · ".join(dict.fromkeys(tag_reasons))
                     st.caption(f"자동 연결 근거: {reason}")
                 if selected:
                     pending.append(_contract_data(holding, product))
