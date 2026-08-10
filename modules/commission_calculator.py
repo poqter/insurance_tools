@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-# 전달용 파일: 보유계약 자동 연결·검토 흐름 적용본 v13
+# 전달용 파일: 월별 수수료표 스마트 연결 흐름 적용본 v14
 
 import hashlib
 import io
@@ -490,6 +490,7 @@ INSURER_ALIASES = {
     "DB생명보험": "DB생명", "DB생명": "DB생명",
     "농협생명보험": "농협생명", "NH농협생명": "농협생명",
     "농협손해보험": "농협손보", "NH농협손해보험": "농협손보",
+    "NH농협손보": "농협손보", "농협손보": "농협손보",
     "삼성생명보험": "삼성생명", "삼성화재해상보험": "삼성화재",
     "현대해상화재보험": "현대해상", "흥국화재해상보험": "흥국화재",
 }
@@ -529,10 +530,17 @@ def _date_text(value: Any) -> str:
 
 def _holding_product_name(value: Any) -> str:
     text = _clean_text(value).lower()
+    text = re.sub(r"\(\s*\d+\s*\)", "", text)
     replacements = ("무배당", "(무)", "_무", "해약환급금", "해지환급금", "미지급형", "납입면제형")
     for token in replacements:
         text = text.replace(token, "")
     text = re.sub(r"\(?(?:20\d{2}|2\d)[.\-](?:0?[1-9]|1[0-2])\)?", "", text)
+    for token in (
+        "간편가입", "간편심사형", "일반심사형", "보험가입금액형", "보험료형",
+        "일부지급형", "저해약환급금형", "보증비용부과형", "간편",
+    ):
+        text = text.replace(token, "")
+    text = re.sub(r"(?<!\d)\d{1,2}형(?!\d)", "", text)
     # 보험회사는 별도 항목에서 먼저 일치시키므로 상품명 앞의 브랜드 표기는 비교에서 제외합니다.
     brand_prefixes = (
         "kb라이프생명", "kb라이프", "kb손해보험", "kb손보", "kb",
@@ -655,15 +663,8 @@ def _condition_option_label(
     payout_rate: float | None = None,
     candidates: list[ProductRate] | None = None,
 ) -> str:
-    """납입기간과 후보 간 차이, 최종 요율만 간결하게 표시합니다."""
-    applied = payout_rate
-    if applied is None:
-        applied = float(st.session_state.get("commission_payout_rate", DEFAULT_PAYOUT_RATE)) / 100
-    return (
-        f"{_short_condition_label(product, candidates)} · "
-        f"익월 {_format_rate(product.first_year_rate * applied)} / "
-        f"총 {_format_rate(product.total_rate * applied)}"
-    )
+    """선택 목록에는 납입기간과 실제 구분에 필요한 세부조건만 표시합니다."""
+    return _short_condition_label(product, candidates)
 
 
 @st.cache_data(show_spinner=False)
@@ -889,54 +890,143 @@ def _sort_condition_candidates(products: list[ProductRate]) -> list[ProductRate]
     return sorted(products, key=_condition_sort_key)
 
 
+PRODUCT_CATEGORY_TOKENS = {
+    "실손": ("실손", "실비", "의료비"),
+    "건강": ("건강보험", "종합건강", "건강보장"),
+    "치아": ("치아", "치과"),
+    "운전자": ("운전자",),
+    "펫": ("펫", "반려", "애견", "애묘"),
+    "종신": ("종신",),
+    "연금": ("연금",),
+    "치매간병": ("치매", "간병", "장기요양", "돌봄"),
+    "어린이": ("어린이", "자녀", "키즈", "태아"),
+    "화재재물": ("화재", "재물", "사업장", "주택"),
+    "암": ("암보험", "암보장", "암치료", "암플랜"),
+}
+
+
+def _product_categories(value: Any) -> set[str]:
+    text = _normalize(value)
+    return {
+        category for category, tokens in PRODUCT_CATEGORY_TOKENS.items()
+        if any(token in text for token in tokens)
+    }
+
+
+def _strip_revision_markers(value: Any) -> str:
+    """상품 개정월은 약하게 처리하고 3.10.5·3N5·0545 같은 핵심 숫자는 보존합니다."""
+    text = _clean_text(value).lower()
+    # 괄호 속 YY.MM, YYYY.MM, YYMM.회차 형태는 대부분 개정 표기입니다.
+    text = re.sub(r"\(\s*(?:20)?\d{2}[.\-/](?:0?[1-9]|1[0-2])(?:[.\-/]\d+)?\s*\)", " ", text)
+    # 상품명 끝 또는 보험/plus 바로 뒤의 2404·2607 형식만 개정월로 봅니다.
+    text = re.sub(
+        r"(보험|plus)\s*(?:20)?(?:2[4-9]|3\d)(?:0[1-9]|1[0-2])(?=\s|_|$|\()",
+        r"\1 ", text, flags=re.I,
+    )
+    text = re.sub(
+        r"(?<!\d)(?:20)?(?:2[4-9]|3\d)(?:0[1-9]|1[0-2])(?=\s|_|$)",
+        " ", text,
+    )
+    return text
+
+
+def _smart_product_name(value: Any) -> str:
+    return _holding_product_name(_strip_revision_markers(value))
+
+
+def _structural_signatures(value: Any) -> set[str]:
+    """개정월과 달리 상품 정체성에 직접 쓰이는 숫자 표지를 추출합니다."""
+    text = _strip_revision_markers(value).lower().replace("·", ".")
+    signatures: set[str] = set()
+    signatures.update(item.replace(".", ".") for item in re.findall(r"(?<!\d)\d{1,2}(?:\.\d{1,2}){1,3}(?!\d)", text))
+    signatures.update(item.lower() for item in re.findall(r"(?<![0-9a-z])\d{1,2}n\d{1,2}(?![0-9a-z])", text, re.I))
+    # 0545·0550·4565처럼 상품 핵심명 중간에 남는 4자리 숫자만 보존합니다.
+    signatures.update(re.findall(r"(?<!\d)(?:0[3-9]\d{2}|[3-9]\d{3})(?!\d)", text))
+    return signatures
+
+
+def _bigrams(value: str) -> set[str]:
+    return {value[index:index + 2] for index in range(max(0, len(value) - 1))}
+
+
+def _name_similarity(source: str, target: str) -> float:
+    if not source or not target:
+        return 0.0
+    sequence = SequenceMatcher(None, source, target).ratio()
+    source_pairs, target_pairs = _bigrams(source), _bigrams(target)
+    jaccard = (
+        len(source_pairs & target_pairs) / len(source_pairs | target_pairs)
+        if source_pairs and target_pairs else 0.0
+    )
+    containment = min(len(source), len(target)) / max(len(source), len(target)) if source in target or target in source else 0.0
+    return max(sequence * 0.62 + jaccard * 0.38, containment)
+
+
+def _hard_product_conflict(source: Any, target: Any) -> bool:
+    source_categories = _product_categories(source)
+    target_categories = _product_categories(target)
+    if source_categories and target_categories and not source_categories.intersection(target_categories):
+        return True
+    source_signatures = _structural_signatures(source)
+    target_signatures = _structural_signatures(target)
+    return bool(source_signatures and target_signatures and source_signatures.isdisjoint(target_signatures))
+
+
 def _rank_products(holding: dict, products: list[ProductRate]) -> list[tuple[float, ProductRate]]:
-    source = _holding_product_name(holding["product_raw"])
+    source = _smart_product_name(holding["product_raw"])
     ranked: list[tuple[float, ProductRate]] = []
     for product in products:
         if product.source_type != holding["source_type"] or product.insurer != holding["insurer"]:
             continue
-        target = _holding_product_name(product.product)
+        if _hard_product_conflict(holding["product_raw"], product.product):
+            continue
+        target = _smart_product_name(product.product)
         if not source or not target:
             continue
-        score = SequenceMatcher(None, source, target).ratio()
-        if source in target or target in source:
-            score = max(score, min(len(source), len(target)) / max(len(source), len(target)) + 0.08)
+        score = _name_similarity(source, target)
+        if source == target:
+            score = 1.0
+        elif source in target or target in source:
+            score = min(0.98, score + 0.06)
         if _payment_matches(product, holding.get("payment_years")):
-            score += 0.04
+            score += 0.025
         elif holding.get("payment_years") is not None and _has_payment_condition(product):
-            score -= 0.12
+            score -= 0.10
         matched_tags, conflicting_tags, _ = _tag_match_summary(holding, product)
-        score += min(matched_tags, 4) * 0.035
-        score -= conflicting_tags * 0.14
-        # 세만기·갱신형·간편형 등 핵심 유형이 서로 충돌하면 자동 확정을 방지합니다.
-        raw = _normalize(holding["product_raw"])
-        detail = _normalize(product.product + " " + product.conditions)
-        for keyword in ("세만기", "연만기", "갱신형", "간편"):
-            if keyword in raw and keyword not in detail:
-                score -= 0.08
+        score += min(matched_tags, 4) * 0.025
+        score -= conflicting_tags * 0.12
         ranked.append((score, product))
     ranked.sort(key=lambda item: item[0], reverse=True)
     return ranked
 
 
+def _ranked_product_groups(
+    holding: dict, products: list[ProductRate]
+) -> list[tuple[float, str, list[ProductRate]]]:
+    groups: dict[str, list[tuple[float, ProductRate]]] = defaultdict(list)
+    for score, product in _rank_products(holding, products):
+        display_name, _ = _product_display_parts(product.product)
+        groups[display_name].append((score, product))
+    ranked_groups = []
+    for display_name, rows in groups.items():
+        best_score = max(score for score, _ in rows)
+        unique: dict[tuple, ProductRate] = {}
+        for _, product in rows:
+            key = (product.conditions, round(product.first_year_rate, 8), round(product.total_rate, 8))
+            unique.setdefault(key, product)
+        ranked_groups.append((best_score, display_name, _sort_condition_candidates(list(unique.values()))))
+    ranked_groups.sort(key=lambda item: (-item[0], _normalize(item[1])))
+    return ranked_groups
+
+
 def _candidate_products(holding: dict, products: list[ProductRate]) -> list[ProductRate]:
-    ranked = _rank_products(holding, products)
-    if not ranked or ranked[0][0] < 0.58:
+    groups = _ranked_product_groups(holding, products)
+    if not groups or groups[0][0] < 0.56:
         return []
-    best_name = _holding_product_name(ranked[0][1].product)
-    best_family = _product_family_name(ranked[0][1].product)
-    same_product = [
-        product for score, product in ranked
-        if score >= max(0.55, ranked[0][0] - 0.14)
-        and (
-            _holding_product_name(product.product) == best_name
-            or _product_family_name(product.product) == best_family
-        )
-    ]
+    candidates = groups[0][2]
     payment_years = holding.get("payment_years")
-    payment_filtered = [p for p in same_product if _payment_matches(p, payment_years)]
-    # 보유계약에 납입기간이 있으면 다른 납기의 상품을 억지 후보로 되돌리지 않습니다.
-    candidates = payment_filtered if payment_years is not None else same_product
+    payment_filtered = [p for p in candidates if _payment_matches(p, payment_years)]
+    candidates = payment_filtered if payment_years is not None else candidates
     if not candidates:
         return []
     candidates = _most_specific_payment_candidates(candidates, payment_years)
@@ -951,46 +1041,58 @@ def _candidate_products(holding: dict, products: list[ProductRate]) -> list[Prod
 
 
 def _review_candidate_products(holding: dict, products: list[ProductRate]) -> list[ProductRate]:
-    """확인 화면에는 최상위 상품뿐 아니라 가까운 유사 상품·조건도 함께 보여줍니다."""
-    primary = _candidate_products(holding, products)
-    ranked = _rank_products(holding, products)
-    if not ranked:
-        return primary
-    threshold = max(0.48, ranked[0][0] - 0.24)
-    combined = primary + [product for score, product in ranked if score >= threshold][:30]
-    unique: dict[tuple, ProductRate] = {}
-    for product in combined:
-        key = (
-            _holding_product_name(product.product), product.conditions,
-            round(product.first_year_rate, 8), round(product.total_rate, 8),
-        )
-        unique.setdefault(key, product)
-    return _sort_condition_candidates(list(unique.values()))[:18]
+    """확인 화면에는 서로 다른 추천 상품을 최대 3개까지만 제공합니다."""
+    groups = _ranked_product_groups(holding, products)
+    if not groups or groups[0][0] < 0.56:
+        return []
+    floor = max(0.56, groups[0][0] - 0.16)
+    selected_groups = [group for group in groups if group[0] >= floor][:3]
+    return [product for _, _, candidates in selected_groups for product in candidates]
 
 
 def _auto_candidate(holding: dict, products: list[ProductRate]) -> ProductRate | None:
-    ranked = _rank_products(holding, products)
+    groups = _ranked_product_groups(holding, products)
     candidates = _candidate_products(holding, products)
-    if not ranked or not candidates:
+    if not groups or not candidates:
         return None
-    candidate_scores = {
-        product.key: score for score, product in ranked
-        if any(product.key == candidate.key for candidate in candidates)
-    }
-    best_candidate_score = max(candidate_scores.values(), default=0.0)
+    best_candidate_score = groups[0][0]
+    next_group_score = groups[1][0] if len(groups) > 1 else 0.0
     matched_tags, conflicting_tags, _ = _tag_match_summary(holding, candidates[0])
-    strong_condition_evidence = (
-        len(candidates) == 1
-        and best_candidate_score >= 0.70
-        and matched_tags >= 2
-        and conflicting_tags == 0
-    )
-    if best_candidate_score < 0.78 and not strong_condition_evidence:
+    source_name = _smart_product_name(holding["product_raw"])
+    target_name = _smart_product_name(candidates[0].product)
+    exact_core = source_name == target_name
+    clear_margin = best_candidate_score - next_group_score >= 0.10
+    if conflicting_tags or not (exact_core or (best_candidate_score >= 0.90 and clear_margin)):
         return None
     rate_pairs = {(round(p.first_year_rate, 8), round(p.total_rate, 8)) for p in candidates}
-    if len(candidates) == 1 or len(rate_pairs) == 1:
+    if len(candidates) == 1 or (len(rate_pairs) == 1 and matched_tags >= 1):
         return candidates[0]
     return None
+
+
+@st.cache_data(show_spinner=False)
+def _analyze_product_links(
+    holdings: list[dict], product_rows: list[dict]
+) -> dict[str, dict[str, Any]]:
+    """업로드 직후 한 번만 전체 추천을 계산하고 선택 조작 시에는 결과를 재사용합니다."""
+    products = [_to_product_rate(row) for row in product_rows]
+    products_by_insurer: dict[tuple[str, str], list[ProductRate]] = defaultdict(list)
+    for product in products:
+        products_by_insurer[(product.source_type, product.insurer)].append(product)
+    decisions: dict[str, dict[str, Any]] = {}
+    for holding in holdings:
+        insurer_products = products_by_insurer.get(
+            (holding.get("source_type", ""), holding.get("insurer", "")), []
+        )
+        candidates = _candidate_products(holding, insurer_products)
+        review = _review_candidate_products(holding, insurer_products)
+        automatic = _auto_candidate(holding, insurer_products)
+        decisions[holding["row_key"]] = {
+            "candidate_keys": [product.key for product in candidates],
+            "review_keys": [product.key for product in review],
+            "auto_key": automatic.key if automatic else "",
+        }
+    return decisions
 
 
 def _initialize_state() -> None:
@@ -1064,6 +1166,87 @@ def _holding_caption(holding: dict) -> str:
 def _markdown_text(value: Any) -> str:
     """마스킹 이름의 ** 등이 Markdown 문법으로 해석되지 않도록 처리합니다."""
     return str(value or "").replace("\\", "\\\\").replace("*", "\\*").replace("_", "\\_")
+
+
+def _product_groups(products: list[ProductRate]) -> dict[str, list[ProductRate]]:
+    groups: dict[str, list[ProductRate]] = defaultdict(list)
+    for product in products:
+        display_name, _ = _product_display_parts(product.product)
+        groups[display_name].append(product)
+    return {name: _sort_condition_candidates(items) for name, items in groups.items()}
+
+
+def _direct_product_names(holding: dict, groups: dict[str, list[ProductRate]]) -> list[str]:
+    """직접 찾기에서도 관련 상품을 위에 두되 같은 보험사의 전체 상품을 검색할 수 있습니다."""
+    source_name = _smart_product_name(holding.get("product_raw", ""))
+    source_categories = _product_categories(holding.get("product_raw", ""))
+
+    def sort_key(name: str) -> tuple:
+        target_categories = _product_categories(name)
+        category_rank = 0 if source_categories and source_categories & target_categories else 1
+        conflict_rank = 1 if _hard_product_conflict(holding.get("product_raw", ""), name) else 0
+        similarity = _name_similarity(source_name, _smart_product_name(name))
+        return conflict_rank, category_rank, -similarity, _normalize(name)
+
+    return sorted(groups, key=sort_key)
+
+
+def _render_smart_product_picker(
+    holding: dict,
+    recommended: list[ProductRate],
+    insurer_products: list[ProductRate],
+    payout_rate: float,
+    key_prefix: str,
+) -> ProductRate | None:
+    """추천은 최대 3개만, 직접 찾기는 동일 보험사의 전체 상품을 검색하도록 분리합니다."""
+    recommended_groups = _product_groups(recommended)
+    direct_groups = _product_groups(insurer_products)
+    modes = ["추천 상품"] if recommended_groups else []
+    modes.append("직접 찾기")
+    mode = st.radio(
+        "상품 연결 방법",
+        modes,
+        horizontal=True,
+        key=f"{key_prefix}_mode",
+        help="추천이 맞지 않으면 직접 찾기에서 같은 보험사의 전체 상품을 검색할 수 있습니다.",
+    )
+    groups = recommended_groups if mode == "추천 상품" else direct_groups
+    if mode == "추천 상품":
+        product_names = list(groups)[:3]
+        label = f"추천 상품 · {len(product_names)}개"
+        placeholder = "가장 적합한 상품을 선택해 주세요."
+    else:
+        product_names = _direct_product_names(holding, groups)
+        label = f"{holding.get('insurer') or '보험사'} 상품 직접 찾기"
+        placeholder = "상품명을 입력하거나 목록에서 선택해 주세요."
+
+    selected_name = st.selectbox(
+        label,
+        product_names,
+        index=0 if mode == "추천 상품" and len(product_names) == 1 else None,
+        placeholder=placeholder,
+        key=f"{key_prefix}_{'recommended' if mode == '추천 상품' else 'direct'}_product",
+    ) if product_names else None
+    condition_candidates = groups.get(selected_name, []) if selected_name else []
+    condition_key = hashlib.sha1(str(selected_name).encode("utf-8")).hexdigest()[:10]
+    if condition_candidates:
+        return st.selectbox(
+            f"납입기간 및 세부 조건 · {len(condition_candidates)}개",
+            condition_candidates,
+            index=0 if len(condition_candidates) == 1 else None,
+            placeholder="납입기간과 세부 조건을 선택해 주세요.",
+            format_func=lambda product: _condition_option_label(
+                product, payout_rate, condition_candidates
+            ),
+            key=f"{key_prefix}_condition_{condition_key}",
+        )
+    st.selectbox(
+        "납입기간 및 세부 조건",
+        ["상품을 선택하면 해당 상품의 조건만 표시됩니다."],
+        disabled=True,
+        key=f"{key_prefix}_condition_wait_{mode}",
+    )
+    return None
 
 
 def _render_manual_entry(all_products: list[ProductRate]) -> None:
@@ -1349,6 +1532,11 @@ def run() -> None:
         help="계약상태가 정상이고 수수료표 기준월과 같은 계약을 우선 분석합니다.",
     )
 
+    # 선택할 때마다 전체 16,000여 조건을 다시 비교하지 않도록 보험사별로 미리 나눕니다.
+    products_by_insurer: dict[tuple[str, str], list[ProductRate]] = defaultdict(list)
+    for product in all_products:
+        products_by_insurer[(product.source_type, product.insurer)].append(product)
+
     review_records: list[dict] = []
     if holding_file is not None and all_products:
         try:
@@ -1357,6 +1545,9 @@ def run() -> None:
             holdings = []
             st.error(f"보유계약 파일을 읽지 못했습니다: {exc}")
 
+        product_by_key = {product.key: product for product in all_products}
+        product_rows = [product.__dict__ for product in all_products]
+        link_decisions = _analyze_product_links(holdings, product_rows)
         registered_policies = {c.get("policy_number") for c in st.session_state["commission_contracts"] if c.get("policy_number")}
         automatic: list[tuple[dict, ProductRate]] = []
         needs_review: list[tuple[dict, list[ProductRate], str]] = []
@@ -1365,6 +1556,9 @@ def run() -> None:
         already_registered = 0
 
         for holding in holdings:
+            insurer_products = products_by_insurer.get(
+                (holding.get("source_type", ""), holding.get("insurer", "")), []
+            )
             ref_month = reference_months.get(holding["source_type"], "")
             if holding.get("policy_number") and holding["policy_number"] in registered_policies:
                 already_registered += 1
@@ -1375,11 +1569,15 @@ def run() -> None:
             if ref_month and holding.get("contract_month") and holding["contract_month"] != ref_month:
                 excluded.append((holding, f"계약월 {holding['contract_month']} / 수수료표 기준월 {ref_month}"))
                 continue
-            candidates = _candidate_products(holding, all_products)
+            decision = link_decisions.get(holding["row_key"], {})
+            candidates = [
+                product_by_key[key] for key in decision.get("candidate_keys", [])
+                if key in product_by_key
+            ]
             if not candidates:
                 unmatched.append((holding, "수수료표에서 일치하는 상품을 찾지 못함"))
                 continue
-            auto = _auto_candidate(holding, all_products)
+            auto = product_by_key.get(decision.get("auto_key", ""))
             if auto is not None and holding.get("share_rate", 100.0) >= 100:
                 automatic.append((holding, auto))
             else:
@@ -1388,7 +1586,10 @@ def run() -> None:
                     reason_parts.append("세부 조건 확인")
                 if holding.get("share_rate", 100.0) < 100:
                     reason_parts.append("모집 형태 확인")
-                review_candidates = _review_candidate_products(holding, all_products)
+                review_candidates = [
+                    product_by_key[key] for key in decision.get("review_keys", [])
+                    if key in product_by_key
+                ]
                 needs_review.append((holding, review_candidates, " · ".join(reason_parts)))
 
         st.markdown("### ③ 연결 결과 확인")
@@ -1426,51 +1627,17 @@ def run() -> None:
             if not needs_review:
                 st.caption("확인이 필요한 계약이 없습니다.")
             for holding, candidates, reason in needs_review:
-                customer_name = _markdown_text(holding.get("customer") or "고객명 없음")
-                st.markdown(f"**{customer_name} · {holding['insurer']}**")
-                st.caption(f"{_holding_caption(holding)} · {reason}")
-                st.write(f"보유계약 상품: {holding['product_raw']}")
-                product_groups: dict[str, list[ProductRate]] = defaultdict(list)
-                for candidate in candidates:
-                    display_name, _ = _product_display_parts(candidate.product)
-                    product_groups[display_name].append(candidate)
-                all_product_names = list(product_groups)
-                show_more = False
-                if len(all_product_names) > 3:
-                    show_more = st.checkbox(
-                        f"다른 유사 상품 보기 ({len(all_product_names) - 3}개 더 있음)",
-                        value=False, key=f"show_more_{holding['row_key']}",
+                with st.container(border=True):
+                    customer_name = _markdown_text(holding.get("customer") or "고객명 없음")
+                    st.markdown(f"**{customer_name} · {holding['insurer']}**")
+                    st.caption(f"{_holding_caption(holding)} · {reason}")
+                    st.write(f"보유계약 상품: {holding['product_raw']}")
+                    insurer_products = products_by_insurer.get(
+                        (holding.get("source_type", ""), holding.get("insurer", "")), []
                     )
-                product_names = all_product_names if show_more else all_product_names[:3]
-                selected_product_name = st.selectbox(
-                    f"연결할 상품 · {'전체 후보' if show_more else '추천 후보'} {len(product_names)}개",
-                    product_names,
-                    index=0 if len(product_names) == 1 else None,
-                    key=f"review_product_{holding['row_key']}_{'all' if show_more else 'recommended'}",
-                    placeholder="수수료표의 상품을 선택해 주세요.",
-                )
-                selected_product = None
-                if selected_product_name:
-                    condition_candidates = _sort_condition_candidates(
-                        product_groups[selected_product_name]
-                    )
-                    product_key = hashlib.sha1(selected_product_name.encode("utf-8")).hexdigest()[:8]
-                    selected_product = st.selectbox(
-                        f"납입기간 및 세부 조건 · 후보 {len(condition_candidates)}개",
-                        condition_candidates,
-                        index=0 if len(condition_candidates) == 1 else None,
-                        key=f"review_condition_{holding['row_key']}_{product_key}",
-                        placeholder="납입기간과 세부 조건을 선택해 주세요.",
-                        format_func=lambda p: _condition_option_label(
-                            p, payout_rate, condition_candidates
-                        ),
-                    )
-                else:
-                    st.selectbox(
-                        "납입기간 및 세부 조건",
-                        ["먼저 상품을 선택해 주세요."],
-                        disabled=True,
-                        key=f"review_condition_disabled_{holding['row_key']}",
+                    selected_product = _render_smart_product_picker(
+                        holding, candidates, insurer_products, payout_rate,
+                        key_prefix=f"review_{holding['row_key']}",
                     )
                 recruiter_type = ""
                 if holding.get("share_rate", 100.0) < 100:
@@ -1490,7 +1657,7 @@ def run() -> None:
                     review_records.append({**holding, "product": holding["product_raw"], "reason": "사용자가 등록 대상에서 제외"})
                 else:
                     st.caption("상품·납입기간·모집 형태 중 필요한 항목을 선택해 주세요.")
-                st.divider()
+                st.write("")
 
         if excluded:
             with st.expander(f"기준월·계약상태·중복으로 제외 {len(excluded)}건", expanded=False):
@@ -1501,7 +1668,10 @@ def run() -> None:
                     st.caption(f"{_holding_caption(holding)} · {reason}")
                     include = st.checkbox("이번 계산에 포함", value=False, key=f"excluded_include_{holding['row_key']}")
                     if include:
-                        candidates = _candidate_products(holding, all_products)
+                        insurer_products = products_by_insurer.get(
+                            (holding.get("source_type", ""), holding.get("insurer", "")), []
+                        )
+                        candidates = _candidate_products(holding, insurer_products)
                         selected_product = st.selectbox(
                             "적용할 상품 및 조건", candidates, index=None, key=f"excluded_product_{holding['row_key']}",
                             format_func=lambda p: (
@@ -1529,51 +1699,30 @@ def run() -> None:
                     st.caption(_holding_caption(holding))
                     st.write(f"{holding['product_raw']} · {reason}")
                     with st.container(border=True):
-                        source_products = [
-                            product for product in all_products
-                            if product.source_type == holding.get("source_type")
-                        ]
-                        insurer_options = sorted({product.insurer for product in source_products})
-                        default_insurer = holding.get("insurer")
-                        insurer_index = (
-                            insurer_options.index(default_insurer)
-                            if default_insurer in insurer_options else None
+                        insurer_products = products_by_insurer.get(
+                            (holding.get("source_type", ""), holding.get("insurer", "")), []
                         )
-                        direct_insurer = st.selectbox(
-                            "보험회사 직접 선택",
-                            insurer_options,
-                            index=insurer_index,
-                            placeholder="보험회사를 선택해 주세요.",
-                            key=f"unmatched_insurer_{holding['row_key']}",
+                        if not insurer_products:
+                            source_products = [
+                                product for product in all_products
+                                if product.source_type == holding.get("source_type")
+                            ]
+                            insurer_options = sorted({product.insurer for product in source_products})
+                            direct_insurer = st.selectbox(
+                                "보험회사를 찾지 못했습니다 · 직접 선택",
+                                insurer_options,
+                                index=None,
+                                placeholder="보험회사를 선택해 주세요.",
+                                key=f"unmatched_insurer_{holding['row_key']}",
+                            )
+                            insurer_products = [
+                                product for product in source_products
+                                if product.insurer == direct_insurer
+                            ]
+                        direct_product = _render_smart_product_picker(
+                            holding, [], insurer_products, payout_rate,
+                            key_prefix=f"unmatched_{holding['row_key']}",
                         )
-                        insurer_products = [
-                            product for product in source_products
-                            if product.insurer == direct_insurer
-                        ]
-                        product_groups: dict[str, list[ProductRate]] = defaultdict(list)
-                        for product in insurer_products:
-                            display_name, _ = _product_display_parts(product.product)
-                            product_groups[display_name].append(product)
-                        direct_product_name = st.selectbox(
-                            "상품 직접 선택",
-                            sorted(product_groups),
-                            index=None,
-                            placeholder="수수료표의 상품을 선택해 주세요.",
-                            key=f"unmatched_product_{holding['row_key']}_{direct_insurer}",
-                        ) if product_groups else None
-                        direct_candidates = _sort_condition_candidates(
-                            product_groups.get(direct_product_name, [])
-                        )
-                        direct_product = st.selectbox(
-                            "납입기간 및 세부 조건",
-                            direct_candidates,
-                            index=None,
-                            placeholder="납입기간과 세부 조건을 선택해 주세요.",
-                            format_func=lambda p: _condition_option_label(
-                                p, payout_rate, direct_candidates
-                            ),
-                            key=f"unmatched_condition_{holding['row_key']}_{hashlib.sha1(str(direct_product_name).encode()).hexdigest()[:8]}",
-                        ) if direct_candidates else None
                         if direct_product is not None:
                             pending.append(_contract_data(holding, direct_product))
                             st.success("직접 연결 준비 완료")
