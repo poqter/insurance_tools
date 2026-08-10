@@ -488,7 +488,8 @@ def _compact_product_display(contract: dict, peers: list[dict] | None = None) ->
 
 
 def _make_excel(
-    contracts: list[dict], payout_rate: float, reference_month: str, excluded: list[dict]
+    contracts: list[dict], payout_rate: float, reference_month: str, excluded: list[dict],
+    fallback_collectors: list[str] | None = None,
 ) -> bytes:
     wb = Workbook()
     ws = wb.active
@@ -496,7 +497,9 @@ def _make_excel(
     total_premium = sum(item["premium"] for item in contracts)
     total_first = sum(item["premium"] * item["first_year_rate"] * payout_rate for item in contracts)
     total_commission = sum(item["premium"] * item["total_rate"] * payout_rate for item in contracts)
-    ws.append(["수수료 계산 결과"])
+    collector_label = _collector_label(contracts, fallback_collectors)
+    title = f"{collector_label} 수수료 계산 결과" if collector_label else "수수료 계산 결과"
+    ws.append([title])
     ws.append(["수수료표 기준월", reference_month or "확인 필요", "공통 지급율", payout_rate])
     ws.append(["계약 수", len(contracts), "월보험료 합계", total_premium])
     ws.append(["예상 익월수당 합계", round(total_first), "예상 총수당 합계", round(total_commission)])
@@ -644,7 +647,10 @@ def _date_text(value: Any) -> str:
 def _holding_product_name(value: Any) -> str:
     text = _clean_text(value).lower()
     text = re.sub(r"\(\s*\d+\s*\)", "", text)
-    replacements = ("무배당", "(무)", "_무", "해약환급금", "해지환급금", "미지급형", "납입면제형")
+    replacements = (
+        "무배당", "(무)", "_무", "상품개정",
+        "해약환급금", "해지환급금", "미지급형", "납입면제형",
+    )
     for token in replacements:
         text = text.replace(token, "")
     text = re.sub(r"\(?(?:20\d{2}|2\d)[.\-](?:0?[1-9]|1[0-2])\)?", "", text)
@@ -836,23 +842,27 @@ def parse_holding_workbook(file_bytes: bytes) -> list[dict]:
 def _payment_matches(product: ProductRate, years: int | None) -> bool:
     if years is None:
         return True
-    condition = re.sub(r"\s+", "", product.conditions)
+    condition = _normalize(product.conditions)
     if not condition:
         return True
-    exact = re.search(rf"(?<!\d){years}년(?:납|갱신|만기)", condition)
-    if exact:
+    if re.search(rf"(?<!\d){years}년(?:납|갱신|만기)", condition):
+        return True
+    if re.search(rf"(?:납기|납입기간){years}(?:년|년납)?", condition):
         return True
     over = re.search(r"(\d+)년납(?:이상|↑)", condition)
     return bool(over and years >= int(over.group(1)))
 
 
 def _has_payment_condition(product: ProductRate) -> bool:
-    condition = re.sub(r"\s+", "", product.conditions)
-    return bool(re.search(r"\d+(?:~\d+)?년(?:납|갱신|만기)", condition))
+    condition = _normalize(product.conditions)
+    return bool(
+        re.search(r"\d+(?:~\d+)?년(?:납|갱신|만기)", condition)
+        or re.search(r"(?:납기|납입기간)\d+(?:년|년납)?", condition)
+    )
 
 
 def _payment_threshold(product: ProductRate) -> int | None:
-    condition = re.sub(r"\s+", "", product.conditions)
+    condition = _normalize(product.conditions)
     match = re.search(r"(?<!\d)(\d+)년납(?:이상|↑)", condition)
     return int(match.group(1)) if match else None
 
@@ -996,6 +1006,8 @@ def _condition_sort_key(product: ProductRate) -> tuple:
         if any(token in header for token in ("구분", "종형", "형구분", "종구분", "담보"))
     )
     payment_match = re.search(r"(?<!\d)(\d+)(?:년)?(?:납|갱신)", text)
+    if not payment_match:
+        payment_match = re.search(r"(?:납기|납입기간)(\d+)(?:년)?", text)
     payment_years = int(payment_match.group(1)) if payment_match else 999
     return surrender_rank, renewal_rank, category, payment_years, text, product.row_number
 
@@ -1140,10 +1152,10 @@ def _candidate_products(holding: dict, products: list[ProductRate]) -> list[Prod
     candidates = groups[0][2]
     payment_years = holding.get("payment_years")
     payment_filtered = [p for p in candidates if _payment_matches(p, payment_years)]
-    candidates = payment_filtered if payment_years is not None else candidates
-    if not candidates:
-        return []
-    candidates = _most_specific_payment_candidates(candidates, payment_years)
+    # 같은 상품을 찾았다면 납기 불일치만으로 '미연결' 처리하지 않습니다.
+    # 일치 납기가 없을 때는 화면에서 사용자가 다른 납기를 명시적으로 펼칩니다.
+    candidates = payment_filtered if payment_years is not None and payment_filtered else candidates
+    candidates = _most_specific_payment_candidates(candidates, payment_years) if payment_filtered else candidates
     candidates = _filter_by_holding_tags(holding, candidates)
     if not candidates:
         return []
@@ -1168,6 +1180,11 @@ def _auto_candidate(holding: dict, products: list[ProductRate]) -> ProductRate |
     groups = _ranked_product_groups(holding, products)
     candidates = _candidate_products(holding, products)
     if not groups or not candidates:
+        return None
+    payment_years = holding.get("payment_years")
+    if payment_years is not None and not any(
+        _payment_matches(product, payment_years) for product in groups[0][2]
+    ):
         return None
     best_candidate_score = groups[0][0]
     next_group_score = groups[1][0] if len(groups) > 1 else 0.0
@@ -1275,12 +1292,9 @@ def _contract_data(holding: dict, product: ProductRate, recruiter_type: str = ""
     }
 
 
-def _commission_download_filename(
-    contracts: list[dict],
-    fallback_collectors: list[str] | None = None,
-    fallback_months: list[str] | None = None,
+def _collector_label(
+    contracts: list[dict], fallback_collectors: list[str] | None = None
 ) -> str:
-    """수금자명과 계약일의 연월을 사용해 Windows에서도 안전한 파일명을 만듭니다."""
     collectors: list[str] = []
     for contract in contracts:
         name = _clean_text(contract.get("collector", ""))
@@ -1291,6 +1305,21 @@ def _commission_download_filename(
             cleaned = _clean_text(name)
             if cleaned and cleaned not in collectors:
                 collectors.append(cleaned)
+    if not collectors:
+        return ""
+    label = collectors[0]
+    if len(collectors) > 1:
+        label += f" 외 {len(collectors) - 1}명"
+    return re.sub(r'[\\/:*?"<>|]+', "", label).strip(" ._")
+
+
+def _commission_download_filename(
+    contracts: list[dict],
+    fallback_collectors: list[str] | None = None,
+    fallback_months: list[str] | None = None,
+) -> str:
+    """수금자명과 계약일의 연월을 사용해 Windows에서도 안전한 파일명을 만듭니다."""
+    collector_label = _collector_label(contracts, fallback_collectors)
     months = sorted({
         match.group(1)
         for contract in contracts
@@ -1302,12 +1331,8 @@ def _commission_download_filename(
             if re.fullmatch(r"20\d{2}-\d{2}", cleaned) and cleaned not in months:
                 months.append(cleaned)
     months.sort()
-    if collectors:
-        collector_label = collectors[0]
-        if len(collectors) > 1:
-            collector_label += f" 외 {len(collectors) - 1}명"
-        collector_label = re.sub(r'[\\/:*?"<>|]+', "", collector_label).strip(" ._")
-        base_name = f"{collector_label}FP_수수료 계산 결과"
+    if collector_label:
+        base_name = f"{collector_label}_수수료 계산 결과"
     else:
         base_name = "수수료 계산 결과"
     if len(months) == 1:
@@ -1390,11 +1415,34 @@ def _render_smart_product_picker(
         placeholder=placeholder,
         key=f"{key_prefix}_{'recommended' if mode == '추천 상품' else 'direct'}_product",
     ) if product_names else None
-    condition_candidates = groups.get(selected_name, []) if selected_name else []
+    all_condition_candidates = groups.get(selected_name, []) if selected_name else []
+    payment_years = holding.get("payment_years")
+    matched_payment_candidates = [
+        product for product in all_condition_candidates
+        if _payment_matches(product, payment_years)
+    ] if payment_years is not None else all_condition_candidates
+    condition_candidates = matched_payment_candidates
     condition_key = hashlib.sha1(str(selected_name).encode("utf-8")).hexdigest()[:10]
+    if selected_name and payment_years is not None and not matched_payment_candidates:
+        st.warning(f"원본의 {payment_years}년납과 일치하는 조건이 없습니다.")
+        show_other_payment = st.checkbox(
+            "다른 납기 조건 보기",
+            value=False,
+            key=f"{key_prefix}_other_payment_{condition_key}",
+        )
+        condition_candidates = all_condition_candidates if show_other_payment else []
+        if not show_other_payment:
+            st.selectbox(
+                "납입기간 및 세부 조건",
+                [f"{payment_years}년납 조건 없음 · 다른 납기 조건 보기를 선택해 주세요."],
+                disabled=True,
+                key=f"{key_prefix}_condition_payment_wait_{condition_key}",
+            )
+            return None
     if condition_candidates:
+        label_prefix = f"원본 {payment_years}년납과 일치" if payment_years is not None and matched_payment_candidates else "납입기간 및 세부 조건"
         return st.selectbox(
-            f"납입기간 및 세부 조건 · {len(condition_candidates)}개",
+            f"{label_prefix} · {len(condition_candidates)}개",
             condition_candidates,
             index=0 if len(condition_candidates) == 1 else None,
             placeholder="납입기간과 세부 조건을 선택해 주세요.",
@@ -1781,6 +1829,7 @@ def run() -> None:
             for holding, product in automatic:
                 col1, col2 = st.columns([0.08, 0.92])
                 selected = col1.checkbox("선택", value=True, key=f"auto_{holding['row_key']}", label_visibility="collapsed")
+                selected_product = product
                 with col2:
                     customer_name = _markdown_text(holding.get("customer") or "고객명 없음")
                     st.markdown(f"**{customer_name} · {product.insurer}**")
@@ -1793,8 +1842,31 @@ def run() -> None:
                     if tag_reasons:
                         reason += " · " + " · ".join(dict.fromkeys(tag_reasons))
                     st.caption(f"자동 연결 근거: {reason}")
-                if selected:
-                    pending.append(_contract_data(holding, product))
+                    verify_auto = st.checkbox(
+                        "상품·납기 다시 확인",
+                        value=False,
+                        key=f"auto_verify_{holding['row_key']}",
+                    )
+                    if verify_auto:
+                        insurer_products = products_by_insurer.get(
+                            (holding.get("source_type", ""), holding.get("insurer", "")), []
+                        )
+                        decision = link_decisions.get(holding["row_key"], {})
+                        recommended = [
+                            product_by_key[key] for key in decision.get("review_keys", [])
+                            if key in product_by_key
+                        ]
+                        selected_product = _render_smart_product_picker(
+                            holding,
+                            recommended or [product],
+                            insurer_products,
+                            payout_rate,
+                            key_prefix=f"auto_change_{holding['row_key']}",
+                        )
+                if selected and selected_product is not None:
+                    pending.append(_contract_data(holding, selected_product))
+                elif selected and verify_auto:
+                    st.caption("변경할 상품과 원본 납기에 맞는 조건을 선택해 주세요.")
 
         with st.expander(f"확인 필요 {len(needs_review)}건", expanded=bool(needs_review)):
             if not needs_review:
@@ -2013,7 +2085,13 @@ def run() -> None:
     with download_col:
         months = sorted({month for month in reference_months.values() if month})
         reference_month = ", ".join(months)
-        excel_bytes = _make_excel(calculation_contracts, payout_rate, reference_month, review_records)
+        excel_bytes = _make_excel(
+            calculation_contracts,
+            payout_rate,
+            reference_month,
+            review_records,
+            st.session_state.get("commission_import_collectors", []),
+        )
         st.download_button(
             "엑셀 다운로드",
             data=excel_bytes,
