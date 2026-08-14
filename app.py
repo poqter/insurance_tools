@@ -1,7 +1,10 @@
+import base64
 import textwrap
+from pathlib import Path
 
 import streamlit as st
 import modules.commission_calculator as commission_calculator
+import modules.insurance_claim_guide as insurance_claim_guide
 
 from modules import (
     analyzer,
@@ -27,6 +30,41 @@ st.set_page_config(
 inject_global_styles()
 
 
+@st.cache_data(show_spinner=False)
+def _pretendard_font_data() -> str:
+    font_path = Path(__file__).resolve().parent / "assets" / "fonts" / "PretendardVariable.ttf"
+    if not font_path.is_file():
+        return ""
+    return base64.b64encode(font_path.read_bytes()).decode("ascii")
+
+
+def inject_pretendard_font() -> None:
+    font_data = _pretendard_font_data()
+    if not font_data:
+        return
+    st.markdown(
+        f"""
+        <style>
+        @font-face {{
+            font-family: 'Pretendard';
+            src: url(data:font/ttf;base64,{font_data}) format('truetype');
+            font-weight: 100 900;
+            font-style: normal;
+            font-display: swap;
+        }}
+        html, body, [class*="css"], [data-testid="stAppViewContainer"],
+        [data-testid="stSidebar"], button, input, textarea, select {{
+            font-family: 'Pretendard', 'Noto Sans KR', 'Apple SD Gothic Neo', sans-serif !important;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+inject_pretendard_font()
+
+
 # 공지는 이 목록만 수정하면 로그인 화면에 반영됩니다.
 NOTICE = {
     "date": "2026.08.01",
@@ -47,6 +85,12 @@ APP_DEFINITIONS = {
         "name": "보장 분석 도우미", "icon": "📑", "code": "BA", "category": "고객 상담",
         "badge": {"text": "BEST", "tone": "best"},
         "description": "보험사 보장분석 자료를 고객용 양식으로 변환합니다.", "action": "보장 분석 시작", "run": analyzer.run,
+    },
+    "insurance_claim_guide": {
+        "name": "보험금 청구 가이드", "icon": "📋", "code": "CG", "category": "고객 상담",
+        "badge": {"text": "NEW", "tone": "new"},
+        "description": "청구 항목별 필요서류를 안내하고 보장분석 PDF에서 관련 담보를 찾습니다.",
+        "action": "청구 가이드 시작", "run": insurance_claim_guide.run,
     },
     "remodeling": {
         "name": "보험 리모델링", "icon": "🔁", "code": "RM", "category": "고객 상담",
@@ -97,6 +141,7 @@ APP_DEFINITIONS = {
 # 홈 카드용 아이콘입니다. 외부 이미지나 추가 패키지 없이 동일한 모양으로 표시됩니다.
 HOME_ICONS = {
     "analyzer": '<svg viewBox="0 0 24 24"><path d="M9 11l2 2 4-4"/><path d="M12 3l7 3v5c0 4.6-3 8.1-7 10-4-1.9-7-5.4-7-10V6l7-3z"/></svg>',
+    "insurance_claim_guide": '<svg viewBox="0 0 24 24"><path d="M7 3h10v3H7z"/><path d="M5 5h14v16H5z"/><path d="M8 11l2 2 4-4M8 17h8"/></svg>',
     "remodeling": '<svg viewBox="0 0 24 24"><path d="M20 7h-6V1"/><path d="M20 7a9 9 0 10 1 7"/><path d="M4 17h6v6"/></svg>',
     "deposit_vs_shortpay": '<svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v5c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 11v5c0 1.7 3.1 3 7 3 1 0 2-.1 2.8-.3"/><circle cx="18" cy="17" r="3"/><path d="M18 15.5v3M16.8 16.2h2.4"/></svg>',
     "renewal_vs_nonrenewal": '<svg viewBox="0 0 24 24"><path d="M20 7h-5V2"/><path d="M20 7a8 8 0 00-14.5-2"/><path d="M4 17h5v5"/><path d="M4 17a8 8 0 0014.5 2"/></svg>',
@@ -111,6 +156,7 @@ HOME_ICONS = {
 
 USER_PERMISSIONS = {
     "Admin": {
+        "insurance_claim_guide": True,
         "analyzer": True, "remodeling": True, "deposit_vs_shortpay": True,
         "renewal_vs_nonrenewal": True, "inheritance_tax": True,
         "insurer_portal": True,
@@ -118,6 +164,7 @@ USER_PERMISSIONS = {
         "commission_calculator": True,
     },
     "Manager1": {
+        "insurance_claim_guide": True,
         "analyzer": True, "remodeling": True, "deposit_vs_shortpay": True,
         "renewal_vs_nonrenewal": True, "inheritance_tax": True,
         "insurer_portal": True,
@@ -125,6 +172,7 @@ USER_PERMISSIONS = {
         "commission_calculator": True,
     },
     "Basic": {
+        "insurance_claim_guide": True,
         "analyzer": True, "remodeling": False, "deposit_vs_shortpay": False,
         "renewal_vs_nonrenewal": False, "inheritance_tax": False,
         "insurer_portal": True,
@@ -132,6 +180,7 @@ USER_PERMISSIONS = {
         "commission_calculator": False,
     },
     "Crew": {
+        "insurance_claim_guide": True,
         "analyzer": True, "remodeling": False, "deposit_vs_shortpay": True,
         "renewal_vs_nonrenewal": True, "inheritance_tax": False,
         "insurer_portal": True,
@@ -139,6 +188,7 @@ USER_PERMISSIONS = {
         "commission_calculator": False,
     },
     "Dream": {
+        "insurance_claim_guide": True,
         "analyzer": True, "remodeling": True, "deposit_vs_shortpay": True,
         "renewal_vs_nonrenewal": True, "inheritance_tax": True,
         "insurer_portal": True,
