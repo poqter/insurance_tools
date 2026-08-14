@@ -12,6 +12,7 @@ from typing import Iterable
 import pandas as pd
 import pdfplumber
 import streamlit as st
+import streamlit.components.v1 as components
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.lib.pagesizes import A4
@@ -36,7 +37,7 @@ except ImportError:  # 단독 파일 점검용
     from ui_components import page_header, section_intro
 
 
-GUIDE_VERSION = "1.1.0"
+GUIDE_VERSION = "1.2.0"
 GUIDE_STANDARD_DATE = "2026.08"
 STATE_PREFIX = "cg_"
 
@@ -250,7 +251,7 @@ MATCH_RULES: dict[str, dict[str, list[str]]] = {
     "실손 입원": {"direct": ["입원의료비", "입원실손"], "related": ["비급여도수", "체외충격파", "비급여주사", "비급여mri"]},
     "약제비": {"direct": ["처방조제", "약제의료비", "약제비"], "related": []},
     "입원일당": {"direct": ["입원일당", "입원급여", "입원생활비"], "related": ["중환자실", "1인실", "2~3인실", "상급종합병원입원", "종합병원입원", "간병인사용입원", "간호간병통합"]},
-    "수술": {"direct": ["수술비", "수술급여", "수술특약", "종수술", "재해수술"], "related": ["시술비", "이식수술", "로봇수술"]},
+    "수술": {"direct": ["수술"], "related": ["시술"]},
     "응급실": {"direct": ["응급실내원", "응급치료"], "related": []},
     "간병인": {"direct": ["간병인사용", "간병인지원", "간병비"], "related": ["입원일당"]},
     "간호간병통합": {"direct": ["간호간병통합"], "related": ["입원일당"]},
@@ -297,13 +298,14 @@ LIMIT_TERMS = {
 
 INSURER_ALIASES = {
     "DB손보": "DB손해보험", "KB손보": "KB손해보험", "NH손보": "NH농협손해보험",
-    "농협손해보험": "NH농협손해보험", "신한생명": "신한라이프", "우체국": "우체국보험",
+    "농협손해보험": "NH농협손해보험", "하나손보": "하나손해보험",
+    "신한생명": "신한라이프", "우체국": "우체국보험",
 }
 
 
 INSURER_PATTERN = re.compile(
     r"DB손해보험|DB손보|KB손해보험|KB손보|현대해상|메리츠화재|한화손해보험|흥국화재|"
-    r"삼성화재|롯데손해보험|MG손해보험|NH농협손해보험|농협손해보험|NH손보|캐롯손해보험|"
+    r"삼성화재|롯데손해보험|MG손해보험|NH농협손해보험|농협손해보험|NH손보|캐롯손해보험|하나손해보험|하나손보|"
     r"신한라이프|신한생명|한화생명|교보생명|삼성생명|라이나생명|ABL생명|AIA생명|동양생명|"
     r"흥국생명|NH농협생명|미래에셋생명|KDB생명|하나생명|IBK연금보험|처브라이프|"
     r"우체국보험|우체국|새마을금고|수협"
@@ -329,13 +331,31 @@ def parse_amount(value: str) -> str:
     return f"{match.group(0)}만원" if match else raw
 
 
+def infer_coverage_category(category: str, coverage: str) -> str:
+    """담보명에 원인이 명시된 경우 PDF의 병합셀 위치보다 담보명을 우선한다."""
+    category = str(category or "").strip()
+    text = normalize_text(coverage)
+    surgery_rules = [
+        (("교통", "수술"), "교통상해수술"), (("자동차", "수술"), "교통상해수술"),
+        (("질병", "수술"), "질병수술"), (("상해", "수술"), "상해수술"), (("재해", "수술"), "상해수술"),
+        (("장기이식", "수술"), "기타수술"),
+        (("각막이식", "수술"), "기타수술"), (("조혈모세포", "수술"), "기타수술"),
+    ]
+    for terms, inferred in surgery_rules:
+        if all(normalize_text(term) in text for term in terms):
+            return inferred
+    return category
+
+
 def extract_pdf(pdf_bytes: bytes) -> dict:
     pages_text: list[str] = []
     pages_words: list[tuple[float, list[dict]]] = []
+    pages_tables: list[list[list[list[str | None]]]] = []
     with pdfplumber.open(BytesIO(pdf_bytes)) as pdf:
         for page in pdf.pages:
             pages_text.append(page.extract_text(x_tolerance=2, y_tolerance=3, layout=True) or "")
             pages_words.append((float(page.width), page.extract_words(x_tolerance=1, y_tolerance=2) or []))
+            pages_tables.append(page.extract_tables() or [])
 
     first_text = "\n".join(pages_text[:2])
     customer_match = re.search(r"([가-힣]{2,5})님을\s*위한", first_text)
@@ -347,7 +367,56 @@ def extract_pdf(pdf_bytes: bytes) -> dict:
     )
 
     rows: list[CoverageRow] = []
-    for page_no, (page_width, words) in enumerate(pages_words, start=1):
+    for page_no, ((page_width, words), page_tables) in enumerate(zip(pages_words, pages_tables), start=1):
+        table_row_count = 0
+        for table in page_tables:
+            if not table:
+                continue
+            header_index = next(
+                (
+                    idx for idx, row in enumerate(table)
+                    if len(row) >= 7
+                    and "구분" in normalize_text(row[0] or "")
+                    and "회사" in normalize_text(row[1] or "")
+                    and "담보" in normalize_text(row[3] or "")
+                ),
+                None,
+            )
+            if header_index is None:
+                continue
+            current_category = ""
+            for cells in table[header_index + 1:]:
+                if len(cells) < 7:
+                    continue
+                category_cell = str(cells[0] or "").replace("\n", " ").strip()
+                if category_cell:
+                    current_category = category_cell
+                company_cell = str(cells[1] or "").replace("\n", " ").strip()
+                insurer_match = INSURER_PATTERN.search(company_cell)
+                if not insurer_match:
+                    continue
+                product = str(cells[2] or "").replace("\n", " ").strip()
+                coverage = str(cells[3] or "").replace("\n", " ").strip()
+                if coverage.startswith(")") and product.count("(") > product.count(")"):
+                    product += ")"
+                    coverage = coverage[1:].lstrip()
+                amount_raw = str(cells[4] or "").replace("\n", " ").strip()
+                contract_date = str(cells[5] or "").replace("\n", " ").strip()
+                expiry_date = str(cells[6] or "").replace("\n", " ").strip()
+                if not product or not coverage or not re.fullmatch(r"\d{4}[-.]\d{1,2}(?:[-.]\d{1,2})?", contract_date):
+                    continue
+                if not re.fullmatch(r"\d{4}[-.]\d{1,2}(?:[-.]\d{1,2})?|종신", expiry_date):
+                    expiry_date = "확인 필요"
+                category = infer_coverage_category(current_category, coverage)
+                rows.append(CoverageRow(
+                    company=normalize_company(insurer_match.group(0)), product=product, category=category,
+                    coverage=coverage, amount=parse_amount(amount_raw), contract_date=contract_date,
+                    expiry_date=expiry_date, source_page=page_no,
+                    extraction_status="담보명 잘림 가능성" if coverage.endswith(("(", "제", "갱", "지", "수")) else "정상 추출",
+                ))
+                table_row_count += 1
+        if table_row_count:
+            continue
         if not words:
             continue
         scale = 595.28 / page_width if page_width else 1.0
@@ -358,7 +427,18 @@ def extract_pdf(pdf_bytes: bytes) -> dict:
             else:
                 line_groups[-1].append(word)
 
-        current_category = ""
+        # 보장분류 셀은 여러 담보 행의 세로 중앙에 놓이는 경우가 있어
+        # 단순히 '이전 분류'를 물려주면 질병/상해 분류가 뒤바뀔 수 있다.
+        category_markers: list[tuple[float, str]] = []
+        for marker_words in line_groups:
+            marker_text = " ".join(
+                str(word["text"]).strip()
+                for word in sorted(marker_words, key=lambda item: float(item["x0"]))
+                if float(word["x0"]) * scale < 95
+            ).strip()
+            if marker_text and len(marker_text) <= 35:
+                category_markers.append((float(marker_words[0]["top"]), marker_text))
+
         for line_words in line_groups:
             fields = {"category": [], "company": [], "product": [], "coverage": [], "amount": [], "contract": [], "expiry": []}
             for word in sorted(line_words, key=lambda item: float(item["x0"])):
@@ -366,7 +446,7 @@ def extract_pdf(pdf_bytes: bytes) -> dict:
                 text = str(word["text"]).strip()
                 if x < 95:
                     fields["category"].append(text)
-                elif x < 168:
+                elif x < 150:
                     fields["company"].append(text)
                 elif x < 303:
                     fields["product"].append(text)
@@ -381,8 +461,6 @@ def extract_pdf(pdf_bytes: bytes) -> dict:
 
             category_text = " ".join(fields["category"]).strip()
             company_text = " ".join(fields["company"]).strip()
-            if category_text and not company_text and len(category_text) <= 35:
-                current_category = category_text
             insurer_match = INSURER_PATTERN.search(company_text)
             if not insurer_match:
                 continue
@@ -395,12 +473,16 @@ def extract_pdf(pdf_bytes: bytes) -> dict:
                 continue
             if not re.fullmatch(r"\d{4}[-.]\d{1,2}(?:[-.]\d{1,2})?|종신", expiry_date):
                 expiry_date = "확인 필요"
+            if not category_text and category_markers:
+                row_top = float(line_words[0]["top"])
+                category_text = min(category_markers, key=lambda item: abs(item[0] - row_top))[1]
+            category_text = infer_coverage_category(category_text, coverage)
             status = "담보명 잘림 가능성" if coverage.endswith(("(", "제", "갱", "지", "수")) else "정상 추출"
             rows.append(
                 CoverageRow(
                     company=normalize_company(insurer_match.group(0)),
                     product=product,
-                    category=category_text or current_category,
+                    category=category_text,
                     coverage=coverage,
                     amount=parse_amount(amount_raw),
                     contract_date=contract_date,
@@ -457,6 +539,7 @@ def match_coverages(coverages: list[dict], selected_claims: list[str]) -> pd.Dat
                 "포함": relation != "함께 확인",
                 "보험회사": row.get("company", "확인 필요"),
                 "상품명": row.get("product", "확인 필요"),
+                "보장분류": row.get("category", ""),
                 "관련 담보": row.get("coverage", "확인 필요"),
                 "가입금액": row.get("amount", "확인 필요"),
                 "분류": relation,
@@ -470,7 +553,7 @@ def match_coverages(coverages: list[dict], selected_claims: list[str]) -> pd.Dat
             if key not in matched or priority[relation] > priority[matched[key]["분류"]]:
                 matched[key] = candidate
 
-    columns = ["포함", "보험회사", "상품명", "관련 담보", "가입금액", "분류", "확인사항", "추출상태", "계약일", "만기일", "원본쪽", "매칭근거"]
+    columns = ["포함", "보험회사", "상품명", "보장분류", "관련 담보", "가입금액", "분류", "확인사항", "추출상태", "계약일", "만기일", "원본쪽", "매칭근거"]
     if not matched:
         return pd.DataFrame(columns=columns)
     df = pd.DataFrame(matched.values(), columns=columns)
@@ -487,6 +570,23 @@ def refine_matches_with_answers(df: pd.DataFrame, answers: dict) -> pd.DataFrame
     def downgrade(mask: pd.Series) -> None:
         result.loc[mask, "분류"] = "함께 확인"
         result.loc[mask, "포함"] = False
+
+    surgery_cause = answers.get("surgery_cause")
+    if surgery_cause:
+        surgery_text = (result.get("보장분류", pd.Series("", index=result.index)).fillna("") + " " + result["관련 담보"].fillna("")).map(normalize_text)
+        surgery_rows = surgery_text.str.contains("수술|시술", regex=True)
+        disease = surgery_text.str.contains("질병|암|종양|뇌혈관|심장|심근|협심|장기이식|각막|조혈모세포", regex=True)
+        injury = surgery_text.str.contains("상해|재해|골절|화상", regex=True)
+        traffic = surgery_text.str.contains("교통|자동차", regex=True)
+        generic = surgery_rows & ~disease & ~injury & ~traffic
+        if surgery_cause == "질병":
+            downgrade(surgery_rows & ~(disease | generic))
+        elif surgery_cause == "상해·재해":
+            downgrade(surgery_rows & ~(injury | generic))
+        elif surgery_cause == "교통사고":
+            downgrade(surgery_rows & ~traffic)
+        elif surgery_cause in {"선택 전", "잘 모르겠음"}:
+            downgrade(surgery_rows & ~generic)
 
     cause = answers.get("death_cause")
     if cause in {"질병", "재해·상해", "교통사고"}:
@@ -546,6 +646,16 @@ def render_conditional_questions(selected_claims: list[str]) -> tuple[dict, list
     """복잡한 청구의 짧은 추가 질문을 표시하고 담보 검색용 세부 항목을 반환합니다."""
     answers: dict[str, object] = {}
     derived: list[str] = []
+
+    if "수술" in selected_claims:
+        with st.container(border=True):
+            st.markdown("#### 수술 청구 추가 확인")
+            answers["surgery_cause"] = st.radio(
+                "어떤 원인으로 수술을 받았나요?",
+                ["선택 전", "질병", "상해·재해", "교통사고", "질병과 상해 모두 확인", "잘 모르겠음"],
+                horizontal=True,
+                key="cg_surgery_cause",
+            )
 
     if "암" in selected_claims:
         with st.container(border=True):
@@ -656,11 +766,75 @@ def make_customer_message(docs: list[DocumentRule], customer_name: str = "") -> 
         if not group_docs:
             continue
         lines.extend(["", f"[{labels[group]}]"])
-        for i, doc in enumerate(group_docs, start=1):
+        for doc in group_docs:
             info = compact_required_info(doc.required_info)
-            lines.append(f"{i}. {doc.name}" + (f"({info})" if info else ""))
+            lines.append(f"• {doc.name}" + (f"({info})" if info else ""))
     lines.extend(["", "보험회사 심사 과정에서 추가서류가 요청될 수 있습니다."])
     return "\n".join(lines)
+
+
+def render_copyable_message(message: str) -> None:
+    """읽기 전용 문자 안내문과 하단 복사 버튼을 표시한다."""
+    safe_message = html.escape(message)
+    frame_height = min(max(320, 150 + len(message.splitlines()) * 25), 680)
+    components.html(
+        f"""
+        <div class="cg-copy-wrap">
+          <textarea id="cg-copy-message" readonly>{safe_message}</textarea>
+          <button id="cg-copy-button" type="button" onclick="copyClaimMessage()">문자 안내문 복사</button>
+        </div>
+        <script>
+        async function copyClaimMessage() {{
+          const area = document.getElementById('cg-copy-message');
+          const button = document.getElementById('cg-copy-button');
+          let copied = false;
+          try {{
+            if (navigator.clipboard && window.isSecureContext) {{
+              await navigator.clipboard.writeText(area.value);
+              copied = true;
+            }}
+          }} catch (e) {{ copied = false; }}
+          if (!copied) {{
+            area.focus();
+            area.select();
+            copied = document.execCommand('copy');
+            window.getSelection()?.removeAllRanges();
+          }}
+          if (copied) {{
+            button.textContent = '복사 완료';
+            button.classList.add('done');
+            setTimeout(() => {{
+              button.textContent = '문자 안내문 복사';
+              button.classList.remove('done');
+            }}, 1600);
+          }} else {{
+            button.textContent = '문구를 선택해 복사해 주세요';
+            area.focus();
+            area.select();
+          }}
+        }}
+        </script>
+        <style>
+        * {{ box-sizing: border-box; }}
+        body {{ margin: 0; font-family: Arial, 'Noto Sans KR', sans-serif; background: transparent; }}
+        .cg-copy-wrap {{ width: 100%; }}
+        #cg-copy-message {{
+          width: 100%; min-height: {frame_height - 95}px; resize: vertical;
+          padding: 16px; border: 1px solid #CBD5E1; border-radius: 10px;
+          background: #F8FAFC; color: #172033; font: 15px/1.65 Arial, 'Noto Sans KR', sans-serif;
+          white-space: pre-wrap;
+        }}
+        #cg-copy-button {{
+          width: 100%; margin-top: 10px; padding: 11px 16px; border: 1px solid #1D4E89;
+          border-radius: 8px; background: #1D4E89; color: white; font-size: 15px;
+          font-weight: 700; cursor: pointer;
+        }}
+        #cg-copy-button:hover {{ background: #163D6D; }}
+        #cg-copy-button.done {{ background: #1F7A4D; border-color: #1F7A4D; }}
+        </style>
+        """,
+        height=frame_height,
+    )
 
 
 def build_accident_narrative(accident_date: str, place: str, course: str, body_part: str, visit_date: str = "", treatment: str = "") -> str:
@@ -866,9 +1040,10 @@ def _coverage_key(row: dict) -> str:
 def _coverage_editor_table(df: pd.DataFrame, key: str) -> pd.DataFrame:
     return st.data_editor(
         df, key=key, hide_index=True, use_container_width=True,
-        disabled=["보험회사", "상품명", "분류", "추출상태", "계약일", "만기일", "원본쪽", "매칭근거"],
+        disabled=["보험회사", "상품명", "보장분류", "분류", "추출상태", "계약일", "만기일", "원본쪽", "매칭근거"],
         column_config={
             "포함": st.column_config.CheckboxColumn("포함"),
+            "보장분류": st.column_config.TextColumn("보장분류", width="small"),
             "관련 담보": st.column_config.TextColumn("관련 담보", width="large"),
             "가입금액": st.column_config.TextColumn("가입금액", width="small"),
             "확인사항": st.column_config.TextColumn("확인사항", width="large"),
@@ -914,17 +1089,18 @@ def render_coverage_editor(matched_df: pd.DataFrame, all_coverages: list[dict]) 
             candidates = []
             existing_keys = {_coverage_key(r) for r in display_df.to_dict("records")}
             for row in all_coverages:
-                searchable = normalize_text(f"{row.get('company', '')} {row.get('product', '')} {row.get('coverage', '')}")
+                searchable = normalize_text(f"{row.get('category', '')} {row.get('company', '')} {row.get('product', '')} {row.get('coverage', '')}")
                 if needle and needle in searchable:
                     candidate = {
                         "포함": True, "보험회사": row.get("company", "확인 필요"), "상품명": row.get("product", "확인 필요"),
+                        "보장분류": row.get("category", ""),
                         "관련 담보": row.get("coverage", "확인 필요"), "가입금액": row.get("amount", "확인 필요"), "분류": "검색 추가",
                         "확인사항": "담보 검색으로 추가", "추출상태": row.get("extraction_status", "정상 추출"),
                         "계약일": row.get("contract_date", ""), "만기일": row.get("expiry_date", ""),
                         "원본쪽": row.get("source_page", ""), "매칭근거": search_term.strip(),
                     }
-                    if _coverage_key(candidate) not in existing_keys:
-                        candidates.append(candidate)
+                    candidate["_already_listed"] = _coverage_key(candidate) in existing_keys
+                    candidates.append(candidate)
             if not candidates:
                 st.caption("추가할 수 있는 새로운 담보를 찾지 못했습니다.")
             else:
@@ -933,9 +1109,12 @@ def render_coverage_editor(matched_df: pd.DataFrame, all_coverages: list[dict]) 
                     st.markdown(f"**{company} · {len(company_df)}개**")
                     for idx, row in company_df.iterrows():
                         cols = st.columns([4, 1])
-                        cols[0].markdown(f"{row['관련 담보']}　·　{row['가입금액']}  \n<small>{row['상품명']}</small>", unsafe_allow_html=True)
-                        if cols[1].button("추가", key=f"cg_add_search_{hashlib.md5(_coverage_key(row.to_dict()).encode()).hexdigest()}"):
-                            st.session_state.setdefault("cg_searched_coverages", []).append(row.to_dict())
+                        cols[0].markdown(f"{row['관련 담보']}　·　{row['가입금액']}  \n<small>{row['보장분류'] or '분류 확인 필요'} · {row['상품명']}</small>", unsafe_allow_html=True)
+                        already_listed = bool(row.get("_already_listed", False))
+                        if cols[1].button("표시 중" if already_listed else "추가", disabled=already_listed, key=f"cg_add_search_{hashlib.md5(_coverage_key(row.to_dict()).encode()).hexdigest()}"):
+                            added_row = row.to_dict()
+                            added_row.pop("_already_listed", None)
+                            st.session_state.setdefault("cg_searched_coverages", []).append(added_row)
                             st.rerun()
 
         searched = st.session_state.get("cg_searched_coverages", [])
@@ -960,7 +1139,7 @@ def render_coverage_editor(matched_df: pd.DataFrame, all_coverages: list[dict]) 
         if submitted:
             manual = st.session_state.setdefault("cg_manual_coverages", [])
             manual.append({
-                "포함": True, "보험회사": company or "직접 입력", "상품명": product or "확인 필요",
+                "포함": True, "보험회사": company or "직접 입력", "상품명": product or "확인 필요", "보장분류": "직접 추가",
                 "관련 담보": coverage or "확인 필요", "가입금액": amount or "확인 필요", "분류": "직접 추가",
                 "확인사항": note, "추출상태": "사용자 입력", "계약일": "", "만기일": "", "원본쪽": "", "매칭근거": "직접 추가",
             })
@@ -1178,19 +1357,8 @@ def run() -> None:
     tab_message, tab_hospital, tab_pdf = st.tabs(["문자 안내문", "병원 발급 요청", "안내서 PDF"])
     with tab_message:
         default_message = make_customer_message(selected_docs, st.session_state.get("cg_customer_name", ""))
-        if st.session_state.pop("cg_pending_message_restore", False):
-            st.session_state["cg_customer_message"] = default_message
-            st.session_state["cg_message_source"] = default_message
-        elif "cg_customer_message" not in st.session_state:
-            st.session_state["cg_customer_message"] = default_message
-            st.session_state["cg_message_source"] = default_message
-        elif st.session_state.get("cg_message_source") != default_message:
-            st.info("고객 이름 또는 선택한 서류가 변경되었습니다. 변경 내용을 반영하려면 기본 안내문으로 복원해 주세요.")
-        st.text_area("문자 안내문", key="cg_customer_message", height=280)
-        st.caption("필요한 문장을 자유롭게 추가하거나 수정할 수 있습니다. 회사명·담보명·가입금액은 포함되지 않습니다.")
-        if st.button("기본 안내문으로 복원", key="cg_restore_message"):
-            st.session_state["cg_pending_message_restore"] = True
-            st.rerun()
+        st.caption("선택한 필요서류에 따라 자동으로 갱신됩니다. 복사한 뒤 카카오톡이나 문자에서 필요한 내용을 추가해 주세요.")
+        render_copyable_message(default_message)
 
     with tab_hospital:
         hospital_docs = [d for d in selected_docs if d.group == "병원 발급"]
