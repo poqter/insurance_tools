@@ -47,6 +47,7 @@ class DocumentRule:
     required_info: str
     group: str = "병원 발급"
     level: str = "기본 준비"
+    default_selected: bool = True
 
 
 @dataclass(frozen=True)
@@ -80,8 +81,8 @@ CLAIM_GROUPS = {
 
 
 COMMON_DOCUMENTS = [
-    DocumentRule("보험금 청구서", "보험회사별 양식, 청구인 서명", "직접 준비"),
-    DocumentRule("개인·신용정보 처리동의서", "청구인 자필서명", "직접 준비"),
+    DocumentRule("보험금 청구서", "보험회사별 양식, 청구인 서명", "직접 준비", default_selected=False),
+    DocumentRule("개인·신용정보 처리동의서", "청구인 자필서명", "직접 준비", default_selected=False),
     DocumentRule("신분증 사본", "청구인 기준", "직접 준비"),
     DocumentRule("보험금 수령 계좌정보", "청구인 또는 보험수익자 계좌", "직접 준비"),
 ]
@@ -91,8 +92,8 @@ DOC_RULES: dict[str, list[DocumentRule]] = {
     "실손 통원": [
         DocumentRule("진료비 계산서·영수증", "환자명, 진료일, 본인부담금"),
         DocumentRule("진료비 세부내역서", "급여·비급여 치료내역"),
-        DocumentRule("처방전", "진단명 또는 질병분류코드", level="상황별 준비"),
-        DocumentRule("통원확인서", "진단명, 질병분류코드, 통원일", level="진단정보가 부족한 경우"),
+        DocumentRule("처방전", "처방받은 경우, 진단명 또는 질병분류코드"),
+        DocumentRule("통원확인서", "진단명, 질병분류코드, 통원일", level="진단정보가 부족하거나 보험회사 요청 시", default_selected=False),
     ],
     "실손 입원": [
         DocumentRule("진료비 계산서·영수증", "환자명, 입원기간, 본인부담금"),
@@ -165,7 +166,11 @@ DOC_RULES: dict[str, list[DocumentRule]] = {
         DocumentRule("장기요양인정서", "인정등급, 인정일, 유효기간", "직접 준비"),
         DocumentRule("개인별 장기요양이용계획서", "급여 종류와 이용계획", "직접 준비"),
     ],
-    "기타 진단": [DocumentRule("진단서", "정확한 진단명, 질병분류코드, 진단일")],
+    "기타 진단": [
+        DocumentRule("진단서", "정확한 진단명, 질병분류코드, 진단일"),
+        DocumentRule("진료기록지", "진단 및 치료 경과", level="보험사 요청 가능", default_selected=False),
+        DocumentRule("사고사실 확인자료", "사고일자와 사고내용", "상황별 추가", "사고로 인한 진단인 경우", False),
+    ],
     "항암약물": [
         DocumentRule("항암치료확인서", "암 진단명, 항암제명, 투여일, 치료 목적"),
         DocumentRule("투약기록", "약제명과 투여일", level="보험사 요청 가능"),
@@ -180,6 +185,7 @@ DOC_RULES: dict[str, list[DocumentRule]] = {
     "항암방사선": [
         DocumentRule("방사선치료확인서", "암 진단명, 치료 종류, 치료기간, 치료횟수"),
         DocumentRule("진료비 세부내역서", "방사선치료 내역"),
+        DocumentRule("방사선 치료기록지", "치료방법, 치료기간, 치료횟수", level="추가 확인이 필요한 경우", default_selected=False),
     ],
     "양성자·세기조절": [
         DocumentRule("방사선치료확인서", "양성자 또는 세기조절 치료기법, 치료기간, 횟수"),
@@ -223,6 +229,8 @@ DOC_RULES: dict[str, list[DocumentRule]] = {
         DocumentRule("입퇴원확인서", "진단명, 입원일·퇴원일, 신생아중환자실 기간"),
         DocumentRule("진단서", "진단명, 질병분류코드"),
         DocumentRule("가족관계증명서", "출생아와 청구인 관계", "직접 준비"),
+        DocumentRule("유산진단서", "유산 진단명, 진단일", level="유산 청구 시", default_selected=False),
+        DocumentRule("사산증명서", "사산 사실과 일자", level="사산 청구 시", default_selected=False),
     ],
     "치아": [
         DocumentRule("치과치료확인서", "치아번호, 진단명, 치료명, 진단일·치료일"),
@@ -446,7 +454,7 @@ def match_coverages(coverages: list[dict], selected_claims: list[str]) -> pd.Dat
             )
             priority = {"직접 관련": 3, "조건부 관련": 2, "함께 확인": 1}
             candidate = {
-                "포함": True,
+                "포함": relation != "함께 확인",
                 "보험회사": row.get("company", "확인 필요"),
                 "상품명": row.get("product", "확인 필요"),
                 "관련 담보": row.get("coverage", "확인 필요"),
@@ -470,6 +478,47 @@ def match_coverages(coverages: list[dict], selected_claims: list[str]) -> pd.Dat
     return df.assign(_order=relation_order).sort_values(["보험회사", "_order", "상품명"]).drop(columns="_order").reset_index(drop=True)
 
 
+def refine_matches_with_answers(df: pd.DataFrame, answers: dict) -> pd.DataFrame:
+    """추가 질문 답변과 맞지 않는 넓은 매칭은 '함께 확인'으로 내린다."""
+    if df.empty:
+        return df
+    result = df.copy()
+
+    def downgrade(mask: pd.Series) -> None:
+        result.loc[mask, "분류"] = "함께 확인"
+        result.loc[mask, "포함"] = False
+
+    cause = answers.get("death_cause")
+    if cause in {"질병", "재해·상해", "교통사고"}:
+        normalized = result["관련 담보"].map(normalize_text)
+        if cause == "질병":
+            keep = normalized.str.contains("질병사망")
+        elif cause == "재해·상해":
+            keep = normalized.str.contains("상해사망|재해사망", regex=True) & ~normalized.str.contains("교통")
+        else:
+            keep = normalized.str.contains("교통.*사망|자동차.*사망", regex=True)
+        death_rows = normalized.str.contains("사망")
+        downgrade(death_rows & ~keep)
+
+    birth_claims = set(answers.get("birth_claims", []))
+    if birth_claims:
+        keyword_map = {
+            "저체중아": ["저체중", "출생체중"], "신생아 질환·입원": ["신생아", "신생아입원"],
+            "신생아중환자실": ["신생아중환자", "nicu"], "선천이상": ["선천"],
+            "유산": ["유산"], "사산": ["사산"], "산모 입원·수술": ["산모", "임신", "출산"],
+            "기타 출산 관련": ["태아", "출산", "신생아"],
+        }
+        allowed = [term for choice in birth_claims for term in keyword_map.get(choice, [])]
+        if allowed:
+            normalized = result["관련 담보"].map(normalize_text)
+            birth_rows = normalized.str.contains("저체중|신생아|태아|선천|출산|산모|유산|사산", regex=True)
+            keep = normalized.map(lambda value: any(normalize_text(term) in value for term in allowed))
+            downgrade(birth_rows & ~keep)
+
+    order = pd.Categorical(result["분류"], ["직접 관련", "조건부 관련", "검색 추가", "직접 추가", "함께 확인"], ordered=True)
+    return result.assign(_order=order).sort_values(["보험회사", "_order", "상품명"]).drop(columns="_order").reset_index(drop=True)
+
+
 def merged_documents(selected_claims: Iterable[str]) -> list[DocumentRule]:
     merged: dict[tuple[str, str], DocumentRule] = {}
     for doc in COMMON_DOCUMENTS:
@@ -482,17 +531,135 @@ def merged_documents(selected_claims: Iterable[str]) -> list[DocumentRule]:
             else:
                 current = merged[key]
                 info_parts = [p.strip() for p in (current.required_info + ", " + doc.required_info).split(",") if p.strip()]
-                merged[key] = DocumentRule(current.name, ", ".join(dict.fromkeys(info_parts)), current.group, current.level)
+                merged[key] = DocumentRule(
+                    current.name,
+                    ", ".join(dict.fromkeys(info_parts)),
+                    current.group,
+                    current.level,
+                    current.default_selected or doc.default_selected,
+                )
     group_order = {"병원 발급": 0, "직접 준비": 1, "상황별 추가": 2}
     return sorted(merged.values(), key=lambda d: (group_order.get(d.group, 9), d.name))
 
 
-def make_customer_message(docs: list[DocumentRule]) -> str:
-    hospital_docs = [d for d in docs if d.group == "병원 발급"]
-    lines = ["고객님, 보험금 청구를 위해 병원에서 아래 서류를 준비해 주세요.", ""]
-    for i, doc in enumerate(hospital_docs, start=1):
-        lines.append(f"{i}. {doc.name} - {doc.required_info}")
-    lines.extend(["", "보험회사 확인 과정에서 추가서류가 요청될 수 있습니다."])
+def render_conditional_questions(selected_claims: list[str]) -> tuple[dict, list[str]]:
+    """복잡한 청구의 짧은 추가 질문을 표시하고 담보 검색용 세부 항목을 반환합니다."""
+    answers: dict[str, object] = {}
+    derived: list[str] = []
+
+    if "암" in selected_claims:
+        with st.container(border=True):
+            st.markdown("#### 암 청구 추가 확인")
+            st.session_state.setdefault("cg_cancer_claims", ["암 진단비"])
+            answers["cancer_claims"] = st.multiselect(
+                "청구할 보험금",
+                ["암 진단비", "암 수술비", "항암약물치료", "표적항암치료", "방사선치료", "양성자·세기조절치료", "중입자치료", "CAR-T"],
+                key="cg_cancer_claims",
+            )
+            c1, c2 = st.columns(2)
+            answers["biopsy"] = c1.selectbox("조직검사를 받았나요?", ["선택 전", "받음", "받지 못함", "잘 모르겠음"], key="cg_biopsy")
+            answers["blood_cancer"] = c2.selectbox("혈액암 또는 골수검사로 진단받았나요?", ["선택 전", "아니요", "예", "잘 모르겠음"], key="cg_blood_cancer")
+
+        cancer_map = {
+            "암 수술비": "수술", "항암약물치료": "항암약물", "표적항암치료": "표적항암",
+            "방사선치료": "항암방사선", "양성자·세기조절치료": "양성자·세기조절",
+            "중입자치료": "중입자치료", "CAR-T": "CAR-T",
+        }
+        derived.extend(cancer_map[x] for x in answers["cancer_claims"] if x in cancer_map)
+
+    if "사망" in selected_claims:
+        with st.container(border=True):
+            st.markdown("#### 사망 청구 추가 확인")
+            c1, c2 = st.columns(2)
+            answers["death_cause"] = c1.selectbox("사망 원인", ["선택 전", "질병", "재해·상해", "교통사고", "확인 중"], key="cg_death_cause")
+            answers["beneficiary"] = c2.selectbox("보험수익자", ["선택 전", "지정수익자", "법정상속인", "잘 모르겠음"], key="cg_beneficiary")
+            if answers["beneficiary"] == "법정상속인":
+                c3, c4 = st.columns(2)
+                answers["representative_heir"] = c3.selectbox("상속인 한 명이 대표로 청구하나요?", ["선택 전", "아니요", "예", "잘 모르겠음"], key="cg_representative_heir")
+                answers["minor_beneficiary"] = c4.selectbox("미성년 수익자가 포함되어 있나요?", ["선택 전", "아니요", "예"], key="cg_minor_beneficiary")
+            else:
+                answers["representative_heir"] = "해당 없음"
+                answers["minor_beneficiary"] = st.selectbox("미성년 수익자가 포함되어 있나요?", ["선택 전", "아니요", "예"], key="cg_minor_beneficiary")
+
+    if "태아·출산" in selected_claims:
+        with st.container(border=True):
+            st.markdown("#### 태아·출산 청구 추가 확인")
+            st.session_state.setdefault("cg_birth_claims", [])
+            answers["birth_claims"] = st.multiselect(
+                "청구 내용",
+                ["저체중아", "신생아 질환·입원", "신생아중환자실", "선천이상", "유산", "사산", "산모 입원·수술", "기타 출산 관련"],
+                key="cg_birth_claims",
+            )
+            if "유산" in answers["birth_claims"]:
+                answers["miscarriage_procedure"] = st.selectbox("유산과 관련해 수술 또는 처치를 받았나요?", ["선택 전", "아니요", "예", "잘 모르겠음"], key="cg_miscarriage_procedure")
+            if "산모 입원·수술" in answers["birth_claims"]:
+                derived.extend(["실손 입원", "입원일당", "수술"])
+
+    return answers, list(dict.fromkeys(derived))
+
+
+def conditional_documents(base_docs: list[DocumentRule], answers: dict) -> list[DocumentRule]:
+    """추가 질문 답변에 맞는 추천서류를 더하고 불필요한 조건서류는 기본 해제한다."""
+    docs = list(base_docs)
+
+    def add(doc: DocumentRule) -> None:
+        if not any(d.name == doc.name and d.group == doc.group for d in docs):
+            docs.append(doc)
+
+    if answers.get("blood_cancer") == "예":
+        add(DocumentRule("혈액검사 결과지", "혈액암 확정진단 근거"))
+        add(DocumentRule("골수검사 결과지", "골수검사 소견과 확정진단"))
+    if answers.get("biopsy") == "받지 못함":
+        add(DocumentRule("대체 진단자료", "영상·혈액검사 등 암 확정진단 근거"))
+
+    if answers.get("beneficiary") == "법정상속인":
+        add(DocumentRule("사망자 가족관계증명서", "사망자 기준, 상속관계 확인", "직접 준비"))
+    if answers.get("representative_heir") == "예":
+        add(DocumentRule("상속인 위임장", "위임하는 상속인의 서명 또는 인감", "직접 준비"))
+        add(DocumentRule("인감증명서 또는 본인서명사실확인서", "위임하는 상속인 기준", "직접 준비"))
+    if answers.get("minor_beneficiary") == "예":
+        add(DocumentRule("미성년자 기본증명서", "친권자 확인", "직접 준비"))
+        add(DocumentRule("미성년자 가족관계증명서", "미성년자와 친권자 관계", "직접 준비"))
+        add(DocumentRule("친권자 신분증 사본", "친권자 기준", "직접 준비"))
+
+    birth_claims = set(answers.get("birth_claims", []))
+    if "유산" in birth_claims:
+        add(DocumentRule("유산진단서", "유산 진단명, 진단일"))
+    if "사산" in birth_claims:
+        add(DocumentRule("사산증명서", "사산 사실과 일자"))
+    if "신생아중환자실" in birth_claims:
+        add(DocumentRule("신생아중환자실 사용확인서", "입원 시작일·종료일과 이용기간"))
+
+    group_order = {"병원 발급": 0, "직접 준비": 1, "상황별 추가": 2}
+    return sorted(docs, key=lambda d: (group_order.get(d.group, 9), d.name))
+
+
+def compact_required_info(value: str) -> str:
+    replacements = {
+        "질병분류코드": "질병코드", "급여·비급여 치료내역": "급여·비급여 내역",
+        "청구인 또는 보험수익자 계좌": "청구인·수익자 계좌", "보험회사별 양식, ": "",
+        "최종 병리진단과 조직검사 결과": "최종 병리진단",
+    }
+    result = value
+    for old, new in replacements.items():
+        result = result.replace(old, new)
+    return result
+
+
+def make_customer_message(docs: list[DocumentRule], customer_name: str = "") -> str:
+    clean_name = re.sub(r"\s*고객님\s*$", "", customer_name.strip())
+    greeting = f"{clean_name} 고객님" if clean_name else "고객님"
+    lines = [f"{greeting}, 보험금 청구에 필요한 서류를 안내드립니다."]
+    labels = {"병원 발급": "병원 발급서류", "직접 준비": "직접 준비서류", "상황별 추가": "추가 준비서류"}
+    for group in ["병원 발급", "직접 준비", "상황별 추가"]:
+        group_docs = [d for d in docs if d.group == group]
+        if not group_docs:
+            continue
+        lines.extend(["", f"[{labels[group]}]"])
+        for i, doc in enumerate(group_docs, start=1):
+            info = compact_required_info(doc.required_info)
+            lines.append(f"{i}. {doc.name}" + (f"({info})" if info else ""))
+    lines.extend(["", "보험회사 심사 과정에서 추가서류가 요청될 수 있습니다."])
     return "\n".join(lines)
 
 
@@ -692,37 +859,96 @@ def render_claim_buttons() -> list[str]:
     return selected
 
 
-def render_coverage_editor(matched_df: pd.DataFrame) -> pd.DataFrame:
+def _coverage_key(row: dict) -> str:
+    return "|".join(str(row.get(x, "")) for x in ["보험회사", "상품명", "관련 담보", "계약일"])
+
+
+def _coverage_editor_table(df: pd.DataFrame, key: str) -> pd.DataFrame:
+    return st.data_editor(
+        df, key=key, hide_index=True, use_container_width=True,
+        disabled=["보험회사", "상품명", "분류", "추출상태", "계약일", "만기일", "원본쪽", "매칭근거"],
+        column_config={
+            "포함": st.column_config.CheckboxColumn("포함"),
+            "관련 담보": st.column_config.TextColumn("관련 담보", width="large"),
+            "가입금액": st.column_config.TextColumn("가입금액", width="small"),
+            "확인사항": st.column_config.TextColumn("확인사항", width="large"),
+            "원본쪽": None, "매칭근거": None,
+        },
+    )
+
+
+def render_coverage_editor(matched_df: pd.DataFrame, all_coverages: list[dict]) -> pd.DataFrame:
     manual_df = pd.DataFrame(st.session_state.get("cg_manual_coverages", []))
-    display_df = pd.concat([matched_df, manual_df], ignore_index=True) if not manual_df.empty else matched_df.copy()
-    if display_df.empty:
-        st.info("업로드한 PDF에서 선택한 청구 항목과 관련된 담보를 확인하지 못했습니다. 필요하면 누락 담보를 직접 추가해 주세요.")
-        edited = display_df.copy()
+    searched_df = pd.DataFrame(st.session_state.get("cg_searched_coverages", []))
+    frames = [matched_df]
+    if not searched_df.empty:
+        frames.append(searched_df)
+    if not manual_df.empty:
+        frames.append(manual_df)
+    display_df = pd.concat(frames, ignore_index=True).drop_duplicates(
+        subset=["보험회사", "상품명", "관련 담보", "계약일"], keep="last"
+    )
+
+    direct_df = display_df[display_df["분류"] != "함께 확인"].copy()
+    related_df = display_df[display_df["분류"] == "함께 확인"].copy()
+    edited_frames: list[pd.DataFrame] = []
+
+    if direct_df.empty:
+        st.info("선택한 청구와 직접 일치하는 담보를 찾지 못했습니다. 아래에서 담보명을 검색하거나 직접 추가해 주세요.")
     else:
-        direct = int((display_df["분류"] == "직접 관련").sum())
-        conditional = int((display_df["분류"] == "조건부 관련").sum())
-        related = int((display_df["분류"] == "함께 확인").sum())
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("보험회사", f"{display_df['보험회사'].nunique()}개")
-        c2.metric("직접 관련", f"{direct}개")
-        c3.metric("조건부 관련", f"{conditional}개")
-        c4.metric("함께 확인", f"{related}개")
-        edited = st.data_editor(
-            display_df,
-            key="cg_coverage_editor",
-            hide_index=True,
-            use_container_width=True,
-            disabled=["보험회사", "상품명", "분류", "추출상태", "계약일", "만기일", "원본쪽", "매칭근거"],
-            column_config={
-                "포함": st.column_config.CheckboxColumn("포함"),
-                "관련 담보": st.column_config.TextColumn("관련 담보", width="large"),
-                "가입금액": st.column_config.TextColumn("가입금액", width="small"),
-                "확인사항": st.column_config.TextColumn("확인사항", width="large"),
-                "원본쪽": None,
-                "매칭근거": None,
-            },
-        )
-    with st.expander("누락 담보 직접 추가"):
+        c1, c2 = st.columns(2)
+        c1.metric("보험회사", f"{direct_df['보험회사'].nunique()}개")
+        c2.metric("직접 관련 담보", f"{len(direct_df)}개")
+        edited_frames.append(_coverage_editor_table(direct_df, "cg_coverage_direct_editor"))
+
+    if not related_df.empty:
+        related_df["포함"] = related_df["포함"].fillna(False)
+        with st.expander(f"함께 확인할 담보 {len(related_df)}개 보기"):
+            edited_frames.append(_coverage_editor_table(related_df, "cg_coverage_related_editor"))
+
+    search_expanded = direct_df.empty
+    with st.expander("다른 담보 검색해서 추가", expanded=search_expanded):
+        search_term = st.text_input("담보명 검색", key="cg_coverage_search", placeholder="예: 표적항암, 뇌혈관, 질병수술")
+        if search_term.strip():
+            needle = normalize_text(search_term)
+            candidates = []
+            existing_keys = {_coverage_key(r) for r in display_df.to_dict("records")}
+            for row in all_coverages:
+                searchable = normalize_text(f"{row.get('company', '')} {row.get('product', '')} {row.get('coverage', '')}")
+                if needle and needle in searchable:
+                    candidate = {
+                        "포함": True, "보험회사": row.get("company", "확인 필요"), "상품명": row.get("product", "확인 필요"),
+                        "관련 담보": row.get("coverage", "확인 필요"), "가입금액": row.get("amount", "확인 필요"), "분류": "검색 추가",
+                        "확인사항": "담보 검색으로 추가", "추출상태": row.get("extraction_status", "정상 추출"),
+                        "계약일": row.get("contract_date", ""), "만기일": row.get("expiry_date", ""),
+                        "원본쪽": row.get("source_page", ""), "매칭근거": search_term.strip(),
+                    }
+                    if _coverage_key(candidate) not in existing_keys:
+                        candidates.append(candidate)
+            if not candidates:
+                st.caption("추가할 수 있는 새로운 담보를 찾지 못했습니다.")
+            else:
+                candidate_df = pd.DataFrame(candidates)
+                for company, company_df in candidate_df.groupby("보험회사", sort=True):
+                    st.markdown(f"**{company} · {len(company_df)}개**")
+                    for idx, row in company_df.iterrows():
+                        cols = st.columns([4, 1])
+                        cols[0].markdown(f"{row['관련 담보']}　·　{row['가입금액']}  \n<small>{row['상품명']}</small>", unsafe_allow_html=True)
+                        if cols[1].button("추가", key=f"cg_add_search_{hashlib.md5(_coverage_key(row.to_dict()).encode()).hexdigest()}"):
+                            st.session_state.setdefault("cg_searched_coverages", []).append(row.to_dict())
+                            st.rerun()
+
+        searched = st.session_state.get("cg_searched_coverages", [])
+        if searched:
+            st.markdown("##### 검색으로 추가한 담보")
+            for row in searched:
+                cols = st.columns([5, 1])
+                cols[0].write(f"{row['보험회사']} · {row['관련 담보']} · {row['가입금액']}")
+                if cols[1].button("제외", key=f"cg_remove_search_{hashlib.md5(_coverage_key(row).encode()).hexdigest()}"):
+                    st.session_state["cg_searched_coverages"] = [x for x in searched if _coverage_key(x) != _coverage_key(row)]
+                    st.rerun()
+
+    with st.expander("보장분석에 없는 담보 직접 추가", expanded=not all_coverages):
         with st.form("cg_manual_coverage_form", clear_on_submit=True):
             cols = st.columns([1, 1.4, 1.5, .7])
             company = cols[0].text_input("보험회사")
@@ -739,21 +965,46 @@ def render_coverage_editor(matched_df: pd.DataFrame) -> pd.DataFrame:
                 "확인사항": note, "추출상태": "사용자 입력", "계약일": "", "만기일": "", "원본쪽": "", "매칭근거": "직접 추가",
             })
             st.rerun()
-    return edited
+        manual = st.session_state.get("cg_manual_coverages", [])
+        for row in manual:
+            cols = st.columns([5, 1])
+            cols[0].write(f"{row['보험회사']} · {row['관련 담보']} · {row['가입금액']}")
+            if cols[1].button("삭제", key=f"cg_remove_manual_cov_{hashlib.md5(_coverage_key(row).encode()).hexdigest()}"):
+                st.session_state["cg_manual_coverages"] = [x for x in manual if _coverage_key(x) != _coverage_key(row)]
+                st.rerun()
+
+    return pd.concat(edited_frames, ignore_index=True) if edited_frames else pd.DataFrame(columns=display_df.columns)
 
 
-def render_document_editor(docs: list[DocumentRule]) -> list[DocumentRule]:
-    selected_keys = st.session_state.setdefault("cg_selected_docs", [f"{d.group}|{d.name}" for d in docs])
-    current_keys = {f"{d.group}|{d.name}" for d in docs}
+def render_document_editor(docs: list[DocumentRule], recommendation_token: str) -> list[DocumentRule]:
+    manual_docs = [DocumentRule(**x) for x in st.session_state.get("cg_manual_documents", [])]
+    all_docs = docs + manual_docs
+    recommended_keys = [f"{d.group}|{d.name}" for d in docs if d.default_selected]
+    manual_keys = [f"{d.group}|{d.name}" for d in manual_docs]
+
+    if st.session_state.get("cg_doc_recommendation_token") != recommendation_token:
+        st.session_state["cg_selected_docs"] = list(dict.fromkeys(recommended_keys + manual_keys))
+        st.session_state["cg_doc_recommendation_token"] = recommendation_token
+        for key in list(st.session_state):
+            if key.startswith("cg_doc_") and key != "cg_doc_recommendation_token":
+                st.session_state.pop(key, None)
+
+    title_cols = st.columns([4, 1.4])
+    title_cols[0].caption("필요하지 않은 서류는 자유롭게 해제할 수 있습니다.")
+    if title_cols[1].button("추천 서류로 되돌리기", key="cg_restore_docs", use_container_width=True):
+        st.session_state["cg_selected_docs"] = list(dict.fromkeys(recommended_keys + manual_keys))
+        for key in list(st.session_state):
+            if key.startswith("cg_doc_") and key != "cg_doc_recommendation_token":
+                st.session_state.pop(key, None)
+        st.success("현재 답변을 기준으로 추천 서류를 복원했습니다.")
+        st.rerun()
+
+    selected_keys = st.session_state.setdefault("cg_selected_docs", recommended_keys + manual_keys)
+    current_keys = {f"{d.group}|{d.name}" for d in all_docs}
     selected_keys[:] = [key for key in selected_keys if key in current_keys]
-    for doc in docs:
-        key = f"{doc.group}|{doc.name}"
-        if key not in selected_keys:
-            selected_keys.append(key)
-
     result: list[DocumentRule] = []
     for group in ["병원 발급", "직접 준비", "상황별 추가"]:
-        group_docs = [d for d in docs if d.group == group]
+        group_docs = [d for d in all_docs if d.group == group]
         if not group_docs:
             continue
         st.markdown(f"#### {group}")
@@ -771,6 +1022,29 @@ def render_document_editor(docs: list[DocumentRule]) -> list[DocumentRule]:
                     selected_keys.append(key)
             elif key in selected_keys:
                 selected_keys.remove(key)
+
+    with st.expander("필요서류 직접 추가"):
+        with st.form("cg_manual_document_form", clear_on_submit=True):
+            c1, c2 = st.columns([1, 1.6])
+            doc_name = c1.text_input("서류명")
+            required_info = c2.text_input("필수 기재사항")
+            doc_group = st.selectbox("구분", ["병원 발급", "직접 준비", "상황별 추가"])
+            submitted = st.form_submit_button("서류 추가", type="primary")
+        if submitted and doc_name.strip():
+            item = asdict(DocumentRule(doc_name.strip(), required_info.strip(), doc_group, "사용자 직접 추가"))
+            st.session_state.setdefault("cg_manual_documents", []).append(item)
+            st.session_state.setdefault("cg_selected_docs", []).append(f"{doc_group}|{doc_name.strip()}")
+            st.rerun()
+
+        manual_items = st.session_state.get("cg_manual_documents", [])
+        for item in manual_items:
+            item_key = f"{item['group']}|{item['name']}"
+            cols = st.columns([5, 1])
+            cols[0].write(f"{item['name']} · {item['required_info'] or '기재사항 없음'}")
+            if cols[1].button("삭제", key=f"cg_delete_doc_{hashlib.md5(item_key.encode()).hexdigest()}"):
+                st.session_state["cg_manual_documents"] = [x for x in manual_items if f"{x['group']}|{x['name']}" != item_key]
+                st.session_state["cg_selected_docs"] = [x for x in selected_keys if x != item_key]
+                st.rerun()
     return result
 
 
@@ -790,14 +1064,14 @@ def render_accident_helper(selected_claims: list[str]) -> str:
         if st.button("사고경위 생성", key="cg_generate_accident", type="primary"):
             generated = build_accident_narrative(accident_date, place, course, body_part, visit_date, treatment)
             if generated:
-                st.session_state["cg_accident_narrative"] = generated
+                st.session_state["cg_accident_final"] = generated
             else:
                 st.warning("사고일자, 장소, 사고 과정과 다친 부위를 입력해 주세요.")
-        narrative = st.text_area("최종 사고경위", value=st.session_state.get("cg_accident_narrative", ""), key="cg_accident_final", height=120)
+        narrative = st.text_area("최종 사고경위", key="cg_accident_final", height=120)
         st.session_state["cg_accident_narrative"] = narrative
         if narrative.strip():
             st.checkbox("A4 청구 준비 안내서에 사고경위 포함", key="cg_include_accident_pdf", value=False)
-            st.caption("입력한 사실과 일치하는지 확인한 후 사용해 주세요. 고객 카카오톡 문구에는 자동으로 포함되지 않습니다.")
+            st.caption("입력한 사실과 일치하는지 확인한 후 사용해 주세요. 문자 안내문에는 자동으로 포함되지 않습니다.")
         return narrative
 
 
@@ -813,9 +1087,28 @@ def run() -> None:
             clear_state()
             st.rerun()
 
-    section_intro("STEP 1 · 선택사항", "보장분석 PDF")
-    st.caption("PDF를 첨부하면 보험회사별 관련 담보와 가입금액을 함께 확인합니다. 첨부하지 않아도 서류 가이드를 이용할 수 있습니다.")
-    uploaded = st.file_uploader("프로보장분석 PDF 선택", type=["pdf"], key="cg_uploader")
+    pending_customer = st.session_state.pop("cg_pending_customer_name", "")
+    existing_parsed = st.session_state.get("cg_parsed_pdf") or {}
+    existing_pdf_customer = str(existing_parsed.get("customer", "")).strip()
+    if pending_customer:
+        st.session_state["cg_customer_name"] = pending_customer
+    elif not st.session_state.get("cg_customer_name") and existing_pdf_customer not in {"", "확인 필요"}:
+        st.session_state["cg_customer_name"] = existing_pdf_customer
+    customer_name = st.text_input("고객 이름 · 선택사항", key="cg_customer_name", placeholder="이름을 입력하지 않아도 안내문을 만들 수 있습니다.")
+
+    section_intro("청구 유형", "무엇을 청구하시나요?", "해당하는 항목을 여러 개 선택할 수 있습니다.")
+    selected_claims = render_claim_buttons()
+    if not selected_claims:
+        st.info("청구 항목을 선택하면 추천서류와 문자 안내문을 바로 확인할 수 있습니다.")
+        return
+
+    answers, derived_claims = render_conditional_questions(selected_claims)
+    effective_claims = list(dict.fromkeys(selected_claims + derived_claims))
+
+    section_intro("선택사항", "보장분석 PDF로 관련 담보도 확인하기")
+    with st.expander("보장분석 PDF 첨부"):
+        st.caption("첨부하지 않아도 서류 안내와 문자 안내문을 이용할 수 있습니다.")
+        uploaded = st.file_uploader("프로보장분석 PDF 선택", type=["pdf"], key="cg_uploader")
     parsed = st.session_state.get("cg_parsed_pdf")
     if uploaded:
         pdf_bytes = uploaded.getvalue()
@@ -826,7 +1119,9 @@ def run() -> None:
                     parsed = extract_pdf(pdf_bytes)
                 st.session_state["cg_pdf_hash"] = file_hash
                 st.session_state["cg_parsed_pdf"] = parsed
-                st.session_state.pop("cg_coverage_editor", None)
+                st.session_state.pop("cg_coverage_direct_editor", None)
+                st.session_state.pop("cg_coverage_related_editor", None)
+                st.session_state["cg_parsed_just_now"] = True
             except Exception as exc:
                 st.session_state.pop("cg_parsed_pdf", None)
                 parsed = None
@@ -836,8 +1131,19 @@ def run() -> None:
         st.session_state.pop("cg_parsed_pdf", None)
         parsed = None
 
+    if st.session_state.pop("cg_parsed_just_now", False):
+        st.rerun()
+
     if parsed:
         coverages = parsed.get("coverages", [])
+        pdf_customer = str(parsed.get("customer", "")).strip()
+        if pdf_customer and pdf_customer != "확인 필요":
+            typed_customer = str(st.session_state.get("cg_customer_name", "")).strip()
+            if typed_customer and normalize_text(typed_customer) != normalize_text(pdf_customer):
+                st.warning(f"입력한 고객 이름({typed_customer})과 보장분석 PDF의 고객 이름({pdf_customer})이 다릅니다.")
+                if st.button("PDF 이름 적용", key="cg_apply_pdf_customer"):
+                    st.session_state["cg_pending_customer_name"] = pdf_customer
+                    st.rerun()
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("고객", parsed.get("customer", "확인 필요"))
         c2.metric("작성 기준일", parsed.get("report_date", "확인 필요"))
@@ -855,52 +1161,49 @@ def run() -> None:
             else:
                 st.info("담보 상세표를 추출하지 못했습니다. 관련 담보는 직접 추가할 수 있습니다.")
 
-    section_intro("STEP 2", "청구 항목 선택", "해당하는 항목을 여러 개 선택할 수 있습니다.")
-    selected_claims = render_claim_buttons()
-    if st.button("선택한 항목으로 청구 가이드 확인", key="cg_show_result", type="primary", use_container_width=True, disabled=not selected_claims):
-        st.session_state["cg_result_claims"] = list(selected_claims)
-        st.session_state["cg_selected_docs"] = []
-        st.rerun()
-
-    result_claims = st.session_state.get("cg_result_claims")
-    if not result_claims:
-        st.info("청구 항목을 선택한 뒤 ‘청구 가이드 확인’을 눌러 주세요.")
-        return
-
     if parsed:
-        section_intro("STEP 3 · FP 전용", "회사별 관련 담보", "자동 분류 결과를 확인하고 이번 청구에 포함할 담보를 선택하세요.")
-        matched_df = match_coverages(parsed.get("coverages", []), result_claims)
-        included_coverages = render_coverage_editor(matched_df)
+        section_intro("FP 확인", "회사별 관련 담보", "직접 관련 담보만 우선 표시하며, 필요한 담보를 검색해 추가할 수 있습니다.")
+        matched_df = refine_matches_with_answers(match_coverages(parsed.get("coverages", []), effective_claims), answers)
+        included_coverages = render_coverage_editor(matched_df, parsed.get("coverages", []))
         st.session_state["cg_included_coverages"] = included_coverages.to_dict("records") if not included_coverages.empty else []
         st.caption("가입금액은 보장분석 PDF 표시 기준이며 실제 지급액을 의미하지 않습니다.")
 
-    section_intro("STEP 4", "필요서류와 필수 기재사항", "필요하지 않은 서류를 해제하면 고객 안내문과 A4 PDF에서도 제외됩니다.")
-    docs = merged_documents(result_claims)
-    selected_docs = render_document_editor(docs)
-    accident_narrative = render_accident_helper(result_claims)
+    section_intro("준비서류", "필요서류와 필수 기재사항", "선택 결과는 문자 안내문과 안내서 PDF에 함께 반영됩니다.")
+    docs = conditional_documents(merged_documents(effective_claims), answers)
+    recommendation_token = hashlib.sha256(repr((effective_claims, answers, [(d.group, d.name, d.default_selected) for d in docs])).encode()).hexdigest()
+    selected_docs = render_document_editor(docs, recommendation_token)
+    accident_narrative = render_accident_helper(effective_claims)
 
-    section_intro("STEP 5", "고객·병원 전달")
-    tab_message, tab_hospital, tab_pdf = st.tabs(["카카오톡 안내문", "병원용 발급 요청", "A4 PDF"])
+    section_intro("청구 안내자료", "고객·병원 전달")
+    tab_message, tab_hospital, tab_pdf = st.tabs(["문자 안내문", "병원 발급 요청", "안내서 PDF"])
     with tab_message:
-        default_message = make_customer_message(selected_docs)
-        if st.session_state.get("cg_message_source") != default_message:
+        default_message = make_customer_message(selected_docs, st.session_state.get("cg_customer_name", ""))
+        if st.session_state.pop("cg_pending_message_restore", False):
             st.session_state["cg_customer_message"] = default_message
             st.session_state["cg_message_source"] = default_message
-        st.text_area("고객 안내문", key="cg_customer_message", height=240)
-        st.caption("문구를 선택해 복사할 수 있습니다. 회사명·담보명·가입금액은 고객 안내문에 포함되지 않습니다.")
-        if st.button("기본 문구로 복원", key="cg_restore_message"):
+        elif "cg_customer_message" not in st.session_state:
             st.session_state["cg_customer_message"] = default_message
+            st.session_state["cg_message_source"] = default_message
+        elif st.session_state.get("cg_message_source") != default_message:
+            st.info("고객 이름 또는 선택한 서류가 변경되었습니다. 변경 내용을 반영하려면 기본 안내문으로 복원해 주세요.")
+        st.text_area("문자 안내문", key="cg_customer_message", height=280)
+        st.caption("필요한 문장을 자유롭게 추가하거나 수정할 수 있습니다. 회사명·담보명·가입금액은 포함되지 않습니다.")
+        if st.button("기본 안내문으로 복원", key="cg_restore_message"):
+            st.session_state["cg_pending_message_restore"] = True
             st.rerun()
 
     with tab_hospital:
         hospital_docs = [d for d in selected_docs if d.group == "병원 발급"]
-        items = "".join(f"<li><b>{html.escape(d.name)}</b><br>{html.escape(d.required_info)}</li>" for d in hospital_docs)
-        st.markdown(f'<div class="cg-hospital-view"><h3>보험금 청구용 서류 발급 요청</h3><ol>{items}</ol></div>', unsafe_allow_html=True)
+        if hospital_docs:
+            items = "".join(f"<li><b>{html.escape(d.name)}</b><br>{html.escape(d.required_info)}</li>" for d in hospital_docs)
+            st.markdown(f'<div class="cg-hospital-view"><h3>보험금 청구용 서류 발급 요청</h3><ol>{items}</ol></div>', unsafe_allow_html=True)
+        else:
+            st.info("선택된 병원 발급서류가 없습니다.")
 
     with tab_pdf:
         include_accident = bool(st.session_state.get("cg_include_accident_pdf", False))
         try:
-            pdf_bytes = build_guide_pdf(result_claims, selected_docs, accident_narrative, include_accident)
+            pdf_bytes = build_guide_pdf(effective_claims, selected_docs, accident_narrative, include_accident)
             st.download_button(
                 "보험금 청구 준비 안내서 PDF 다운로드",
                 data=pdf_bytes,
