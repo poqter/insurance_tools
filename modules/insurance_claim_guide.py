@@ -37,7 +37,7 @@ except ImportError:  # 단독 파일 점검용
     from ui_components import page_header, section_intro
 
 
-GUIDE_VERSION = "1.2.0"
+GUIDE_VERSION = "1.3.0"
 GUIDE_STANDARD_DATE = "2026.08"
 STATE_PREFIX = "cg_"
 
@@ -840,14 +840,65 @@ def render_copyable_message(message: str) -> None:
 def build_accident_narrative(accident_date: str, place: str, course: str, body_part: str, visit_date: str = "", treatment: str = "") -> str:
     if not all([accident_date.strip(), place.strip(), course.strip(), body_part.strip()]):
         return ""
-    text = f"{accident_date.strip()} {place.strip()}에서 {course.strip()} 사고로 {body_part.strip()} 부위를 다쳤습니다."
+
+    def clean(value: str) -> str:
+        value = re.sub(r"\s+", " ", value.strip())
+        return re.sub(r"[.!?。]+$", "", value).strip()
+
+    def sentence(value: str) -> str:
+        value = clean(value)
+        return f"{value}." if value else ""
+
+    def object_form(value: str) -> str:
+        value = re.sub(r"\s*부위\s*$", "", clean(value))
+        if not value:
+            return "해당 부위를"
+        last = value[-1]
+        if "가" <= last <= "힣":
+            has_final = (ord(last) - ord("가")) % 28 != 0
+            return value + ("을" if has_final else "를")
+        return value + " 부위를"
+
+    accident_date = clean(accident_date)
+    place = re.sub(r"에서$", "", clean(place))
+    course_text = clean(course)
+    body_text = clean(body_part)
+    place_words = re.findall(r"[가-힣A-Za-z0-9]+", place)
+    if place_words:
+        course_text = re.sub(rf"^{re.escape(place_words[-1])}에서\s*", "", course_text).strip()
+    normalized_course = normalize_text(course_text)
+    normalized_body = normalize_text(re.sub(r"\s*부위\s*$", "", body_text))
+    body_words = re.findall(r"[가-힣]+", re.sub(r"\s*부위\s*$", "", body_text))
+    body_core = normalize_text(body_words[-1]) if body_words else normalized_body
+
+    complete_ending = bool(re.search(r"(?:습니다|했습니다|되었습니다|입었습니다|다쳤습니다|발생했습니다|했습니다|했다|하였다|됐다|되었다)$", course_text))
+    memo_ending = bool(re.search(r"(?:함|됨|음|넘어짐|부딪힘|베임|미끄러짐|충돌)$", course_text))
+
+    if complete_ending:
+        text = f"{accident_date} {place}에서 {sentence(course_text)}"
+    elif memo_ending:
+        text = f"{accident_date} {place}에서 사고가 발생했습니다. 사고 당시 상황은 다음과 같습니다: {sentence(course_text)}"
+    else:
+        text = f"{accident_date} {place}에서 {sentence(course_text)}"
+
+    injury_word_present = bool(re.search(r"다치|부상|골절|염좌|화상|상처|베었|찢어|타박|부딪", normalized_course))
+    body_already_present = bool(
+        (normalized_body and normalized_body in normalized_course)
+        or (body_core and body_core in normalized_course)
+    )
+    injury_already_described = injury_word_present and body_already_present
+    if not injury_already_described:
+        text += f" 이로 인해 {object_form(body_text)} 다쳤습니다."
+
     if visit_date.strip():
-        text += f" 이후 {visit_date.strip()} 병원에 내원하였습니다."
-        if treatment.strip():
-            text += f" 진단·치료 내용은 다음과 같습니다: {treatment.strip()}."
+        text += f" 사고 후 {clean(visit_date)}에 병원에 처음 내원하였습니다."
     elif treatment.strip():
-        text += f" 이후 병원에서 진단 또는 치료를 받았으며, 내용은 다음과 같습니다: {treatment.strip()}."
-    return text
+        text += " 이후 병원에 내원하였습니다."
+
+    if treatment.strip():
+        text += f" 진단 및 치료 내용은 다음과 같습니다: {sentence(treatment)}"
+
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def _register_korean_font() -> str:
@@ -1235,7 +1286,12 @@ def render_accident_helper(selected_claims: list[str]) -> str:
         c1, c2 = st.columns(2)
         accident_date = c1.text_input("사고일자", key="cg_accident_date", placeholder="예: 2026년 8월 13일")
         place = c2.text_input("사고 장소", key="cg_accident_place", placeholder="예: 자택 화장실")
-        course = st.text_area("사고 당시 상황과 발생 과정", key="cg_accident_course", placeholder="예: 화장실에서 나오다가 문턱에 발가락을 부딪힘")
+        course = st.text_area(
+            "사고 당시 상황과 발생 과정",
+            key="cg_accident_course",
+            placeholder="예: 화장실에서 나오다가 문턱에 발가락을 부딪혔습니다.",
+            help="가능하면 실제 사고 상황을 완성된 문장으로 입력해 주세요. 짧은 메모 형태도 사용할 수 있습니다.",
+        )
         c3, c4 = st.columns(2)
         body_part = c3.text_input("다친 부위", key="cg_accident_body", placeholder="예: 오른쪽 네 번째 발가락")
         visit_date = c4.text_input("최초 병원 방문일 · 선택", key="cg_visit_date")
@@ -1249,7 +1305,7 @@ def render_accident_helper(selected_claims: list[str]) -> str:
         narrative = st.text_area("최종 사고경위", key="cg_accident_final", height=120)
         st.session_state["cg_accident_narrative"] = narrative
         if narrative.strip():
-            st.checkbox("A4 청구 준비 안내서에 사고경위 포함", key="cg_include_accident_pdf", value=False)
+            st.checkbox("안내문 PDF에 사고경위 포함", key="cg_include_accident_pdf", value=True)
             st.caption("입력한 사실과 일치하는지 확인한 후 사용해 주세요. 문자 안내문에는 자동으로 포함되지 않습니다.")
         return narrative
 
@@ -1353,39 +1409,26 @@ def run() -> None:
     selected_docs = render_document_editor(docs, recommendation_token)
     accident_narrative = render_accident_helper(effective_claims)
 
-    section_intro("청구 안내자료", "고객·병원 전달")
-    tab_message, tab_hospital, tab_pdf = st.tabs(["문자 안내문", "병원 발급 요청", "안내서 PDF"])
-    with tab_message:
-        default_message = make_customer_message(selected_docs, st.session_state.get("cg_customer_name", ""))
-        st.caption("선택한 필요서류에 따라 자동으로 갱신됩니다. 복사한 뒤 카카오톡이나 문자에서 필요한 내용을 추가해 주세요.")
-        render_copyable_message(default_message)
+    section_intro("고객 안내자료", "문자 안내문과 PDF")
+    default_message = make_customer_message(selected_docs, st.session_state.get("cg_customer_name", ""))
+    st.caption("선택한 필요서류에 따라 자동으로 갱신됩니다. 복사한 뒤 카카오톡이나 문자에서 필요한 내용을 추가해 주세요.")
+    render_copyable_message(default_message)
 
-    with tab_hospital:
-        hospital_docs = [d for d in selected_docs if d.group == "병원 발급"]
-        if hospital_docs:
-            items = "".join(f"<li><b>{html.escape(d.name)}</b><br>{html.escape(d.required_info)}</li>" for d in hospital_docs)
-            st.markdown(f'<div class="cg-hospital-view"><h3>보험금 청구용 서류 발급 요청</h3><ol>{items}</ol></div>', unsafe_allow_html=True)
-        else:
-            st.info("선택된 병원 발급서류가 없습니다.")
-
-    with tab_pdf:
-        include_accident = bool(st.session_state.get("cg_include_accident_pdf", False))
-        try:
-            pdf_bytes = build_guide_pdf(effective_claims, selected_docs, accident_narrative, include_accident)
-            st.download_button(
-                "보험금 청구 준비 안내서 PDF 다운로드",
-                data=pdf_bytes,
-                file_name=f"보험금_청구_준비_안내서_{date.today():%Y%m%d}.pdf",
-                mime="application/pdf",
-                type="primary",
-                use_container_width=True,
-            )
-            if include_accident and accident_narrative.strip():
-                st.success("최종 수정된 사고경위가 A4 안내서에 포함됩니다.")
-            else:
-                st.caption("사고경위는 기본적으로 포함되지 않습니다. 사고경위 도우미에서 선택하면 포함할 수 있습니다.")
-        except Exception as exc:
-            st.error(f"PDF 안내서를 생성하지 못했습니다: {exc}")
+    include_accident = bool(st.session_state.get("cg_include_accident_pdf", bool(accident_narrative.strip())))
+    try:
+        pdf_bytes = build_guide_pdf(effective_claims, selected_docs, accident_narrative, include_accident)
+        st.download_button(
+            "안내문 PDF 다운로드",
+            data=pdf_bytes,
+            file_name=f"보험금_청구_준비_안내서_{date.today():%Y%m%d}.pdf",
+            mime="application/pdf",
+            type="primary",
+            use_container_width=True,
+        )
+        if include_accident and accident_narrative.strip():
+            st.caption("작성한 사고경위가 안내문 PDF에 포함됩니다.")
+    except Exception as exc:
+        st.error(f"PDF 안내서를 생성하지 못했습니다: {exc}")
 
     st.divider()
     st.caption("이 가이드는 보장분석 자료와 선택한 청구 항목을 기준으로 관련 담보와 준비서류를 안내합니다. 실제 지급 여부와 추가서류는 가입 약관 및 보험회사의 심사 결과에 따라 달라질 수 있습니다.")
