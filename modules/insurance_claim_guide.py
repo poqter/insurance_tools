@@ -93,30 +93,30 @@ DOC_RULES: dict[str, list[DocumentRule]] = {
     "실손 통원": [
         DocumentRule("진료비 계산서·영수증", "환자명, 진료일, 본인부담금"),
         DocumentRule("진료비 세부내역서", "급여·비급여 치료내역"),
-        DocumentRule("처방전", "처방받은 경우, 진단명 또는 질병분류코드"),
-        DocumentRule("통원확인서", "진단명, 질병분류코드, 통원일", level="진단정보가 부족하거나 보험회사 요청 시", default_selected=False),
+        DocumentRule("처방전", "처방받은 경우, 진단명 또는 진단코드"),
+        DocumentRule("통원확인서", "진단명, 진단코드, 통원일", level="진단정보가 부족하거나 보험회사 요청 시", default_selected=False),
     ],
     "실손 입원": [
         DocumentRule("진료비 계산서·영수증", "환자명, 입원기간, 본인부담금"),
         DocumentRule("진료비 세부내역서", "급여·비급여 치료내역"),
-        DocumentRule("입퇴원확인서", "진단명, 질병분류코드, 입원일·퇴원일"),
-        DocumentRule("진단서", "진단명, 질병분류코드, 진단일", level="대체서류 확인"),
+        DocumentRule("입퇴원확인서", "진단명, 진단코드, 입원일·퇴원일"),
+        DocumentRule("진단서", "진단명, 진단코드, 진단일", level="대체서류 확인"),
     ],
     "약제비": [
         DocumentRule("약제비 계산서·영수증", "환자명, 처방일, 약제비"),
-        DocumentRule("처방전", "질병분류코드, 처방 의료기관"),
+        DocumentRule("처방전", "진단코드, 처방 의료기관"),
     ],
     "입원일당": [
-        DocumentRule("입퇴원확인서", "진단명, 질병분류코드, 입원일·퇴원일"),
+        DocumentRule("입퇴원확인서", "진단명, 진단코드, 입원일·퇴원일"),
         DocumentRule("중환자실·병실 확인자료", "병실 종류와 이용기간", level="해당 시"),
     ],
     "수술": [
-        DocumentRule("수술확인서", "진단명, 질병분류코드, 정확한 수술명, 수술일"),
+        DocumentRule("수술확인서", "진단명, 진단코드, 정확한 수술명, 수술일"),
         DocumentRule("수술기록지", "수술방법과 수술 부위", level="보험사 요청 가능"),
         DocumentRule("조직병리검사 결과지", "최종 병리진단", level="조직검사한 경우"),
     ],
     "응급실": [
-        DocumentRule("응급실 진료확인서", "진단명, 질병분류코드, 내원일, 응급환자 여부"),
+        DocumentRule("응급실 진료확인서", "진단명, 진단코드, 내원일, 응급환자 여부"),
         DocumentRule("응급실 진료기록", "내원경위와 처치내용", level="보험사 요청 가능"),
     ],
     "간병인": [
@@ -129,36 +129,36 @@ DOC_RULES: dict[str, list[DocumentRule]] = {
         DocumentRule("입퇴원확인서", "진단명, 입원일·퇴원일"),
     ],
     "기타 치료비": [
-        DocumentRule("치료확인서", "진단명, 질병분류코드, 치료명, 치료일"),
+        DocumentRule("치료확인서", "진단명, 진단코드, 치료명, 치료일"),
         DocumentRule("진료비 세부내역서", "급여·비급여 치료내역"),
         DocumentRule("진료기록지", "치료 목적과 시행내용", level="보험사 요청 가능"),
     ],
     "암": [
-        DocumentRule("진단서", "암 진단명, 질병분류코드, 확정진단일"),
+        DocumentRule("진단서", "암 진단명, 진단코드, 확정진단일"),
         DocumentRule("조직병리검사 결과지", "최종 병리진단과 조직검사 결과"),
         DocumentRule("영상검사 결과지", "조직검사가 불가능한 경우 진단 근거", level="해당 시"),
     ],
     "뇌질환": [
-        DocumentRule("진단서", "진단명, 질병분류코드, 확정진단일"),
+        DocumentRule("진단서", "진단명, 진단코드, 확정진단일"),
         DocumentRule("CT·MRI 영상검사 판독지", "진단 근거가 되는 영상검사 결과"),
         DocumentRule("뇌혈관조영술 결과지", "혈관 병변과 검사 결과", level="해당 시"),
     ],
     "심장질환": [
-        DocumentRule("진단서", "진단명, 질병분류코드, 확정진단일"),
+        DocumentRule("진단서", "진단명, 진단코드, 확정진단일"),
         DocumentRule("심장검사 결과지", "심전도·심초음파·심장효소 등 진단 근거"),
         DocumentRule("관상동맥조영술 결과지", "혈관 병변과 시술내용", level="해당 시"),
     ],
     "골절": [
-        DocumentRule("진단서 또는 통원확인서", "골절 진단명, 질병분류코드, 골절 부위"),
+        DocumentRule("진단서 또는 통원확인서", "골절 진단명, 진단코드, 골절 부위"),
         DocumentRule("영상검사 판독지", "골절 부위와 검사 결과"),
         DocumentRule("깁스·부목 치료확인서", "치료 종류와 시행일", level="해당 시"),
     ],
     "화상": [
-        DocumentRule("진단서", "화상 진단명, 질병분류코드, 화상 정도와 부위"),
+        DocumentRule("진단서", "화상 진단명, 진단코드, 화상 정도와 부위"),
         DocumentRule("진료기록지", "화상 깊이·범위와 치료내용", level="보험사 요청 가능"),
     ],
     "치매": [
-        DocumentRule("진단서", "치매 진단명, 질병분류코드, 진단일"),
+        DocumentRule("진단서", "치매 진단명, 진단코드, 진단일"),
         DocumentRule("인지기능검사 결과지", "검사명, 점수, 시행일"),
         DocumentRule("진료기록지", "임상치매척도 등 진단 근거"),
         DocumentRule("대리청구 관계서류", "지정대리청구 여부와 관계 확인", "직접 준비", "해당 시"),
@@ -168,7 +168,7 @@ DOC_RULES: dict[str, list[DocumentRule]] = {
         DocumentRule("개인별 장기요양이용계획서", "급여 종류와 이용계획", "직접 준비"),
     ],
     "기타 진단": [
-        DocumentRule("진단서", "정확한 진단명, 질병분류코드, 진단일"),
+        DocumentRule("진단서", "정확한 진단명, 진단코드, 진단일"),
         DocumentRule("진료기록지", "진단 및 치료 경과", level="보험사 요청 가능", default_selected=False),
         DocumentRule("사고사실 확인자료", "사고일자와 사고내용", "상황별 추가", "사고로 인한 진단인 경우", False),
     ],
@@ -207,7 +207,7 @@ DOC_RULES: dict[str, list[DocumentRule]] = {
     "교통사고": [
         DocumentRule("자동차보험 지급결의서", "보험회사, 사고번호, 사고일, 부상등급, 지급내역", "상황별 추가"),
         DocumentRule("교통사고 사실확인원", "사고일자, 사고내용, 당사자", "상황별 추가"),
-        DocumentRule("진단서", "진단명, 질병분류코드, 진단일"),
+        DocumentRule("진단서", "진단명, 진단코드, 진단일"),
     ],
     "운전자비용": [
         DocumentRule("사고사실확인서", "사고일, 사고내용, 운전 여부", "상황별 추가"),
@@ -228,7 +228,7 @@ DOC_RULES: dict[str, list[DocumentRule]] = {
     "태아·출산": [
         DocumentRule("출생증명서", "출생일, 출생체중, 임신주수"),
         DocumentRule("입퇴원확인서", "진단명, 입원일·퇴원일, 신생아중환자실 기간"),
-        DocumentRule("진단서", "진단명, 질병분류코드"),
+        DocumentRule("진단서", "진단명, 진단코드"),
         DocumentRule("가족관계증명서", "출생아와 청구인 관계", "직접 준비"),
         DocumentRule("유산진단서", "유산 진단명, 진단일", level="유산 청구 시", default_selected=False),
         DocumentRule("사산증명서", "사산 사실과 일자", level="사산 청구 시", default_selected=False),
@@ -746,7 +746,7 @@ def conditional_documents(base_docs: list[DocumentRule], answers: dict) -> list[
 
 def compact_required_info(value: str) -> str:
     replacements = {
-        "질병분류코드": "질병코드", "급여·비급여 치료내역": "급여·비급여 내역",
+        "진단코드": "진단코드", "급여·비급여 치료내역": "급여·비급여 내역",
         "청구인 또는 보험수익자 계좌": "청구인·수익자 계좌", "보험회사별 양식, ": "",
         "최종 병리진단과 조직검사 결과": "최종 병리진단",
     }
