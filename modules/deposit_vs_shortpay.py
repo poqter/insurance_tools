@@ -2,7 +2,7 @@ import time
 
 import streamlit as st
 
-from .ui_components import page_header
+from .ui_components import page_header, section_intro
 
 
 TAX_RATE = 0.154
@@ -601,6 +601,13 @@ def render_calculation_details(deposit: dict, shortpay: dict, pay_years: int, re
 def run():
     render_styles()
 
+    page_header(
+        "고객 상담",
+        "적금 vs 단기납",
+        "같은 월납입금액으로 10년 예상 이익을 간편하게 비교합니다.",
+        "DS",
+    )
+
     with st.expander("인쇄 방법 및 계산 기준"):
         st.markdown(
             """
@@ -627,15 +634,8 @@ def run():
             unsafe_allow_html=True,
         )
 
-    page_header(
-        "고객 상담",
-        "적금 vs 단기납",
-        "같은 월납입금액으로 10년 예상 이익을 간편하게 비교합니다.",
-        "DS",
-    )
-
+    section_intro("입력", "상담 조건 입력", "적금과 단기납에 적용할 네 가지 조건을 입력해 주세요.")
     with st.form("hwarang_deposit_shortpay_form"):
-        st.markdown('<div class="hw-input-heading">상담 조건 입력</div>', unsafe_allow_html=True)
         left, right = st.columns(2, gap="large")
 
         with left:
@@ -706,6 +706,7 @@ def run():
     else:
         headline = f"현재 조건에서는 적금 누적 세후이자가 <strong>{format_currency(abs(advantage))} 더 큽니다</strong>"
 
+    section_intro("분석 결과", "10년 예상 이익 비교", "같은 월납입금액을 활용했을 때의 예상 결과입니다.")
     st.markdown(
         f"""
         <div class="hw-result-hero">

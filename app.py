@@ -86,12 +86,6 @@ APP_DEFINITIONS = {
         "badge": {"text": "BEST", "tone": "best"},
         "description": "보험사 보장분석 자료를 고객용 양식으로 변환합니다.", "action": "보장 분석 시작", "run": analyzer.run,
     },
-    "insurance_claim_guide": {
-        "name": "보험금 청구 가이드", "icon": "📋", "code": "CG", "category": "고객 상담",
-        "badge": {"text": "NEW", "tone": "new"},
-        "description": "청구 항목별 필요서류를 안내하고 보장분석 PDF에서 관련 담보를 찾습니다.",
-        "action": "청구 가이드 시작", "run": insurance_claim_guide.run,
-    },
     "remodeling": {
         "name": "보험 리모델링", "icon": "🔁", "code": "RM", "category": "고객 상담",
         "badge": {"text": "NEW", "tone": "new"},
@@ -116,6 +110,12 @@ APP_DEFINITIONS = {
         "name": "원수사 전산 포털", "icon": "↗", "code": "IP", "category": "고객 상담",
         "badge": {"text": "NEW", "tone": "new"},
         "description": "생명·손해보험사 원수사 전산을 한 화면에서 연결합니다.", "action": "전산 포털 열기", "run": insurer_portal.run,
+    },
+    "insurance_claim_guide": {
+        "name": "보험금 청구 가이드", "icon": "📋", "code": "CG", "category": "고객 상담",
+        "badge": {"text": "NEW", "tone": "new"},
+        "description": "청구 항목별 필요서류를 안내하고 보장분석 PDF에서 관련 담보를 찾습니다.",
+        "action": "청구 가이드 시작", "run": insurance_claim_guide.run,
     },
     "convention": {
         "name": "컨벤션 계산기", "icon": "🏆", "code": "CV", "category": "실적 관리",

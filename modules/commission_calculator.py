@@ -12,6 +12,7 @@ from difflib import SequenceMatcher
 from typing import Any
 
 import streamlit as st
+from .ui_components import page_header, section_intro
 import streamlit.components.v1 as components
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -1703,8 +1704,13 @@ def _render_contract_editor(all_products: list[ProductRate]) -> None:
 def run() -> None:
     _initialize_state()
 
-    st.title("수수료 계산기")
-    st.caption("수수료 예시표와 보유계약 장기 파일을 연결해 계약별 예상 수당을 계산합니다.")
+    page_header(
+        "실적 관리",
+        "수수료 계산기",
+        "수수료 예시표와 보유계약 장기 파일을 연결해 계약별 예상 수당을 계산합니다.",
+        "CC",
+    )
+    section_intro("입력", "수수료 자료 불러오기", "생보·손보 수수료 예시표를 먼저 등록해 주세요.")
 
     with st.expander("① 수수료 예시표 불러오기", expanded=True):
         life_file = st.file_uploader(
@@ -1774,7 +1780,7 @@ def run() -> None:
     elif current_ratebook_signature and current_ratebook_signature != saved_ratebook_signature:
         st.session_state["commission_ratebook_signature"] = current_ratebook_signature
 
-    st.markdown("### ② 지급율 및 계약 불러오기")
+    section_intro("입력", "지급율 및 보유계약 불러오기", "공통 지급율을 확인하고 보유계약관리 장기 엑셀을 등록해 주세요.")
     payout_rate_percent = st.number_input(
         "공통 지급율 (%)",
         min_value=0.0,
@@ -1861,7 +1867,7 @@ def run() -> None:
                 ]
                 needs_review.append((holding, review_candidates, " · ".join(reason_parts)))
 
-        st.markdown("### ③ 연결 결과 확인")
+        section_intro("연결 결과", "자동 연결 및 확인 필요 계약", "자동 연결 결과를 검토하고 필요한 계약만 조건을 다시 확인해 주세요.")
         metric_cols = st.columns(4)
         metric_cols[0].metric("전체", f"{len(holdings)}건")
         metric_cols[1].metric("자동 연결", f"{len(automatic)}건")
@@ -2041,10 +2047,11 @@ def run() -> None:
         elif holdings:
             st.info("현재 등록할 수 있는 계약이 없습니다. 확인 필요 계약의 조건을 선택해 주세요.")
 
+    section_intro("직접 입력", "계약 직접 추가", "파일에 없는 계약은 보험회사와 상품 조건을 직접 선택해 추가할 수 있습니다.")
     _render_manual_entry(all_products)
 
     contracts = st.session_state["commission_contracts"]
-    st.markdown("### ④ 수당 계산 대상 계약")
+    section_intro("계산 결과", "수당 계산 대상 계약", "등록된 계약과 예상 익월수당·총수당을 확인해 주세요.")
     if not contracts:
         st.info("추가된 계약이 없습니다.")
         return
@@ -2123,7 +2130,7 @@ def run() -> None:
                 unsafe_allow_html=True,
             )
 
-    st.divider()
+    section_intro("다운로드", "계산 결과 내려받기", "확인된 계약과 수수료 계산 결과를 엑셀로 저장합니다.")
     clear_col, download_col = st.columns([1, 2])
     with clear_col:
         if st.button("전체 계약 지우기", use_container_width=True):

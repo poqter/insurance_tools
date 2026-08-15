@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import html
 from dataclasses import dataclass, field
 from datetime import date
 from io import BytesIO
@@ -12,7 +13,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.page import PageMargins
 
 try:
-    from .ui_components import page_header
+    from .ui_components import page_header, section_intro
 except ImportError:  # 단독 실행·테스트용
     def page_header(_section: str, title: str, description: str, _code: str) -> None:
         st.title(title)
@@ -36,7 +37,21 @@ RED = "C00000"
 LINE = "B8C2CF"
 THIN = Side(style="thin", color=LINE)
 
-CONTRACT_ACTIONS = ["유지", "감액", "일부 특약 조정", "해지", "신규 승인 후 결정", "추가 확인"]
+CONTRACT_ACTIONS = ["유지", "감액", "해지", "변경", "검토"]
+ACTION_HELP = {
+    "유지": "예: 현재 계약과 보장을 그대로 유지",
+    "감액": "예: 고객센터를 통해 불필요한 특약 감액 요청",
+    "해지": "예: 고객센터 상담원 연결 후 계약 해지 요청",
+    "변경": "예: 갱신형 특약 또는 보장금액 변경 요청",
+    "검토": "예: 보험회사에 계약조건 확인 후 처리 방향 결정",
+}
+ACTION_STYLE = {
+    "유지": ("E8F4F2", "24745A"),
+    "감액": ("FFF1D6", "9A6700"),
+    "해지": ("FDECEC", "B42318"),
+    "변경": ("EAF2FF", "1769DC"),
+    "검토": ("F2ECFF", "6941C6"),
+}
 
 
 @dataclass
@@ -201,8 +216,15 @@ def render_contract_inputs(person_no: int) -> list[ExistingContract]:
                 company = st.text_input("보험회사", key=f"rm_contract_company_{person_no}_{i}")
                 product = st.text_input("상품명", key=f"rm_contract_product_{person_no}_{i}")
             with b:
-                action = st.selectbox("처리 방향", CONTRACT_ACTIONS, key=f"rm_contract_action_{person_no}_{i}")
-                detail = st.text_input("변경 내용", key=f"rm_contract_detail_{person_no}_{i}")
+                action_key = f"rm_contract_action_{person_no}_{i}"
+                if st.session_state.get(action_key) not in CONTRACT_ACTIONS:
+                    st.session_state[action_key] = "변경"
+                action = st.selectbox("처리 방향", CONTRACT_ACTIONS, key=action_key)
+                detail = st.text_input(
+                    "변경 내용",
+                    key=f"rm_contract_detail_{person_no}_{i}",
+                    placeholder=ACTION_HELP.get(action, "처리 내용을 구체적으로 입력해 주세요."),
+                )
             result.append(ExistingContract(clean(company), clean(product), action, clean(detail)))
     a, b = st.columns(2)
     with a:
@@ -216,7 +238,7 @@ def render_contract_inputs(person_no: int) -> list[ExistingContract]:
     return [c for c in result if c.company or c.product or c.detail]
 
 
-def render_person_inputs(person_no: int, detailed: bool) -> Person:
+def render_person_inputs(person_no: int) -> Person:
     st.subheader(f"고객 {person_no}")
     name = st.text_input("고객명", key=f"rm_name_{person_no}", placeholder="예: 홍길동")
     a, b = st.columns(2)
@@ -229,10 +251,8 @@ def render_person_inputs(person_no: int, detailed: bool) -> Person:
     st.markdown("#### 새롭게 가입하는 보험")
     plans = render_plan_inputs(person_no)
     coverage = st.text_area("새롭게 확보되는 핵심 보장", key=f"rm_coverage_{person_no}", placeholder="예: 암·뇌·심장 진단비 보완 · 주요 치료비 강화", height=75)
-    contracts = []
-    if detailed:
-        st.markdown("#### 기존 계약별 유지·감액·해지")
-        contracts = render_contract_inputs(person_no)
+    st.markdown("#### 기존 계약별 처리 계획")
+    contracts = render_contract_inputs(person_no)
     person = Person(clean(name), old_monthly, old_total, retained_monthly, retained_total, plans, clean(coverage), contracts)
     st.info(
         f"신규 보험료 합계 {person.new_plan_monthly:,}원  ·  "
@@ -297,7 +317,7 @@ def _excel_top(ws, people: list[Person], title: str) -> None:
 
 def _excel_person_panel(ws, p: Person, left: int, right: int, top: int, max_plans: int) -> int:
     L, R = get_column_letter(left), get_column_letter(right)
-    _merge(ws, f"{L}{top}:{R}{top+1}", f"{p.name or '고객'}님", fill=NAVY, color=WHITE, size=13, bold=True)
+    _merge(ws, f"{L}{top}:{R}{top+1}", f"{p.name or 'OOO'}님", fill=NAVY, color=WHITE, size=13, bold=True)
     mid = (left + right) // 2
     spans = [(left, left+1), (left+2, mid), (mid+1, mid+2), (mid+3, right)]
     rows = [
@@ -374,10 +394,10 @@ def _excel_detail(wb: Workbook, people: list[Person]) -> None:
     ws.sheet_view.showGridLines = False
     for col, width in zip("ABCDEF", [16, 24, 18, 44, 16, 16]):
         ws.column_dimensions[col].width = width
-    _merge(ws, "A1:F2", "기존 계약별 유지·감액·해지", color=NAVY, size=18, bold=True, border=False)
+    _merge(ws, "A1:F2", "기존 계약별 처리 계획", color=NAVY, size=18, bold=True, border=False)
     row = 4
     for p in people:
-        _merge(ws, f"A{row}:F{row}", f"{p.name or '고객'}님", fill=NAVY, color=WHITE, bold=True)
+        _merge(ws, f"A{row}:F{row}", f"{p.name or 'OOO'}님", fill=NAVY, color=WHITE, bold=True)
         row += 1
         for col, text in enumerate(["보험회사", "상품명", "처리 방향", "구체적인 변경 내용"], 1):
             end = col if col < 4 else 6
@@ -387,9 +407,10 @@ def _excel_detail(wb: Workbook, people: list[Person]) -> None:
         row += 1
         records = p.contracts or [ExistingContract(detail="입력된 기존 계약 변경 내용이 없습니다.")]
         for c in records:
+            action_fill, action_color = ACTION_STYLE.get(c.action, (WHITE, INK))
             _merge(ws, f"A{row}:A{row}", c.company, fill=WHITE)
             _merge(ws, f"B{row}:B{row}", c.product, fill=WHITE)
-            _merge(ws, f"C{row}:C{row}", c.action if c.company or c.product else "", fill=WHITE, bold=True)
+            _merge(ws, f"C{row}:C{row}", c.action if c.company or c.product else "", fill=action_fill, color=action_color, bold=True)
             _merge(ws, f"D{row}:F{row}", c.detail, fill=WHITE)
             ws.row_dimensions[row].height = 30
             row += 1
@@ -398,7 +419,7 @@ def _excel_detail(wb: Workbook, people: list[Person]) -> None:
     _excel_setup(ws, "F", row)
 
 
-def create_excel(people: list[Person], title: str, detailed: bool, consultation_date: date, consultant: str) -> BytesIO:
+def create_excel(people: list[Person], title: str, consultation_date: date, consultant: str) -> BytesIO:
     wb = Workbook()
     ws = wb.active
     ws.title = "리모델링 비교안"
@@ -429,8 +450,7 @@ def create_excel(people: list[Person], title: str, detailed: bool, consultation_
     _merge(ws, f"A{last-1}:R{last-1}", note, color=MUTED, size=8, border=False)
     _merge(ws, f"A{last}:R{last}", f"상담일 {consultation_date:%Y.%m.%d} · 담당자 {consultant or '-'}", color=MUTED, size=8, border=False)
     _excel_setup(ws, "R", last)
-    if detailed:
-        _excel_detail(wb, people)
+    _excel_detail(wb, people)
     out = BytesIO()
     wb.save(out)
     out.seek(0)
@@ -459,7 +479,7 @@ def load_example(count: int) -> None:
             {
                 "company": "흥국화재",
                 "product": "흥GoodThe건강한0550종합보험",
-                "action": "일부 특약 조정",
+                "action": "변경",
                 "detail": "흥국화재 고객센터 1688-1688 상담원 연결 후 일상생활 배상책임 특약 삭제 요청",
             },
         ],
@@ -508,39 +528,127 @@ def load_example(count: int) -> None:
             st.session_state[f"rm_contract_detail_{no}_{contract_index}"] = contract["detail"]
 
 
-def run() -> None:
-    page_header("고객 상담", APP_TITLE, "간편 입력으로 한눈에 보는 비교표를 만들고 엑셀로 내려받습니다.", "RM")
+def _preview_text(value: str) -> str:
+    return html.escape(value) if value else '<span class="rm-empty">입력 전</span>'
+
+
+def _preview_person(person: Person) -> None:
+    name = html.escape(person.name or "OOO")
+    st.markdown(f'<div class="rm-preview-name">{name}님</div>', unsafe_allow_html=True)
     c1, c2, c3 = st.columns(3)
+    c1.metric("기존 월 보험료", won(person.old_monthly))
+    c2.metric("변경 후 월 보험료", won(person.after_monthly))
+    c3.metric("월 보험료 변화", change_amount(person.old_monthly, person.after_monthly))
+
+    plan_rows = "".join(
+        f'<tr><td>{_preview_text(plan.name)}</td><td>{won(plan.monthly)}</td></tr>'
+        for plan in person.plans
+    ) or '<tr><td><span class="rm-empty">입력 전</span></td><td><span class="rm-empty">입력 전</span></td></tr>'
+    contract_rows = "".join(
+        f'<tr><td>{_preview_text(contract.company)}</td><td>{_preview_text(contract.product)}</td>'
+        f'<td><span class="rm-action rm-action-{html.escape(contract.action)}">{html.escape(contract.action)}</span></td>'
+        f'<td>{_preview_text(contract.detail)}</td></tr>'
+        for contract in person.contracts
+    ) or '<tr><td colspan="4"><span class="rm-empty">입력 전</span></td></tr>'
+    st.markdown(
+        f"""
+        <div class="rm-preview-grid">
+          <section class="rm-preview-card">
+            <h4>새롭게 가입하는 보험</h4>
+            <table><thead><tr><th>보험 또는 보장 구성</th><th>월 보험료</th></tr></thead>
+            <tbody>{plan_rows}</tbody>
+            <tfoot><tr><th>신규 보험료 합계</th><th>{won(person.new_plan_monthly)}</th></tr></tfoot></table>
+          </section>
+          <section class="rm-preview-card">
+            <h4>새롭게 확보되는 핵심 보장</h4>
+            <div class="rm-coverage">{_preview_text(person.coverage)}</div>
+          </section>
+        </div>
+        <section class="rm-preview-card rm-contract-card">
+          <h4>기존 계약별 처리 계획</h4>
+          <table><thead><tr><th>보험회사</th><th>상품명</th><th>처리 방향</th><th>변경 내용</th></tr></thead>
+          <tbody>{contract_rows}</tbody></table>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_preview(people: list[Person]) -> None:
+    st.markdown(
+        """
+        <style>
+        .rm-preview-name{margin:.15rem 0 .75rem;color:#17365D;font-size:1.18rem;font-weight:800}
+        .rm-preview-grid{display:grid;grid-template-columns:1.15fr .85fr;gap:.85rem;margin:1rem 0 .85rem}
+        .rm-preview-card{overflow:hidden;border:1px solid #DCE6EE;border-radius:15px;background:#FFF;
+            box-shadow:0 10px 28px rgba(37,72,98,.05)}
+        .rm-preview-card h4{margin:0;padding:.78rem .95rem;background:#F5F9FC;color:#17365D;font-size:.9rem}
+        .rm-preview-card table{width:100%;border-collapse:collapse;font-size:.78rem}
+        .rm-preview-card th,.rm-preview-card td{padding:.62rem .72rem;border-top:1px solid #E7EEF3;text-align:center}
+        .rm-preview-card thead th{color:#52677A;background:#FBFCFD;font-size:.7rem}
+        .rm-preview-card tfoot th{color:#24745A;background:#E8F4F2}
+        .rm-coverage{min-height:7.25rem;padding:1rem;color:#25364A;line-height:1.7;white-space:pre-wrap}
+        .rm-contract-card{margin-bottom:.8rem}.rm-empty{color:#98A2B3;font-weight:500}
+        .rm-action{display:inline-block;padding:.18rem .42rem;border-radius:999px;font-size:.68rem;font-weight:800}
+        .rm-action-유지{color:#24745A;background:#E8F4F2}.rm-action-감액{color:#9A6700;background:#FFF1D6}
+        .rm-action-해지{color:#B42318;background:#FDECEC}.rm-action-변경{color:#1769DC;background:#EAF2FF}
+        .rm-action-검토{color:#6941C6;background:#F2ECFF}
+        @media(max-width:760px){.rm-preview-grid{grid-template-columns:1fr}.rm-preview-card table{font-size:.7rem}}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    if len(people) == 1:
+        _preview_person(people[0])
+        return
+    tabs = st.tabs(["전체 요약", "고객 1", "고객 2"])
+    with tabs[0]:
+        total = combined(people)
+        c1, c2, c3 = st.columns(3)
+        c1.metric("합산 기존 월 보험료", won(total["old_monthly"]))
+        c2.metric("변경 후 합산 월 보험료", won(total["after_monthly"]))
+        c3.metric("합산 월 보험료 변화", change_amount(total["old_monthly"], total["after_monthly"]))
+        st.caption("고객별 상세 내용은 고객 1·고객 2 탭에서 확인할 수 있습니다.")
+    with tabs[1]:
+        _preview_person(people[0])
+    with tabs[2]:
+        _preview_person(people[1])
+
+
+def run() -> None:
+    page_header("고객 상담", APP_TITLE, "고객별 기존 계약 처리 계획과 새로운 보장 구성을 작성해 엑셀로 내려받습니다.", "RM")
+    section_intro("공통 정보", "상담 기본정보", "대상 인원과 상담 정보를 먼저 확인해 주세요.")
+    c1, c2, c3, c4 = st.columns([.85, 1, 1.15, 1])
     with c1:
         count = int(st.selectbox("대상 인원", [1, 2], format_func=lambda x: f"{x}명", key="rm_count"))
     with c2:
-        mode = st.radio("입력 모드", ["간편 모드", "상세 모드"], horizontal=True, key="rm_mode")
+        consultation_date = st.date_input("상담일", value=date.today(), key="rm_date")
     with c3:
+        consultant = st.text_input("담당자", key="rm_consultant", placeholder="예: 박병선 팀장")
+    with c4:
+        st.markdown('<div style="height:1.78rem"></div>', unsafe_allow_html=True)
         if st.button("예시 데이터 입력", use_container_width=True):
             load_example(count)
             st.rerun()
-    detailed = mode == "상세 모드"
-    meta1, meta2 = st.columns(2)
-    with meta1:
-        consultation_date = st.date_input("상담일", value=date.today(), key="rm_date")
-    with meta2:
-        consultant = st.text_input("담당자", key="rm_consultant", placeholder="예: 박병선 팀장")
+
+    section_intro("상세 입력", "고객별 리모델링 내용", "신규 보험과 기존 계약의 처리 계획을 구체적으로 작성해 주세요.")
     people: list[Person] = []
     tabs = st.tabs([f"고객 {i}" for i in range(1, count+1)])
     for i, tab in enumerate(tabs, 1):
         with tab:
-            people.append(render_person_inputs(i, detailed))
+            people.append(render_person_inputs(i))
     if count == 2:
         shared = st.checkbox("두 고객의 핵심 보장을 하나로 묶어 표시", key="rm_shared_coverage")
         if shared:
             shared_text = st.text_area("공통 핵심 보장", key="rm_shared_coverage_text", height=75)
             for p in people:
                 p.coverage = clean(shared_text)
-    names = [p.name for p in people if p.name]
-    default_title = " · ".join(f"{n}님" for n in names) + " 보험 리모델링 비교안" if names else "보험 리모델링 비교안"
-    title = st.text_input("자료 제목", value=default_title, key="rm_title")
-    st.divider()
-    st.subheader("자동 계산 결과")
+    display_names = [re.sub(r"님$", "", clean(p.name)) or "OOO" for p in people]
+    default_title = " · ".join(f"{name}님" for name in display_names) + " 보험 리모델링 비교안"
+    custom_title = st.text_input("자료 제목 (선택)", key="rm_title", placeholder=default_title)
+    effective_title = clean(custom_title) or default_title
+
+    section_intro("분석 결과", "자동 계산 결과", "입력한 보험료와 납입기간을 기준으로 자동 계산됩니다.")
     t = combined(people)
     a, b, c = st.columns(3)
     labels = (["월 보험료 변화", "변경 후 월 보험료", "납입 예정 총액 변화"] if count == 1 else
@@ -549,12 +657,18 @@ def run() -> None:
     b.metric(labels[1], won(t["after_monthly"]))
     c.metric(labels[2], change_amount(t["old_total"], t["after_total"]), change_rate(t["old_total"], t["after_total"]) or None)
     missing = [f"고객 {i+1} 이름" for i, p in enumerate(people) if not p.name]
+    if not clean(consultant):
+        missing.append("담당자")
     if missing:
-        st.warning("입력 필요: " + ", ".join(missing))
-        return
-    excel = create_excel(people, clean(title) or default_title, detailed, consultation_date, clean(consultant))
-    base = safe_filename(f"{clean(title) or default_title}_{consultation_date:%Y%m%d}")
-    st.markdown("#### 엑셀 다운로드")
+        st.warning("미입력 항목: " + ", ".join(missing) + " · 확인용 파일은 그대로 다운로드할 수 있습니다.")
+
+    section_intro("미리보기", "리모델링 비교안 미리보기", "다운로드할 자료의 핵심 내용을 실시간으로 확인할 수 있습니다.")
+    render_preview(people)
+
+    excel = create_excel(people, effective_title, consultation_date, clean(consultant))
+    filename_people = "_".join(f"{safe_filename(name)}님" for name in display_names)
+    base = f"{filename_people}_보험리모델링_비교안_{date.today():%Y%m%d}"
+    section_intro("다운로드", "엑셀 다운로드", "미리보기 내용을 확인한 뒤 고객 상담용 엑셀을 내려받아 주세요.")
     st.download_button(
         "엑셀로 다운로드",
         excel,

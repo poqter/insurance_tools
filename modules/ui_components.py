@@ -95,6 +95,17 @@ def inject_global_styles() -> None:
             background: rgba(255,255,255,.88); border: 1px dashed #A9C1D3; border-radius: 16px; padding: 1rem;
             box-shadow: 0 9px 26px rgba(37,72,98,.045);
         }
+        /* 모든 도구의 입력 구역을 같은 카드 문법으로 정리합니다. */
+        [data-testid="stForm"] {
+            background: rgba(255,255,255,.94);
+            border: 1px solid var(--hw-premium-line) !important;
+            border-radius: 16px !important;
+            padding: 1.25rem 1.35rem 1.35rem !important;
+            box-shadow: var(--hw-premium-shadow);
+        }
+        [data-testid="stForm"] [data-testid="stFormSubmitButton"] {
+            margin-top: .45rem;
+        }
         [data-testid="stFileUploaderDropzone"]:hover { border-color: var(--hw-blue); background: #FAFCFF; }
         [data-testid="stMetric"] {
             background: var(--hw-surface); border: 1px solid var(--hw-premium-line); border-radius: 15px;
@@ -148,6 +159,11 @@ def inject_global_styles() -> None:
         .hw-page-title { margin:0; font-size:2rem; line-height:1.25; font-weight:780; letter-spacing:-.055em; color:var(--hw-ink); }
         .hw-page-desc { margin:.35rem 0 0; color:var(--hw-muted); font-size:.93rem; line-height:1.55; }
         .hw-section-label { color:var(--hw-blue); font-size:.72rem; font-weight:800; letter-spacing:.1em; }
+        .hw-section-head { margin:2.15rem 0 .85rem; }
+        .hw-section-head .hw-section-label { margin-bottom:.24rem; }
+        .hw-section-title { margin:0; color:var(--hw-ink); font-size:1.42rem; line-height:1.35;
+            font-weight:780; letter-spacing:-.045em; }
+        .hw-section-desc { margin:.32rem 0 0; color:var(--hw-muted); font-size:.88rem; line-height:1.55; }
         .hw-side-brand { display:flex; align-items:center; gap:.7rem; margin:.1rem 0 1rem; color:#10283D; }
         .hw-side-brand span,.hw-login-brand .hw-logo { width:2.25rem; height:2.25rem; display:grid; place-items:center; border-radius:.7rem;
             background:linear-gradient(145deg,#1769DC,#119B98); color:white; font-weight:900; box-shadow:0 8px 18px rgba(23,105,220,.18); }
@@ -233,7 +249,14 @@ def page_header(category: str, title: str, description: str, icon: str) -> None:
 
 
 def section_intro(label: str, title: str, description: str = "") -> None:
-    st.markdown(f'<div class="hw-section-label">{html.escape(label)}</div>', unsafe_allow_html=True)
-    st.subheader(title)
-    if description:
-        st.caption(description)
+    desc = f'<div class="hw-section-desc">{html.escape(description)}</div>' if description else ""
+    st.markdown(
+        f"""
+        <div class="hw-section-head">
+          <div class="hw-section-label">{html.escape(label)}</div>
+          <div class="hw-section-title">{html.escape(title)}</div>
+          {desc}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )

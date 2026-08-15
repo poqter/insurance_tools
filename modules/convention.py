@@ -10,7 +10,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, Border, Side, PatternFill
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.worksheet.table import Table, TableStyleInfo
-from .ui_components import page_header
+from .ui_components import page_header, section_intro
 
 
 # ── 컨벤션 기준 ──────────────────────────────────────────────
@@ -916,6 +916,7 @@ def run():
             """
         )
 
+    section_intro("입력", "계약자료 불러오기", "컨벤션 실적을 계산할 보유계약 엑셀 파일을 등록해 주세요.")
     uploaded_file = st.file_uploader("📂 컨벤션 계산용 Excel 파일 업로드 (.xlsx)", type=["xlsx"])
 
     if not uploaded_file:
@@ -1060,13 +1061,13 @@ def run():
         else df[df["수금자명"].astype(str) == selected_collector].copy()
     )
 
-    st.subheader(f"📄 {'전체' if selected_collector == '전체' else selected_collector} 컨벤션 환산 결과")
+    section_intro("환산 결과", f"{'전체' if selected_collector == '전체' else selected_collector} 컨벤션 환산 결과", "선택한 계약자료에 컨벤션 환산 기준을 적용한 결과입니다.")
     st.dataframe(to_styled(show_df), use_container_width=True)
 
     req = check_convention_requirements(show_df)
     conv_sum = req["컨벤션환산금액"]
 
-    st.subheader("🏆 컨벤션 달성 현황")
+    section_intro("달성 현황", "컨벤션 달성 현황", "금액 기준과 필수조건 충족 여부를 함께 확인해 주세요.")
 
     st.markdown(
         money_box("컨벤션 환산보험료 합계", conv_sum),
@@ -1146,7 +1147,7 @@ def run():
         unsafe_allow_html=True,
     )
 
-    st.subheader("🧮 수금자명별 요약")
+    section_intro("상세 결과", "수금자별 요약", "수금자별 환산금액과 달성 현황을 비교합니다.")
 
     group = make_group(df)
     st.dataframe(format_group_for_display(group), use_container_width=True)

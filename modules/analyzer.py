@@ -285,9 +285,9 @@ def _group_for(label: str) -> str:
 
 
 def _extract_customer_name(value: object) -> str:
-    text = str(value or "고객").strip()
+    text = str(value or "OOO").strip()
     name = re.split(r"[을를]\s*위한", text, maxsplit=1)[0].strip()
-    return name or "고객"
+    return name or "OOO"
 
 
 def _extract_age(value: object) -> str:
@@ -721,7 +721,9 @@ def build_analysis_file(
     workbook.calculation.forceFullCalc = True
 
     today = datetime.today().strftime("%Y%m%d")
-    filename = f"{data['customer_name']}_보장분석_엑셀_{today}.xlsx"
+    filename_name = re.sub(r"님$", "", str(data["customer_name"] or "OOO").strip())
+    filename_name = re.sub(r'[\\/:*?"<>|]+', "_", filename_name).strip() or "OOO"
+    filename = f"{filename_name}님_보장분석_{today}.xlsx"
     output = BytesIO()
     workbook.save(output)
     output.seek(0)

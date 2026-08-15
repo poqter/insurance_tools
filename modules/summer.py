@@ -10,7 +10,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, Border, Side, PatternFill
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.worksheet.table import Table, TableStyleInfo
-from .ui_components import page_header
+from .ui_components import page_header, section_intro
 
 
 # ── 썸머 기준 ────────────────────────────────────────────────
@@ -1079,6 +1079,7 @@ def run():
             """
         )
 
+    section_intro("입력", "계약자료 불러오기", "7월과 8월 계약이 포함된 보유계약 엑셀 파일을 등록해 주세요.")
     uploaded_file = st.file_uploader(
         "📂 썸머 계산용 Excel 파일 업로드 (.xlsx)",
         type=["xlsx"],
@@ -1237,7 +1238,7 @@ def run():
             st.info("제외된 계약이 없습니다.")
 
     # 2. 전체 환산 결과
-    st.subheader("📄 전체 환산 결과")
+    section_intro("전체 결과", "썸머 환산 결과", "반영 계약과 제외 계약을 포함한 전체 계산 결과입니다.")
     render_result_tabs(
         summary_df=total_summary,
         july_df=july_df,
@@ -1246,7 +1247,7 @@ def run():
     )
 
     # 3. 수금자별 결과 확인
-    st.subheader("👤 수금자별 결과 확인")
+    section_intro("상세 결과", "수금자별 결과 확인", "수금자를 선택해 월별 실적과 보너스 적용 결과를 확인해 주세요.")
 
     collectors = ["전체"] + sorted(df["수금자명"].astype(str).dropna().unique().tolist())
 
@@ -1365,7 +1366,7 @@ def run():
     )
 
     # 6. 선택값 기준 썸머 최종 결과
-    st.subheader("🏆 썸머 최종 결과")
+    section_intro("최종 결과", "썸머 최종 등급", "월별 필수조건과 보너스를 모두 반영한 최종 결과입니다.")
 
     st.markdown(
         grade_box(

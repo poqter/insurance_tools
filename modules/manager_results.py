@@ -9,7 +9,7 @@ import os
 import re
 import numpy as np
 import hashlib
-from .ui_components import page_header
+from .ui_components import page_header, section_intro
 
 
 # ── 전역 상수 ────────────────────────────────────────────────
@@ -772,6 +772,7 @@ def run():
             """
         )
 
+    section_intro("입력", "계약자료 불러오기", "매니저 업적으로 환산할 계약 목록 엑셀 파일을 등록해 주세요.")
     uploaded_file = st.file_uploader(
         "📂 계약 목록 Excel 파일 업로드 (.xlsx)",
         type=["xlsx"],
@@ -975,7 +976,7 @@ def run():
         df_all["수금자명"].astype(str).isin(selected_collectors)
     ].copy()
 
-    st.subheader("📄 선택된 수금자 합산 기준 환산 결과")
+    section_intro("환산 결과", "선택된 수금자 합산 결과", "선택한 수금자의 계약을 합산해 환산한 결과입니다.")
 
     st.dataframe(
         to_styled(show_df),
@@ -984,7 +985,7 @@ def run():
 
     perf_sum, score_sum = sums(show_df)
 
-    st.subheader("📈 총합")
+    section_intro("전체 결과", "선택 계약 총합", "보험료와 환산금액의 전체 합계를 확인해 주세요.")
 
     st.markdown(
         f"""
@@ -998,7 +999,7 @@ def run():
         unsafe_allow_html=True,
     )
 
-    st.subheader("🧮 수금자별 요약")
+    section_intro("상세 결과", "수금자별 요약", "수금자별 계약 건수와 환산금액을 비교합니다.")
 
     group = make_group_with_ranks(show_df)
     top_amt, top_cnt = top3_tables(group)
