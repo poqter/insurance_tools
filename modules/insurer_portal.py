@@ -124,28 +124,27 @@ def _card(insurer: dict[str, object]) -> str:
         target = "_self"
         rel = ""
         card_class = "ip-card"
-        action = "Edge로 전산 열기"
 
     elif insurer.get("notice"):
         href = _safe_external_url(str(insurer["url"]))
         target = "_blank"
         rel = ' rel="noopener noreferrer"'
         card_class = "ip-card ip-warning-card"
-        action = "안내 확인 후 전산 열기"
 
     else:
         href = _safe_external_url(str(insurer["url"]))
         target = "_blank"
         rel = ' rel="noopener noreferrer"'
         card_class = "ip-card"
-        action = "전산 열기"
 
     return (
         f'<article class="{card_class}">'
         f'<a class="ip-card-link" href="{href}" target="{target}"{rel} aria-label="{name} 전산 페이지 열기">'
         f'<span class="ip-logo-box">{logo_html}</span>'
-        f'<span class="ip-card-copy"><strong>{name}</strong><small>{action}</small></span>'
-        f'<span class="ip-card-side">{phone_html}{badge_html}<i aria-hidden="true">↗</i></span>'
+        '<span class="ip-card-content">'
+        f'<span class="ip-card-top"><strong title="{name}">{name}</strong>{phone_html}</span>'
+        f'<span class="ip-card-bottom">{badge_html}<small>전산 열기 <i aria-hidden="true">↗</i></small></span>'
+        '</span>'
         '</a></article>'
     )
 
@@ -182,12 +181,15 @@ def _normalized_search_text(value: object) -> str:
 def _home_search_result(insurer: dict[str, object]) -> str:
     name = html.escape(str(insurer["name"]))
     slug = str(insurer["slug"])
-    logo_uri = _logo_data_uri(slug)
-    logo_html = (
-        f'<img class="ip-home-logo" src="{logo_uri}" alt="{name} 로고">'
-        if logo_uri
-        else f'<span class="ip-home-logo ip-home-logo-fallback">{name[:1]}</span>'
-    )
+    if insurer.get("is_main_portal"):
+        logo_html = '<span class="ip-home-hlab-mark" aria-label="한화라이프랩 H 마크">H</span>'
+    else:
+        logo_uri = _logo_data_uri(slug)
+        logo_html = (
+            f'<img class="ip-home-logo" src="{logo_uri}" alt="{name} 로고">'
+            if logo_uri
+            else f'<span class="ip-home-logo ip-home-logo-fallback">{name[:1]}</span>'
+        )
 
     if insurer.get("edge_only"):
         href = f'microsoft-edge:{_safe_external_url(str(insurer["url"]))}'
@@ -255,10 +257,14 @@ def render_home_quick_search() -> None:
             border:1px solid #E3ECF3; border-radius:9px; background:linear-gradient(145deg,#FFF,#F5F9FC); overflow:hidden; }
         .ip-home-logo { display:block; width:1.72rem; height:1.72rem; object-fit:contain; }
         .ip-home-logo-fallback { color:#1769DC; font-size:.78rem; font-weight:850; }
+        .ip-home-hlab-mark { width:100%; height:100%; display:grid; place-items:center; border-radius:8px;
+            background:linear-gradient(145deg,#1769DC,#119B98); color:#FFF; font-size:.88rem; font-weight:900;
+            box-shadow:0 5px 12px rgba(23,105,220,.16); }
         .ip-home-main { min-width:0; flex:1; display:flex; align-items:center; gap:.65rem; text-decoration:none !important; }
         .ip-home-result strong { min-width:0; flex:1; overflow:hidden; color:#18334A; font-size:.86rem;
             font-weight:780; letter-spacing:-.025em; text-overflow:ellipsis; white-space:nowrap; }
-        .ip-home-phone { flex:0 0 auto; color:#667B8C; font-size:.76rem; font-weight: 650; font-variant-numeric:tabular-nums; white-space:nowrap; user-select:text; }
+        .ip-home-phone { flex:0 0 auto; color:#667B8C; font-size:.80rem; font-weight:700;
+            font-variant-numeric:tabular-nums; white-space:nowrap; user-select:text; }
         .ip-home-badge { flex:0 0 auto; padding:.18rem .42rem; border-radius:999px; background:#EAF3FF; color:#1769DC; font-size:.62rem; font-weight:800; white-space:nowrap; }
         .ip-home-arrow { flex:0 0 auto; color:#7290A7 !important; font-size:.86rem; text-decoration:none !important; }
         .ip-home-empty { margin-top:.4rem; padding:.65rem .75rem; border:1px dashed #C9D7E2; border-radius:11px;
@@ -337,18 +343,19 @@ def run() -> None:
             border:1px solid #E3ECF3; border-radius:11px; background:linear-gradient(145deg,#FFF,#F5F9FC); overflow:hidden; }
         .ip-logo { display:block; width:2rem; height:2rem; object-fit:contain; }
         .ip-logo-fallback { color:#1769DC; font-weight:850; }
-        .ip-card-copy { min-width:0; display:flex; flex:1; flex-direction:column; gap:.08rem; }
-        .ip-card-copy strong { overflow:hidden; color:#18334A; font-size:.79rem; font-weight:780; letter-spacing:-.025em;
+        .ip-card-content { min-width:0; display:flex; flex:1; flex-direction:column; gap:.28rem; }
+        .ip-card-top,.ip-card-bottom { min-width:0; display:flex; align-items:center; justify-content:space-between; gap:.55rem; }
+        .ip-card-top strong { min-width:0; overflow:hidden; color:#18334A; font-size:.79rem; font-weight:780; letter-spacing:-.025em;
             text-overflow:ellipsis; white-space:nowrap; }
-        .ip-card-copy small { color:#8495A3; font-size:.61rem; }
-        .ip-card-side { flex:0 0 auto; display:flex; align-items:center; gap:.28rem; }
-        .ip-phone { color:#667B8C; font-size:.70rem; font-weight: 650; font-variant-numeric:tabular-nums; letter-spacing: -0.01em; white-space:nowrap; user-select:text; }
-        .ip-card-side i { color:#7290A7; font-size:.8rem; font-style:normal; }
+        .ip-card-bottom small { margin-left:auto; color:#8495A3; font-size:.61rem; white-space:nowrap; }
+        .ip-card-bottom i { color:#7290A7; font-size:.8rem; font-style:normal; }
+        .ip-phone { flex:0 0 auto; color:#667B8C; font-size:.76rem; font-weight:700;
+            font-variant-numeric:tabular-nums; white-space:nowrap; user-select:text; }
         .ip-badge { padding:.16rem .32rem; border-radius:999px; background:#EEF5FB; color:#356D96; font-size:.5rem; font-weight:800; }
         .ip-warning-card { border-color:#E7D6B1; background:linear-gradient(145deg,#FFFDF8,#FFF9EC); }
         .ip-warning-card .ip-badge { background:#FFF0CE; color:#98641D; }
         @media(max-width:1050px){.ip-layout{grid-template-columns:1fr}.ip-card-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
-        @media(max-width:760px){.ip-card-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.ip-guide{align-items:flex-start;flex-direction:column}.ip-main-portal{align-items:flex-start}.ip-main-copy small{display:none}}
+        @media(max-width:760px){.ip-card-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.ip-guide{align-items:flex-start;flex-direction:column}.ip-main-portal{align-items:flex-start}.ip-main-copy small{display:none}.ip-phone{font-size:.72rem}}
         @media(max-width:480px){.ip-card-grid{grid-template-columns:1fr}.ip-panel{padding:.8rem}.ip-card{min-height:4rem}}
         </style>
         """,
