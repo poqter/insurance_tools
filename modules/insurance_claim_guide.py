@@ -1316,7 +1316,7 @@ def run() -> None:
 
     top_left, top_right = st.columns([5, 1])
     with top_left:
-        st.caption(f"청구서류 가이드 기준일 · {GUIDE_STANDARD_DATE}　|　버전 {GUIDE_VERSION}")
+        st.caption(f"제작자: 박병선 팀장 · {GUIDE_STANDARD_DATE}　|　버전 {GUIDE_VERSION}")
     with top_right:
         if st.button("처음부터 다시", key="cg_reset", use_container_width=True):
             clear_state()

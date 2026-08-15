@@ -317,7 +317,7 @@ def run() -> None:
                         """
                     ).strip()
                 )
-            st.caption("브라우저와 프린터에 따라 결과가 달라질 수 있습니다. 내용이 잘리는 경우 배율을 조정해 주세요.")
+            st.caption("제작자: 박병선 팀장 · 버전 v2.0.0")
 
     with st.container(key="rn_input_area"):
         basic_col, renew_col, fixed_col = st.columns(3, gap="medium")

@@ -258,7 +258,7 @@ def render_home_quick_search() -> None:
         .ip-home-main { min-width:0; flex:1; display:flex; align-items:center; gap:.65rem; text-decoration:none !important; }
         .ip-home-result strong { min-width:0; flex:1; overflow:hidden; color:#18334A; font-size:.86rem;
             font-weight:780; letter-spacing:-.025em; text-overflow:ellipsis; white-space:nowrap; }
-        .ip-home-phone { flex:0 0 auto; color:#718697; font-size:.72rem; font-variant-numeric:tabular-nums; white-space:nowrap; user-select:text; }
+        .ip-home-phone { flex:0 0 auto; color:#667B8C; font-size:.76rem; font-weight: 650; font-variant-numeric:tabular-nums; white-space:nowrap; user-select:text; }
         .ip-home-badge { flex:0 0 auto; padding:.18rem .42rem; border-radius:999px; background:#EAF3FF; color:#1769DC; font-size:.62rem; font-weight:800; white-space:nowrap; }
         .ip-home-arrow { flex:0 0 auto; color:#7290A7 !important; font-size:.86rem; text-decoration:none !important; }
         .ip-home-empty { margin-top:.4rem; padding:.65rem .75rem; border:1px dashed #C9D7E2; border-radius:11px;
@@ -342,7 +342,7 @@ def run() -> None:
             text-overflow:ellipsis; white-space:nowrap; }
         .ip-card-copy small { color:#8495A3; font-size:.61rem; }
         .ip-card-side { flex:0 0 auto; display:flex; align-items:center; gap:.28rem; }
-        .ip-phone { color:#718697; font-size:.62rem; font-variant-numeric:tabular-nums; white-space:nowrap; user-select:text; }
+        .ip-phone { color:#667B8C; font-size:.70rem; font-weight: 650; font-variant-numeric:tabular-nums; letter-spacing: -0.01em; white-space:nowrap; user-select:text; }
         .ip-card-side i { color:#7290A7; font-size:.8rem; font-style:normal; }
         .ip-badge { padding:.16rem .32rem; border-radius:999px; background:#EEF5FB; color:#356D96; font-size:.5rem; font-weight:800; }
         .ip-warning-card { border-color:#E7D6B1; background:linear-gradient(145deg,#FFFDF8,#FFF9EC); }

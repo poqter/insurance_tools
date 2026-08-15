@@ -508,7 +508,8 @@ def _populate_analysis_sheet(
 
     ws.merge_cells("A1:C1")
     age_text = f" (보험연령:{data['age']}세)" if data["age"] else ""
-    ws["A1"] = f"{data['customer_name']}님의 보장 분석{age_text}"
+    title_customer_name = re.sub(r"님$", "", str(data["customer_name"] or "OOO").strip()) or "OOO"
+    ws["A1"] = f"{title_customer_name}님의 보장 분석{age_text}"
     ws["A1"].font = Font(name="나눔고딕", size=13, bold=True)
     ws["A1"].alignment = Alignment(horizontal="center", vertical="bottom")
     ws.row_dimensions[1].height = 82
@@ -723,7 +724,7 @@ def build_analysis_file(
     today = datetime.today().strftime("%Y%m%d")
     filename_name = re.sub(r"님$", "", str(data["customer_name"] or "OOO").strip())
     filename_name = re.sub(r'[\\/:*?"<>|]+', "_", filename_name).strip() or "OOO"
-    filename = f"{filename_name}님_보장분석_{today}.xlsx"
+    filename = f"{filename_name}님_보장분석엑셀_{today}.xlsx"
     output = BytesIO()
     workbook.save(output)
     output.seek(0)
@@ -807,9 +808,9 @@ def run() -> None:
             - 페이지 하단에는 현재 페이지와 전체 페이지 번호가 표시됩니다.
             """
         )
-        st.caption("최종 버전 v2.13.0 · 제작 박병선 팀장")
+        st.caption("제작 박병선 팀장 최종 · 버전 v2.13.0")
 
-    st.markdown("### 1. 전체 보장분석 원본")
+    st.markdown("### ✦ 전체 보장분석 원본")
     uploaded_main = st.file_uploader(
         "전체 보장내용이 포함된 컨설팅보장분석.xlsx 파일을 업로드하세요",
         type=["xlsx"],
@@ -826,7 +827,7 @@ def run() -> None:
             parse_error = exc
             st.error(str(exc))
 
-    st.markdown("### 2. 분석 모드")
+    st.markdown("### ✦ 분석 방식 선택")
     mode = st.radio(
         "분석 방식을 선택하세요",
         ["간편모드", "개인모드"],
@@ -867,7 +868,7 @@ def run() -> None:
             or (current_error and current_error.get("signature") == signature)
         )
     else:
-        st.markdown("### 3. 분석 실행")
+        st.markdown("### ✦ 보장 분석 실행")
         should_generate = st.button(
             "보장 분석 시작",
             type="primary",
@@ -909,6 +910,7 @@ def run() -> None:
     result = st.session_state.get("analyzer_v2_result")
     if result and result.get("signature") == signature:
         st.divider()
+        st.markdown("### ✦ 분석 결과 및 다운로드")
         st.success("보장 분석이 완료되었습니다.")
         col1, col2, col3 = st.columns(3)
         col1.metric("고객명", result["customer_name"])

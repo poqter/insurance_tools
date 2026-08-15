@@ -628,7 +628,7 @@ def run():
         st.markdown(
             """
             <div style="margin-top:14px; color:#6e7e90; font-size:12px;">
-                제작자: 비전본부 드림지점 박병선 팀장 · 버전 v2.0.0 · 2026-08-06
+                제작자: 박병선 팀장 · 버전 v2.0.0
             </div>
             """,
             unsafe_allow_html=True,
