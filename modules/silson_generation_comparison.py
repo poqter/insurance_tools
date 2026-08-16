@@ -243,7 +243,7 @@ def build_pdf(data: dict) -> bytes:
     except Exception:
         font = "Helvetica"
 
-    navy, blue, teal, muted, line = colors.HexColor("#16324F"), colors.HexColor("#1769DC"), colors.HexColor("#119B98"), colors.HexColor("#687F91"), colors.HexColor("#DCE6EE")
+    navy, blue, teal, muted, line = colors.HexColor("#16324F"), colors.HexColor("#2D6EAD"), colors.HexColor("#2A918C"), colors.HexColor("#687F91"), colors.HexColor("#DCE6EE")
 
     def text(x, y, value, size=9, color=navy, bold=False):
         c.setFillColor(color); c.setFont(font, size); c.drawString(x, y, str(value))
@@ -262,7 +262,8 @@ def build_pdf(data: dict) -> bytes:
     text(premium_x+5*mm, premium_y+19*mm, "월 보험료 비교", 12.5, navy)
 
     premium_max = max(data["current_premium"], data["fifth_premium"], 1)
-    bar_x, bar_w, bar_h = premium_x+31*mm, 128*mm, 3.7*mm
+    # 막대 영역과 금액 영역을 분리해 긴 막대가 숫자와 겹치지 않도록 합니다.
+    bar_x, bar_w, bar_h = premium_x+31*mm, 112*mm, 3.2*mm
     premium_rows = [
         ("현재 실손", data["current_premium"], blue, premium_y+12.5*mm),
         ("5세대", data["fifth_premium"], teal, premium_y+5*mm),
@@ -274,7 +275,7 @@ def build_pdf(data: dict) -> bytes:
         c.setFillColor(color)
         c.roundRect(bar_x, y, max(bar_w*value/premium_max, 1.2*mm), bar_h, bar_h/2, fill=1, stroke=0)
         c.setFillColor(navy); c.setFont(font, 11)
-        c.drawRightString(premium_x+174*mm, y+.5*mm, won(value))
+        c.drawRightString(premium_x+176*mm, y+.35*mm, won(value))
 
     if data["premium_diff"] > 0:
         difference_title = "월 절감 예상액"
@@ -345,23 +346,34 @@ def build_pdf(data: dict) -> bytes:
     text(chart_left+76*mm, chart_bottom+56*mm, "● 5세대", 10, teal)
     cumulative = [(years, data['current_premium']*12*years, data['fifth_premium']*12*years) for years in range(1, 6)]
     cumulative_max = max((max(current, fifth) for _, current, fifth in cumulative), default=1) or 1
-    c.setStrokeColor(colors.HexColor("#E3EBF1")); c.setLineWidth(.5)
+    # 차분한 보고서형 차트: 옅은 패널, 보조선, 슬림한 막대로 정보 위계를 정리합니다.
+    c.setFillColor(colors.HexColor("#F8FAFC"))
+    c.roundRect(chart_left, chart_bottom-1.5*mm, chart_width, 48*mm, 3*mm, fill=1, stroke=0)
     baseline = chart_bottom+14*mm
+    c.setStrokeColor(colors.HexColor("#E4EAF0")); c.setLineWidth(.45)
+    for ratio in (.25, .5, .75, 1.0):
+        grid_y = baseline+chart_height*ratio
+        c.line(chart_left+3*mm, grid_y, chart_left+chart_width-3*mm, grid_y)
+    c.setStrokeColor(colors.HexColor("#C9D5DF")); c.setLineWidth(.7)
     c.line(chart_left, baseline, chart_left+chart_width, baseline)
-    group_gap, bar_width = 45*mm, 9*mm
+    group_gap, bar_width = 45*mm, 7*mm
     for idx, (years, current, fifth) in enumerate(cumulative):
         group_x = chart_left+8*mm+idx*group_gap
-        for offset, value, color in ((0, current, blue), (10.5*mm, fifth, teal)):
+        for offset, value, color in ((0, current, blue), (9*mm, fifth, teal)):
             height = max(chart_height*value/cumulative_max, 1*mm)
             c.setFillColor(color)
-            c.roundRect(group_x+offset, baseline, bar_width, height, 1.3*mm, fill=1, stroke=0)
+            c.roundRect(group_x+offset, baseline, bar_width, height, .7*mm, fill=1, stroke=0)
             c.setFillColor(color); c.setFont(font, 8.5)
             c.drawCentredString(group_x+offset+bar_width/2, baseline+height+2*mm, compact_manwon(value))
-        center_x = group_x+9.75*mm
+        center_x = group_x+8*mm
         c.setFillColor(navy); c.setFont(font, 9.5)
         c.drawCentredString(center_x, chart_bottom+9.5*mm, f"{years}년")
-        c.setFillColor(colors.HexColor("#365D78")); c.setFont(font, 8.5)
-        c.drawCentredString(center_x, chart_bottom+4.5*mm, f"차이 {compact_manwon(abs(current-fifth))}")
+        diff_text = f"차이 {compact_manwon(abs(current-fifth))}"
+        badge_w = 28*mm
+        c.setFillColor(colors.HexColor("#EAF0F5"))
+        c.roundRect(center_x-badge_w/2, chart_bottom+2.2*mm, badge_w, 5.5*mm, 2.2*mm, fill=1, stroke=0)
+        c.setFillColor(colors.HexColor("#365D78")); c.setFont(font, 8.2)
+        c.drawCentredString(center_x, chart_bottom+4*mm, diff_text)
     c.showPage(); c.save(); output.seek(0)
     return output.getvalue()
 
