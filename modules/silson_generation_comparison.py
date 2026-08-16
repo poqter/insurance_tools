@@ -42,6 +42,11 @@ def won(value: float) -> str:
     return f"{int(round(value)):,}원"
 
 
+def compact_manwon(value: float) -> str:
+    amount = value / 10_000
+    return f"{amount:,.1f}".rstrip("0").rstrip(".") + "만원"
+
+
 def safe_filename(value: str) -> str:
     cleaned = "".join("_" if ch in '\\/:*?\"<>|' else ch for ch in value.strip())
     return cleaned or "OOO"
@@ -109,10 +114,11 @@ def inject_styles() -> None:
         .sc-track{height:1rem;border-radius:999px;background:#EAF0F4;overflow:hidden}.sc-fill-blue{height:100%;background:linear-gradient(90deg,#1769DC,#5B96E8);border-radius:999px}.sc-fill-teal{height:100%;background:linear-gradient(90deg,#119B98,#56BFBA);border-radius:999px}
         .sc-value{text-align:right;color:#203B50;font-weight:800}.sc-diff{margin-top:1rem;padding:.9rem 1rem;text-align:center;border-radius:12px;background:#EDF5FF;color:#174D91;font-weight:850}
         .sc-total{display:flex;align-items:end;justify-content:space-between;gap:1rem;margin:.9rem 0 1rem;padding:.85rem 1rem;border-radius:12px;background:#F3F7FA;color:#5B7182;font-size:.78rem}
-        .sc-total strong{color:#17364E;font-size:1.18rem}.sc-stack-wrap{display:grid;gap:1rem}.sc-stack-row{display:grid;grid-template-columns:7.2rem 1fr;align-items:center;gap:.8rem}
-        .sc-stack-name{color:#506A7D;font-size:.8rem;font-weight:750}.sc-stack{position:relative;display:flex;height:2.15rem;overflow:hidden;border-radius:10px;background:#E8EEF2;box-shadow:inset 0 0 0 1px rgba(61,91,112,.06)}
-        .sc-stack-part{height:100%}.sc-stack-current{background:linear-gradient(90deg,#1769DC,#4B8AE5)}.sc-stack-fifth{background:linear-gradient(90deg,#119B98,#4EBAB5)}.sc-stack-burden{background:linear-gradient(90deg,#E88B3D,#D96C2D)}
-        .sc-stack-label{position:absolute;top:50%;transform:translateY(-50%);z-index:2;color:white;font-size:.67rem;font-weight:850;text-shadow:0 1px 2px rgba(20,40,55,.28);white-space:nowrap}.sc-stack-left{left:.7rem}.sc-stack-right{right:.7rem}
+        .sc-total strong{color:#17364E;font-size:1.18rem}.sc-stack-wrap{display:grid;gap:1.15rem}.sc-stack-row{display:grid;grid-template-columns:7.2rem 1fr;align-items:center;gap:.8rem}
+        .sc-stack-name{color:#506A7D;font-size:.8rem;font-weight:750}.sc-stack-content{min-width:0}.sc-stack-values{display:flex;align-items:center;justify-content:space-between;gap:.65rem;margin-bottom:.38rem;font-size:.72rem;font-weight:850;white-space:nowrap}.sc-stack-insurance{color:#1769DC}.sc-stack-insurance-fifth{color:#119B98}.sc-stack-self{color:#D96C2D}.sc-stack-excluded-text{color:#71808C}
+        .sc-stack{display:flex;height:1.7rem;overflow:hidden;border-radius:9px;background:#E8EEF2;box-shadow:inset 0 0 0 1px rgba(61,91,112,.06)}
+        .sc-stack-part{height:100%}.sc-stack-current{background:linear-gradient(90deg,#1769DC,#4B8AE5)}.sc-stack-fifth{background:linear-gradient(90deg,#119B98,#4EBAB5)}.sc-stack-burden{background:linear-gradient(90deg,#E88B3D,#D96C2D)}.sc-stack-excluded{background:linear-gradient(90deg,#A6B0B8,#7D8993)}
+        .sc-example-note{display:flex;align-items:center;min-height:2.75rem;padding:.55rem .8rem;border:1px solid #DDE9F1;border-radius:10px;background:#F8FBFD;color:#60788A;font-size:.78rem}.sc-example-note b{margin-left:.25rem;color:#244C68;font-size:.86rem}
         .sc-basis{margin-top:.6rem;padding:.7rem .85rem;border:1px solid #DDE9F1;border-radius:10px;background:#F8FBFD;color:#687F91;font-size:.74rem;line-height:1.5}
         .sc-input-title{display:flex;align-items:center;justify-content:space-between;gap:.7rem;margin:0 0 .9rem;color:#17364E;font-size:1rem;font-weight:850}.sc-input-title:before{content:"";width:4px;height:18px;border-radius:99px;background:linear-gradient(#1769DC,#119B98)}
         .sc-input-title span:first-child{flex:1}.sc-subtitle{display:flex;align-items:center;justify-content:space-between;margin:.1rem 0 .75rem;color:#36566E;font-size:.84rem;font-weight:850}
@@ -120,11 +126,11 @@ def inject_styles() -> None:
         .sc-divider{height:1px;margin:1.1rem 0;background:linear-gradient(90deg,transparent,#D7E4EC 10%,#D7E4EC 90%,transparent)}
         .sc-cumulative-card{padding:1.05rem 1.1rem;border:1px solid #DCE6EE;border-radius:15px;background:#fff;box-shadow:0 10px 28px rgba(37,72,98,.055)}
         .sc-cumulative-year{margin-bottom:.8rem;color:#29485F;font-size:.92rem;font-weight:850}.sc-cumulative-row{display:flex;align-items:center;justify-content:space-between;gap:.65rem;padding:.48rem .62rem;border-radius:9px;font-size:.78rem;font-weight:750}
-        .sc-cumulative-row+.sc-cumulative-row{margin-top:.4rem}.sc-cumulative-current{background:#EDF4FF;color:#175FBF}.sc-cumulative-fifth{background:#EAF8F7;color:#117C79}.sc-cumulative-row strong{font-size:1.04rem;letter-spacing:-.025em;white-space:nowrap}
+        .sc-cumulative-row+.sc-cumulative-row{margin-top:.4rem}.sc-cumulative-current{background:#EDF4FF;color:#175FBF}.sc-cumulative-fifth{background:#EAF8F7;color:#117C79}.sc-cumulative-row strong{font-size:1.04rem;letter-spacing:-.025em;white-space:nowrap}.sc-cumulative-diff{display:flex;align-items:center;justify-content:space-between;gap:.6rem;margin-top:.65rem;padding:.55rem .65rem;border-top:1px solid #E1EAF0;color:#556F82;font-size:.76rem;font-weight:750}.sc-cumulative-diff strong{color:#173E62;font-size:.96rem;white-space:nowrap}
         .sc-cum-chart{margin-top:1rem;padding:1.15rem 1.25rem;border:1px solid #DCE6EE;border-radius:16px;background:#fff;box-shadow:0 11px 30px rgba(37,72,98,.055)}.sc-cum-chart-head{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1rem}.sc-cum-chart-title{color:#29485F;font-size:.92rem;font-weight:850}.sc-cum-legend{display:flex;gap:1rem;color:#63798A;font-size:.75rem;font-weight:750}.sc-cum-dot{display:inline-block;width:.55rem;height:.55rem;margin-right:.3rem;border-radius:50%}.sc-cum-dot-current{background:#1769DC}.sc-cum-dot-fifth{background:#119B98}
-        .sc-cum-plot{display:flex;align-items:end;gap:1.4rem;min-height:15rem;padding:.8rem .6rem .2rem;border-bottom:1px solid #DCE6EE}.sc-cum-group{flex:1;display:flex;align-items:end;justify-content:center;gap:1rem;height:13.5rem;position:relative;padding-bottom:1.6rem}.sc-cum-bar-col{width:min(5.2rem,38%);height:11rem;display:flex;flex-direction:column;justify-content:end;align-items:center}.sc-cum-bar-value{margin-bottom:.35rem;color:#29485F;font-size:.79rem;font-weight:850;white-space:nowrap}.sc-cum-bar{width:100%;min-height:.28rem;border-radius:9px 9px 3px 3px}.sc-cum-bar-current{background:linear-gradient(180deg,#4C8CE8,#1769DC)}.sc-cum-bar-fifth{background:linear-gradient(180deg,#50BDB8,#119B98)}.sc-cum-year{position:absolute;bottom:0;color:#3F5C71;font-size:.85rem;font-weight:850}
+        .sc-cum-plot{display:flex;align-items:end;gap:1.4rem;min-height:16rem;padding:.8rem .6rem .2rem;border-bottom:1px solid #DCE6EE}.sc-cum-group{flex:1;display:flex;align-items:end;justify-content:center;gap:1rem;height:14.5rem;position:relative;padding-bottom:3rem}.sc-cum-bar-col{width:min(5.2rem,38%);height:11rem;display:flex;flex-direction:column;justify-content:end;align-items:center}.sc-cum-bar-value{margin-bottom:.35rem;color:#29485F;font-size:.79rem;font-weight:850;white-space:nowrap}.sc-cum-bar{width:100%;min-height:.28rem;border-radius:9px 9px 3px 3px}.sc-cum-bar-current{background:linear-gradient(180deg,#4C8CE8,#1769DC)}.sc-cum-bar-fifth{background:linear-gradient(180deg,#50BDB8,#119B98)}.sc-cum-year{position:absolute;bottom:1.45rem;color:#3F5C71;font-size:.85rem;font-weight:850}.sc-cum-difference{position:absolute;bottom:.05rem;padding:.28rem .55rem;border-radius:999px;background:#EFF4F8;color:#244C6B;font-size:.75rem;font-weight:850;white-space:nowrap}
         .sc-note{margin-top:.65rem;color:#718393;font-size:.74rem;line-height:1.55}
-        @media(max-width:700px){.sc-bar-row{grid-template-columns:6.5rem 1fr}.sc-value{grid-column:2}.sc-rate-grid>div{padding:.65rem .4rem;font-size:.76rem}.sc-stack-row{grid-template-columns:1fr}.sc-stack-label{font-size:.6rem}.sc-cum-chart{overflow-x:auto}.sc-cum-plot{min-width:42rem}.sc-cum-chart-head{min-width:42rem}}
+        @media(max-width:700px){.sc-bar-row{grid-template-columns:6.5rem 1fr}.sc-value{grid-column:2}.sc-rate-grid>div{padding:.65rem .4rem;font-size:.76rem}.sc-stack-row{grid-template-columns:1fr}.sc-stack-values{font-size:.66rem;gap:.35rem}.sc-cum-chart{overflow-x:auto}.sc-cum-plot{min-width:42rem}.sc-cum-chart-head{min-width:42rem}}
         </style>
         """,
         unsafe_allow_html=True,
@@ -165,6 +171,7 @@ def medical_stacked_bars(
     current_burden: float,
     fifth_payout: float,
     fifth_burden: float,
+    excluded: float,
 ) -> None:
     denominator = max(total, 1)
     rows = []
@@ -173,13 +180,19 @@ def medical_stacked_bars(
         ("5세대 실손", fifth_payout, fifth_burden, "sc-stack-fifth"),
     ):
         payout_width = max(0.0, min(100.0, payout / denominator * 100))
-        burden_width = max(0.0, min(100.0, burden / denominator * 100))
+        covered_burden = max(0.0, burden - excluded)
+        burden_width = max(0.0, min(100.0, covered_burden / denominator * 100))
+        excluded_width = max(0.0, min(100.0, excluded / denominator * 100))
+        insurance_class = "sc-stack-insurance-fifth" if css == "sc-stack-fifth" else "sc-stack-insurance"
         rows.append(
             f'<div class="sc-stack-row"><span class="sc-stack-name">{name}</span>'
+            f'<div class="sc-stack-content"><div class="sc-stack-values">'
+            f'<span class="{insurance_class}">예상 보험금 {won(payout)}</span>'
+            f'<span class="sc-stack-self">본인 부담 {won(covered_burden)}</span>'
+            f'<span class="sc-stack-excluded-text">보상 제외 {won(excluded)}</span></div>'
             f'<div class="sc-stack"><div class="sc-stack-part {css}" style="width:{payout_width:.2f}%"></div>'
             f'<div class="sc-stack-part sc-stack-burden" style="width:{burden_width:.2f}%"></div>'
-            f'<span class="sc-stack-label sc-stack-left">예상 보험금 {won(payout)}</span>'
-            f'<span class="sc-stack-label sc-stack-right">본인 부담 {won(burden)}</span></div></div>'
+            f'<div class="sc-stack-part sc-stack-excluded" style="width:{excluded_width:.2f}%"></div></div></div></div>'
         )
     st.markdown(
         '<div class="sc-card"><b>총 의료비와 고객 부담 비교</b>'
@@ -191,7 +204,7 @@ def medical_stacked_bars(
 
 
 def cumulative_premium_chart(current_premium: float, fifth_premium: float) -> None:
-    values = [(years, current_premium * 12 * years, fifth_premium * 12 * years) for years in (1, 5, 10)]
+    values = [(years, current_premium * 12 * years, fifth_premium * 12 * years) for years in range(1, 6)]
     maximum = max((max(current, fifth) for _, current, fifth in values), default=1) or 1
     groups = []
     for years, current, fifth in values:
@@ -201,7 +214,7 @@ def cumulative_premium_chart(current_premium: float, fifth_premium: float) -> No
             '<div class="sc-cum-group">'
             f'<div class="sc-cum-bar-col"><span class="sc-cum-bar-value">{won(current)}</span><div class="sc-cum-bar sc-cum-bar-current" style="height:{current_height:.2f}%"></div></div>'
             f'<div class="sc-cum-bar-col"><span class="sc-cum-bar-value">{won(fifth)}</span><div class="sc-cum-bar sc-cum-bar-fifth" style="height:{fifth_height:.2f}%"></div></div>'
-            f'<span class="sc-cum-year">{years}년</span></div>'
+            f'<span class="sc-cum-year">{years}년</span><span class="sc-cum-difference">차이 {won(abs(current-fifth))}</span></div>'
         )
     st.markdown(
         '<div class="sc-cum-chart"><div class="sc-cum-chart-head"><span class="sc-cum-chart-title">누적 보험료 비교 그래프</span>'
@@ -294,50 +307,61 @@ def build_pdf(data: dict) -> bytes:
     c.setFillColor(navy); c.setFont(font, 11)
     c.drawRightString(chart_x+chart_w, chart_y-2*mm, won(data["total_medical"]))
     total = max(data["total_medical"], 1)
-    orange = colors.HexColor("#DD762F")
+    orange, gray = colors.HexColor("#DD762F"), colors.HexColor("#84909A")
+    excluded = data["excluded"]
     result_rows = [
         (f"현재 {data['generation']}", data["current_payout"], data["current_burden"], blue),
         ("5세대 실손", data["fifth_payout"], data["fifth_burden"], teal),
     ]
     for idx, (label, payout, burden, payout_color) in enumerate(result_rows):
         y = chart_y-21*mm-idx*20*mm
+        covered_burden = max(0, burden-excluded)
         text(chart_x, y+12*mm, label, 8.5, muted)
-        text(chart_x, y+7.5*mm, f"보험금  {won(payout)}", 8.2, payout_color)
-        c.setFillColor(orange); c.setFont(font, 8.2)
-        c.drawRightString(chart_x+chart_w, y+7.5*mm, f"본인 부담  {won(burden)}")
+        text(chart_x, y+7.5*mm, f"보험금 {compact_manwon(payout)}", 7.8, payout_color)
+        c.setFillColor(orange); c.setFont(font, 7.8)
+        c.drawCentredString(chart_x+chart_w*.60, y+7.5*mm, f"본인 부담 {compact_manwon(covered_burden)}")
+        c.setFillColor(gray); c.setFont(font, 7.8)
+        c.drawRightString(chart_x+chart_w, y+7.5*mm, f"보상 제외 {compact_manwon(excluded)}")
         payout_w = chart_w * max(0, min(payout / total, 1))
-        burden_w = chart_w * max(0, min(burden / total, 1))
+        burden_w = chart_w * max(0, min(covered_burden / total, 1))
+        excluded_w = chart_w * max(0, min(excluded / total, 1))
         c.setFillColor(colors.HexColor("#E8EEF2")); c.roundRect(chart_x, y, chart_w, 6*mm, 2*mm, fill=1, stroke=0)
         if payout_w > 0:
             c.setFillColor(payout_color); c.roundRect(chart_x, y, payout_w, 6*mm, 2*mm, fill=1, stroke=0)
         if burden_w > 0:
-            c.setFillColor(orange); c.roundRect(chart_x+chart_w-burden_w, y, burden_w, 6*mm, 2*mm, fill=1, stroke=0)
+            c.setFillColor(orange); c.rect(chart_x+payout_w, y, burden_w, 6*mm, fill=1, stroke=0)
+        if excluded_w > 0:
+            c.setFillColor(gray); c.roundRect(chart_x+chart_w-excluded_w, y, excluded_w, 6*mm, 2*mm, fill=1, stroke=0)
     text(chart_x, chart_y-60*mm, f"고객 부담 차이  {won(abs(data['burden_diff']))}", 11, navy)
 
-    # 누적 보험료 비교: 1·5·10년을 같은 축에서 비교하는 그룹 막대 차트
+    # 누적 보험료 비교: 1~5년을 같은 축에서 비교하는 그룹 막대 차트
     base_y = 25*mm
-    chart_left, chart_bottom, chart_width, chart_height = 21*mm, base_y, 132*mm, 40*mm
+    chart_left, chart_bottom, chart_width, chart_height = 21*mm, base_y, 132*mm, 30*mm
     text(chart_left, chart_bottom+54*mm, "누적 보험료 비교", 12, navy)
     text(chart_left+40*mm, chart_bottom+54*mm, "● 현재 실손", 9, blue)
     text(chart_left+70*mm, chart_bottom+54*mm, "● 5세대", 9, teal)
-    cumulative = [(years, data['current_premium']*12*years, data['fifth_premium']*12*years) for years in (1, 5, 10)]
+    cumulative = [(years, data['current_premium']*12*years, data['fifth_premium']*12*years) for years in range(1, 6)]
     cumulative_max = max((max(current, fifth) for _, current, fifth in cumulative), default=1) or 1
     c.setStrokeColor(colors.HexColor("#E3EBF1")); c.setLineWidth(.5)
-    c.line(chart_left, chart_bottom+5*mm, chart_left+chart_width, chart_bottom+5*mm)
-    group_gap, bar_width = 43*mm, 9*mm
+    baseline = chart_bottom+13*mm
+    c.line(chart_left, baseline, chart_left+chart_width, baseline)
+    group_gap, bar_width = 25.5*mm, 6*mm
     for idx, (years, current, fifth) in enumerate(cumulative):
-        group_x = chart_left+8*mm+idx*group_gap
-        for offset, value, color in ((0, current, blue), (16*mm, fifth, teal)):
+        group_x = chart_left+2.5*mm+idx*group_gap
+        for offset, value, color in ((0, current, blue), (7*mm, fifth, teal)):
             height = max(chart_height*value/cumulative_max, 1*mm)
             c.setFillColor(color)
-            c.roundRect(group_x+offset, chart_bottom+5*mm, bar_width, height, 1.5*mm, fill=1, stroke=0)
-        c.setFillColor(navy); c.setFont(font, 9.5)
-        c.drawCentredString(group_x+12.5*mm, chart_bottom+.8*mm, f"{years}년")
-        c.setFont(font, 8.2)
+            c.roundRect(group_x+offset, baseline, bar_width, height, 1.3*mm, fill=1, stroke=0)
+        center_x = group_x+6.5*mm
+        c.setFillColor(navy); c.setFont(font, 8.3)
+        c.drawCentredString(center_x, chart_bottom+9.2*mm, f"{years}년")
         c.setFillColor(blue)
-        c.drawCentredString(group_x+4.5*mm, chart_bottom+6.2*mm+max(chart_height*current/cumulative_max, 1*mm), won(current))
+        c.setFont(font, 7.2)
+        c.drawCentredString(center_x, chart_bottom+6.2*mm, f"현재 {compact_manwon(current)}")
         c.setFillColor(teal)
-        c.drawCentredString(group_x+20.5*mm, chart_bottom+6.2*mm+max(chart_height*fifth/cumulative_max, 1*mm), won(fifth))
+        c.drawCentredString(center_x, chart_bottom+3.4*mm, f"5세대 {compact_manwon(fifth)}")
+        c.setFillColor(colors.HexColor("#365D78")); c.setFont(font, 6.8)
+        c.drawCentredString(center_x, chart_bottom+.5*mm, f"차이 {compact_manwon(abs(current-fifth))}")
     text(166*mm, base_y+43*mm, "안내", 11, navy)
     notes = ["대표 자기부담률을 적용한 상담용 비교입니다.", "실제 지급액은 약관·한도·심사에 따라 달라집니다.", f"현재 보험료: {data['current_premium_basis']}", f"5세대 보험료: {data['premium_basis']} · {STANDARD_DATE}", "누적 보험료는 보험료 변동이 없는 가정입니다."]
     for i, note in enumerate(notes): text(166*mm, base_y+35*mm-i*6.2*mm, f"- {note}", 7.5, muted)
@@ -452,15 +476,19 @@ def run() -> None:
 
     comparison_bars("월 보험료 비교", current_premium, fifth_premium, f"월 보험료 차이 {won(abs(current_premium-fifth_premium))}")
 
-    section_intro("CASE", "입원·수술 사례 비교", "총 의료비는 아래 항목의 합계로 자동 계산됩니다.")
-    if st.button("일반 예시 금액 입력", key="sc_example"):
-        st.session_state.update(sc_salary=2_000_000, sc_severe=2_000_000, sc_nonsevere=500_000, sc_excluded=0)
-        st.rerun()
+    section_intro("CASE", "입원·수술 사례 비교", "금액은 만원 단위로 입력하며 총 의료비는 자동 계산됩니다.")
+    example_button_column, example_note_column = st.columns([0.34, 0.66], gap="small")
+    with example_button_column:
+        if st.button("일반 예시 금액 입력", key="sc_example", use_container_width=True):
+            st.session_state.update(sc_salary_manwon=150, sc_severe_manwon=0, sc_nonsevere_manwon=50, sc_excluded_manwon=30)
+            st.rerun()
+    with example_note_column:
+        st.markdown('<div class="sc-example-note">일반 예시 · 총 의료비 <b>230만원</b> 기준</div>', unsafe_allow_html=True)
     m1, m2, m3, m4 = st.columns(4)
-    salary = float(m1.number_input("급여 본인부담금", min_value=0, value=2_000_000, step=100_000, format="%d", key="sc_salary"))
-    severe = float(m2.number_input("중증 비급여", min_value=0, value=2_000_000, step=100_000, format="%d", key="sc_severe"))
-    nonsevere = float(m3.number_input("비중증 비급여", min_value=0, value=500_000, step=100_000, format="%d", key="sc_nonsevere"))
-    excluded = float(m4.number_input("보상 제외 가능 비급여", min_value=0, value=0, step=100_000, format="%d", key="sc_excluded"))
+    salary = float(m1.number_input("급여 의료비 (만원)", min_value=0, value=150, step=1, format="%d", key="sc_salary_manwon")) * 10_000
+    severe = float(m2.number_input("중증 비급여 (만원)", min_value=0, value=0, step=1, format="%d", key="sc_severe_manwon")) * 10_000
+    nonsevere = float(m3.number_input("비중증 비급여 (만원)", min_value=0, value=50, step=1, format="%d", key="sc_nonsevere_manwon")) * 10_000
+    excluded = float(m4.number_input("보상 제외 (만원)", min_value=0, value=30, step=1, format="%d", key="sc_excluded_manwon")) * 10_000
     medical = {"급여": salary, "중증 비급여": severe, "비중증 비급여": nonsevere, "보상 제외 가능 비급여": excluded}
     total_medical = sum(medical.values())
     current_payout, current_burden = calculate(medical, rates)
@@ -470,25 +498,26 @@ def run() -> None:
     k1.metric("총 의료비", won(total_medical))
     k2.metric(f"현재 {generation} 예상 보험금", won(current_payout))
     k3.metric("5세대 예상 보험금", won(fifth_payout))
-    medical_stacked_bars(total_medical, generation, current_payout, current_burden, fifth_payout, fifth_burden)
+    medical_stacked_bars(total_medical, generation, current_payout, current_burden, fifth_payout, fifth_burden, excluded)
 
     section_intro("RESULT", "누적 보험료", "현재 월 보험료가 동일하게 유지된다는 단순 가정입니다.")
-    cols = st.columns(3)
-    for col, years in zip(cols, (1, 5, 10)):
+    cols = st.columns(5)
+    for col, years in zip(cols, range(1, 6)):
         with col:
             st.markdown(
                 f'<div class="sc-cumulative-card"><div class="sc-cumulative-year">{years}년 누적</div>'
                 f'<div class="sc-cumulative-row sc-cumulative-current"><span>현재 실손</span><strong>{won(current_premium*12*years)}</strong></div>'
-                f'<div class="sc-cumulative-row sc-cumulative-fifth"><span>5세대 실손</span><strong>{won(fifth_premium*12*years)}</strong></div></div>',
+                f'<div class="sc-cumulative-row sc-cumulative-fifth"><span>5세대 실손</span><strong>{won(fifth_premium*12*years)}</strong></div>'
+                f'<div class="sc-cumulative-diff"><span>누적 보험료 차이</span><strong>{won(abs((current_premium-fifth_premium)*12*years))}</strong></div></div>',
                 unsafe_allow_html=True,
             )
     cumulative_premium_chart(current_premium, fifth_premium)
 
     saving = current_premium - fifth_premium
     burden_gap = fifth_burden - current_burden
-    if saving > 0 and saving * 120 > max(burden_gap, 0):
+    if saving > 0 and saving * 60 > max(burden_gap, 0):
         result_text = "보험료 절감 효과가 큼"
-    elif burden_gap > saving * 120 and burden_gap > 0:
+    elif burden_gap > saving * 60 and burden_gap > 0:
         result_text = "현재 실손 유지의 보장 가치가 큼"
     else:
         result_text = "보험료와 보장 차이를 함께 비교할 필요가 있음"
@@ -499,7 +528,7 @@ def run() -> None:
         "current_rates": rates, "current_premium": current_premium, "fifth_premium": fifth_premium,
         "premium_diff": current_premium-fifth_premium, "current_payout": current_payout, "fifth_payout": fifth_payout,
         "current_burden": current_burden, "fifth_burden": fifth_burden, "burden_diff": fifth_burden-current_burden,
-        "total_medical": total_medical, "premium_basis": premium_basis, "current_premium_basis": current_premium_basis,
+        "total_medical": total_medical, "excluded": excluded, "premium_basis": premium_basis, "current_premium_basis": current_premium_basis,
     }
     pdf = build_pdf(data)
     filename = f"{safe_filename(data['customer'])}님_실손보험_세대비교_{date.today():%Y%m%d}.pdf"
