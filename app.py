@@ -5,6 +5,7 @@ from pathlib import Path
 import streamlit as st
 import modules.commission_calculator as commission_calculator
 import modules.insurance_claim_guide as insurance_claim_guide
+import modules.silson_generation_comparison as silson_generation_comparison
 
 from modules import (
     analyzer,
@@ -117,6 +118,12 @@ APP_DEFINITIONS = {
         "description": "청구 항목별 필요서류를 안내하고 보장분석 PDF에서 관련 담보를 찾습니다.",
         "action": "청구 가이드 시작", "run": insurance_claim_guide.run,
     },
+    "silson_generation_comparison": {
+        "name": "실손보험 세대 비교", "icon": "🩺", "code": "SC", "category": "고객 상담",
+        "badge": {"text": "NEW", "tone": "new"},
+        "description": "현재 가입 실손과 5세대 실손의 보험료와 입원 보장을 비교합니다.",
+        "action": "실손 세대 비교 시작", "run": silson_generation_comparison.run,
+    },
     "convention": {
         "name": "컨벤션 계산기", "icon": "🏆", "code": "CV", "category": "실적 관리",
         "description": "계약 실적을 환산하고 컨벤션 달성 여부를 확인합니다.", "action": "컨벤션 계산 시작", "run": convention.run,
@@ -142,6 +149,7 @@ APP_DEFINITIONS = {
 HOME_ICONS = {
     "analyzer": '<svg viewBox="0 0 24 24"><path d="M9 11l2 2 4-4"/><path d="M12 3l7 3v5c0 4.6-3 8.1-7 10-4-1.9-7-5.4-7-10V6l7-3z"/></svg>',
     "insurance_claim_guide": '<svg viewBox="0 0 24 24"><path d="M7 3h10v3H7z"/><path d="M5 5h14v16H5z"/><path d="M8 11l2 2 4-4M8 17h8"/></svg>',
+    "silson_generation_comparison": '<svg viewBox="0 0 24 24"><path d="M6 3v6a6 6 0 0012 0V3"/><path d="M9 3v5a3 3 0 006 0V3M12 15v6"/><circle cx="18" cy="18" r="3"/></svg>',
     "remodeling": '<svg viewBox="0 0 24 24"><path d="M20 7h-6V1"/><path d="M20 7a9 9 0 10 1 7"/><path d="M4 17h6v6"/></svg>',
     "deposit_vs_shortpay": '<svg viewBox="0 0 24 24"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v5c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 11v5c0 1.7 3.1 3 7 3 1 0 2-.1 2.8-.3"/><circle cx="18" cy="17" r="3"/><path d="M18 15.5v3M16.8 16.2h2.4"/></svg>',
     "renewal_vs_nonrenewal": '<svg viewBox="0 0 24 24"><path d="M20 7h-5V2"/><path d="M20 7a8 8 0 00-14.5-2"/><path d="M4 17h5v5"/><path d="M4 17a8 8 0 0014.5 2"/></svg>',
@@ -157,6 +165,7 @@ HOME_ICONS = {
 USER_PERMISSIONS = {
     "Admin": {
         "insurance_claim_guide": True,
+        "silson_generation_comparison": True,
         "analyzer": True, "remodeling": True, "deposit_vs_shortpay": True,
         "renewal_vs_nonrenewal": True, "inheritance_tax": True,
         "insurer_portal": True,
@@ -165,6 +174,7 @@ USER_PERMISSIONS = {
     },
     "Manager1": {
         "insurance_claim_guide": True,
+        "silson_generation_comparison": True,
         "analyzer": True, "remodeling": True, "deposit_vs_shortpay": True,
         "renewal_vs_nonrenewal": True, "inheritance_tax": True,
         "insurer_portal": True,
@@ -173,6 +183,7 @@ USER_PERMISSIONS = {
     },
     "Basic": {
         "insurance_claim_guide": True,
+        "silson_generation_comparison": True,
         "analyzer": True, "remodeling": False, "deposit_vs_shortpay": False,
         "renewal_vs_nonrenewal": False, "inheritance_tax": False,
         "insurer_portal": True,
@@ -181,6 +192,7 @@ USER_PERMISSIONS = {
     },
     "Crew": {
         "insurance_claim_guide": True,
+        "silson_generation_comparison": True,
         "analyzer": True, "remodeling": False, "deposit_vs_shortpay": True,
         "renewal_vs_nonrenewal": True, "inheritance_tax": False,
         "insurer_portal": True,
@@ -189,6 +201,7 @@ USER_PERMISSIONS = {
     },
     "Dream": {
         "insurance_claim_guide": True,
+        "silson_generation_comparison": True,
         "analyzer": True, "remodeling": True, "deposit_vs_shortpay": True,
         "renewal_vs_nonrenewal": True, "inheritance_tax": True,
         "insurer_portal": True,
