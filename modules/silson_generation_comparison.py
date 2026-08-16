@@ -22,7 +22,6 @@ except ImportError:  # 단독 점검용
 
 STANDARD_DATE = "2026.08"
 FIFTH_RATES = {"급여": 20.0, "중증 비급여": 30.0, "비중증 비급여": 50.0}
-CLAIM_LEVELS = ["없음", "50만원 미만", "50~100만원", "100~300만원", "300만원 이상", "직접 입력"]
 PREMIUM_MODES = ["연령별 예상 보험료", "가입제안서 직접 입력"]
 
 # 공개된 대표 보험료 예시를 상담용 곡선으로 환산하기 위한 기준값입니다.
@@ -32,8 +31,8 @@ REFERENCE_PREMIUM = {
     "여성": {"age_40_full": 19_000, "annual_factor": 1.038},
 }
 CURRENT_PREMIUM_REFERENCE = {
-    "남성": {"1세대": 54_300, "2세대": 33_700, "3세대": 22_000, "4세대": 14_600},
-    "여성": {"1세대": 60_000, "2세대": 40_000, "3세대": 24_000, "4세대": 16_000},
+    "남성": {"1세대": 57_000, "2세대": 42_000, "3세대": 26_700, "4세대": 17_500},
+    "여성": {"1세대": 65_000, "2세대": 49_000, "3세대": 30_000, "4세대": 20_000},
 }
 CURRENT_PREMIUM_AGE_FACTOR = {"1세대": 1.048, "2세대": 1.047, "3세대": 1.043, "4세대": 1.040}
 
@@ -76,7 +75,7 @@ def estimate_fifth_premium(age: int, gender: str) -> int:
     """공개된 대표 연령 보험료를 바탕으로 1세 단위 상담용 참고값을 계산합니다."""
     reference = REFERENCE_PREMIUM[gender]
     full_premium = reference["age_40_full"] * (reference["annual_factor"] ** (age - 40))
-    return max(1_000, int(round(full_premium / 100) * 100))
+    return max(1_000, int(round(full_premium)))
 
 
 def estimate_current_premium(age: int, gender: str, generation: str, option: str) -> int:
@@ -90,7 +89,7 @@ def estimate_current_premium(age: int, gender: str, generation: str, option: str
         option_factor = 0.85
     elif generation == "3세대" and option == "급여 20%형":
         option_factor = 0.90
-    return max(1_000, int(round(age_adjusted * option_factor / 100) * 100))
+    return max(1_000, int(round(age_adjusted * option_factor)))
 
 
 def _mark_reference_premium_modified() -> None:
@@ -422,7 +421,7 @@ def run() -> None:
                 st.number_input(
                     "현재 실손 월 보험료",
                     min_value=0,
-                    step=100,
+                    step=1,
                     format="%d",
                     key="sc_current_premium",
                     on_change=_mark_current_premium_modified,
@@ -437,10 +436,6 @@ def run() -> None:
                 '보험회사와 갱신 이력에 따라 달라질 수 있으며 금액을 수정하면 실제 납부 보험료로 반영됩니다.</div>',
                 unsafe_allow_html=True,
             )
-
-            claim_level = st.selectbox("최근 1년 실손보험금 수령 수준", CLAIM_LEVELS, key="sc_claim_level")
-            if claim_level == "직접 입력":
-                st.number_input("최근 1년 수령 보험금", min_value=0, step=100_000, format="%d", key="sc_claim_exact")
 
             st.markdown('<div class="sc-divider"></div>', unsafe_allow_html=True)
             st.markdown('<div class="sc-subtitle"><span>5세대 비교 실손</span><span class="sc-fixed-badge">전체 보장형 고정</span></div>', unsafe_allow_html=True)
@@ -457,7 +452,7 @@ def run() -> None:
                     st.number_input(
                         "비교에 적용할 5세대 월 보험료",
                         min_value=0,
-                        step=100,
+                        step=1,
                         format="%d",
                         key="sc_reference_premium",
                         on_change=_mark_reference_premium_modified,
@@ -472,7 +467,7 @@ def run() -> None:
                 )
             else:
                 fifth_premium = float(
-                    st.number_input("가입제안서의 5세대 월 보험료", min_value=0, value=30_000, step=100, format="%d", key="sc_direct_premium")
+                    st.number_input("가입제안서의 5세대 월 보험료", min_value=0, value=30_000, step=1, format="%d", key="sc_direct_premium")
                 )
                 premium_basis = "가입제안서 직접 입력 금액 · 전체 보장형"
 
@@ -522,16 +517,6 @@ def run() -> None:
                 unsafe_allow_html=True,
             )
     cumulative_premium_chart(current_premium, fifth_premium)
-
-    saving = current_premium - fifth_premium
-    burden_gap = fifth_burden - current_burden
-    if saving > 0 and saving * 60 > max(burden_gap, 0):
-        result_text = "보험료 절감 효과가 큼"
-    elif burden_gap > saving * 60 and burden_gap > 0:
-        result_text = "현재 실손 유지의 보장 가치가 큼"
-    else:
-        result_text = "보험료와 보장 차이를 함께 비교할 필요가 있음"
-    st.info(f"비교 요약 · **{result_text}**")
 
     data = {
         "customer": customer.strip() or "OOO", "consultant": consultant.strip(), "generation": generation,
