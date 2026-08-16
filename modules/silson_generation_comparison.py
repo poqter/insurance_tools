@@ -24,7 +24,6 @@ STANDARD_DATE = "2026.08"
 FIFTH_RATES = {"급여": 20.0, "중증 비급여": 30.0, "비중증 비급여": 50.0}
 CLAIM_LEVELS = ["없음", "50만원 미만", "50~100만원", "100~300만원", "300만원 이상", "직접 입력"]
 PREMIUM_MODES = ["연령별 예상 보험료", "가입제안서 직접 입력"]
-COVERAGE_OPTIONS = ["전체 보장형", "핵심 보장형"]
 
 # 공개된 대표 보험료 예시를 상담용 곡선으로 환산하기 위한 기준값입니다.
 # 보험료 환경이 바뀌면 이 값만 수정할 수 있도록 한곳에 모았습니다.
@@ -32,6 +31,11 @@ REFERENCE_PREMIUM = {
     "남성": {"age_40_full": 17_000, "annual_factor": 1.038},
     "여성": {"age_40_full": 19_000, "annual_factor": 1.038},
 }
+CURRENT_PREMIUM_REFERENCE = {
+    "남성": {"1세대": 54_300, "2세대": 33_700, "3세대": 22_000, "4세대": 14_600},
+    "여성": {"1세대": 60_000, "2세대": 40_000, "3세대": 24_000, "4세대": 16_000},
+}
+CURRENT_PREMIUM_AGE_FACTOR = {"1세대": 1.048, "2세대": 1.047, "3세대": 1.043, "4세대": 1.040}
 
 
 def won(value: float) -> str:
@@ -63,16 +67,33 @@ def calculate(medical: Dict[str, float], rates: Dict[str, float]) -> Tuple[float
     return max(0.0, covered - burden), burden + excluded
 
 
-def estimate_fifth_premium(age: int, gender: str, coverage: str) -> int:
+def estimate_fifth_premium(age: int, gender: str) -> int:
     """공개된 대표 연령 보험료를 바탕으로 1세 단위 상담용 참고값을 계산합니다."""
     reference = REFERENCE_PREMIUM[gender]
     full_premium = reference["age_40_full"] * (reference["annual_factor"] ** (age - 40))
-    coverage_factor = 1.0 if coverage == "전체 보장형" else 0.72
-    return max(1_000, int(round(full_premium * coverage_factor / 100) * 100))
+    return max(1_000, int(round(full_premium / 100) * 100))
+
+
+def estimate_current_premium(age: int, gender: str, generation: str, option: str) -> int:
+    """세대·연령·성별·계약유형을 반영한 현재 실손의 상담용 참고 보험료입니다."""
+    base = CURRENT_PREMIUM_REFERENCE[gender][generation]
+    age_adjusted = base * (CURRENT_PREMIUM_AGE_FACTOR[generation] ** (age - 40))
+    option_factor = 1.0
+    if generation == "1세대":
+        option_factor = {"0%": 1.0, "10%": 0.92, "20%": 0.85}.get(option, 1.0)
+    elif generation == "2세대" and option == "20%형":
+        option_factor = 0.85
+    elif generation == "3세대" and option == "급여 20%형":
+        option_factor = 0.90
+    return max(1_000, int(round(age_adjusted * option_factor / 100) * 100))
 
 
 def _mark_reference_premium_modified() -> None:
     st.session_state["sc_reference_modified"] = True
+
+
+def _mark_current_premium_modified() -> None:
+    st.session_state["sc_current_modified"] = True
 
 
 def inject_styles() -> None:
@@ -93,6 +114,10 @@ def inject_styles() -> None:
         .sc-stack-part{height:100%}.sc-stack-current{background:linear-gradient(90deg,#1769DC,#4B8AE5)}.sc-stack-fifth{background:linear-gradient(90deg,#119B98,#4EBAB5)}.sc-stack-burden{background:linear-gradient(90deg,#E88B3D,#D96C2D)}
         .sc-stack-label{position:absolute;top:50%;transform:translateY(-50%);z-index:2;color:white;font-size:.67rem;font-weight:850;text-shadow:0 1px 2px rgba(20,40,55,.28);white-space:nowrap}.sc-stack-left{left:.7rem}.sc-stack-right{right:.7rem}
         .sc-basis{margin-top:.6rem;padding:.7rem .85rem;border:1px solid #DDE9F1;border-radius:10px;background:#F8FBFD;color:#687F91;font-size:.74rem;line-height:1.5}
+        .sc-input-title{display:flex;align-items:center;justify-content:space-between;gap:.7rem;margin:0 0 .9rem;color:#17364E;font-size:1rem;font-weight:850}.sc-input-title:before{content:"";width:4px;height:18px;border-radius:99px;background:linear-gradient(#1769DC,#119B98)}
+        .sc-input-title span:first-child{flex:1}.sc-subtitle{display:flex;align-items:center;justify-content:space-between;margin:.1rem 0 .75rem;color:#36566E;font-size:.84rem;font-weight:850}
+        .sc-fixed-badge{display:inline-flex;align-items:center;padding:.25rem .55rem;border:1px solid #BCE1DE;border-radius:999px;background:#EAF8F7;color:#147C79;font-size:.65rem;font-weight:850}
+        .sc-divider{height:1px;margin:1.1rem 0;background:linear-gradient(90deg,transparent,#D7E4EC 10%,#D7E4EC 90%,transparent)}
         .sc-note{margin-top:.65rem;color:#718393;font-size:.74rem;line-height:1.55}
         @media(max-width:700px){.sc-bar-row{grid-template-columns:6.5rem 1fr}.sc-value{grid-column:2}.sc-rate-grid>div{padding:.65rem .4rem;font-size:.76rem}.sc-stack-row{grid-template-columns:1fr}.sc-stack-label{font-size:.6rem}}
         </style>
@@ -286,8 +311,8 @@ def build_pdf(data: dict) -> bytes:
         c.drawCentredString(group_x+4*mm, chart_bottom+6*mm+max(chart_height*current/cumulative_max, 1*mm), won(current))
         c.drawCentredString(group_x+13.5*mm, chart_bottom+6*mm+max(chart_height*fifth/cumulative_max, 1*mm), won(fifth))
     text(166*mm, base_y+54*mm, "안내", 10, navy)
-    notes = ["본 자료는 입력값과 대표 자기부담률을 이용한 간단 비교입니다.", "실제 지급액은 약관, 공제금액, 보상한도와 심사 결과에 따라 달라질 수 있습니다.", f"5세대 보험료: {data['premium_basis']} · 기준일 {STANDARD_DATE}", "누적 보험료는 현재 월 보험료가 변동 없이 유지된다고 가정했습니다."]
-    for i, note in enumerate(notes): text(166*mm, base_y+44*mm-i*7*mm, f"- {note}", 7, muted)
+    notes = ["본 자료는 입력값과 대표 자기부담률을 이용한 간단 비교입니다.", "실제 지급액은 약관, 공제금액, 보상한도와 심사 결과에 따라 달라질 수 있습니다.", f"현재 보험료: {data['current_premium_basis']}", f"5세대 보험료: {data['premium_basis']} · 기준일 {STANDARD_DATE}", "누적 보험료는 현재 월 보험료가 변동 없이 유지된다고 가정했습니다."]
+    for i, note in enumerate(notes): text(166*mm, base_y+46*mm-i*6*mm, f"- {note}", 6.7, muted)
     c.showPage(); c.save(); output.seek(0)
     return output.getvalue()
 
@@ -301,67 +326,93 @@ def run() -> None:
         st.caption("세대별 대표 자기부담률을 적용하는 상담용 간단 비교이며, 실제 계약의 약관과 공제금액이 우선합니다.")
 
     section_intro("INPUT", "기본 정보", "고객 정보와 비교할 실손 세대를 입력해 주세요.")
-    with st.container(border=True):
-        c1, c2, c3 = st.columns(3)
-        customer = c1.text_input("고객명 (선택)", placeholder="예: 홍길동", key="sc_customer")
-        consultant = c2.text_input("담당자 (선택)", placeholder="예: 박병선", key="sc_consultant")
-        generation = c3.selectbox("현재 실손 세대", ["1세대", "2세대", "3세대", "4세대"], index=1, key="sc_generation")
+    customer_column, insurance_column = st.columns([0.4, 0.6], gap="medium")
+    with customer_column:
+        with st.container(border=True):
+            st.markdown('<div class="sc-input-title"><span>고객·상담 정보</span></div>', unsafe_allow_html=True)
+            customer = st.text_input("고객명 (선택)", placeholder="예: 홍길동", key="sc_customer")
+            consultant = st.text_input("담당자 (선택)", placeholder="예: 박병선", key="sc_consultant")
+            age = int(st.number_input("실제 만 나이", min_value=0, max_value=100, value=40, step=1, key="sc_age"))
+            gender = st.selectbox("성별", ["남성", "여성"], key="sc_gender")
 
-        o1, o2 = st.columns(2)
-        if generation == "1세대":
-            option = o1.selectbox("현재 계약 자기부담률", ["0%", "10%", "20%"], help="1세대는 계약별 차이가 커 실제 증권에 맞게 선택해 주세요.")
-        elif generation == "2세대":
-            option = o1.selectbox("현재 계약 유형", ["10%형", "20%형"])
-        elif generation == "3세대":
-            option = o1.selectbox("급여 자기부담 유형", ["급여 10%형", "급여 20%형"])
-        else:
-            option = "4세대 대표 기준"
-            o1.text_input("현재 계약 유형", value=option, disabled=True)
-        claim_level = o2.selectbox("최근 1년 실손보험금 수령 수준", CLAIM_LEVELS)
-        if claim_level == "직접 입력":
-            st.number_input("최근 1년 수령 보험금", min_value=0, step=100_000, format="%d", key="sc_claim_exact")
+    with insurance_column:
+        with st.container(border=True):
+            st.markdown('<div class="sc-input-title"><span>실손 비교 정보</span></div>', unsafe_allow_html=True)
+            st.markdown('<div class="sc-subtitle"><span>현재 가입 실손</span></div>', unsafe_allow_html=True)
+            generation = st.selectbox("현재 실손 세대", ["1세대", "2세대", "3세대", "4세대"], index=1, key="sc_generation")
+            if generation == "1세대":
+                option = st.selectbox("현재 계약 자기부담률", ["0%", "10%", "20%"], help="1세대는 계약별 차이가 커 실제 증권에 맞게 선택해 주세요.", key="sc_contract_option_1")
+            elif generation == "2세대":
+                option = st.selectbox("현재 계약 유형", ["10%형", "20%형"], key="sc_contract_option_2")
+            elif generation == "3세대":
+                option = st.selectbox("급여 자기부담 유형", ["급여 10%형", "급여 20%형"], key="sc_contract_option_3")
+            else:
+                option = "4세대 대표 기준"
+                st.text_input("현재 계약 유형", value=option, disabled=True, key="sc_contract_option_4")
 
-        p1, p2 = st.columns(2)
-        current_premium = float(p1.number_input("현재 실손 월 보험료", min_value=0, value=60_000, step=1_000, format="%d"))
-        premium_mode = p2.radio("5세대 보험료 입력 방식", PREMIUM_MODES, index=0, horizontal=True)
-
-        if premium_mode == "연령별 예상 보험료":
-            a1, a2, a3 = st.columns(3)
-            age = int(a1.number_input("실제 만 나이", min_value=0, max_value=100, value=40, step=1))
-            gender = a2.selectbox("성별", ["남성", "여성"])
-            coverage = a3.selectbox(
-                "5세대 보장구성",
-                COVERAGE_OPTIONS,
-                help="전체 보장형은 급여·중증·비중증 비급여, 핵심 보장형은 급여·중증 비급여 중심의 상담용 구분입니다.",
-            )
-            estimated_premium = estimate_fifth_premium(age, gender, coverage)
-            reference_signature = (age, gender, coverage)
-            if st.session_state.get("sc_reference_signature") != reference_signature:
-                st.session_state["sc_reference_signature"] = reference_signature
-                st.session_state["sc_reference_premium"] = estimated_premium
-                st.session_state["sc_reference_modified"] = False
-            fifth_premium = float(
+            estimated_current = estimate_current_premium(age, gender, generation, option)
+            current_signature = (age, gender, generation, option)
+            if st.session_state.get("sc_current_signature") != current_signature:
+                st.session_state["sc_current_signature"] = current_signature
+                st.session_state["sc_current_premium"] = estimated_current
+                st.session_state["sc_current_modified"] = False
+            current_premium = float(
                 st.number_input(
-                    "비교에 적용할 5세대 월 보험료",
+                    "현재 실손 월 보험료",
                     min_value=0,
                     step=100,
                     format="%d",
-                    key="sc_reference_premium",
-                    on_change=_mark_reference_premium_modified,
+                    key="sc_current_premium",
+                    on_change=_mark_current_premium_modified,
+                    help="처음에는 세대·연령·성별 참고값이 표시되며 실제 납부 보험료를 알고 있다면 수정할 수 있습니다.",
                 )
             )
-            reference_modified = bool(st.session_state.get("sc_reference_modified", False))
-            premium_basis = "연령 기준 예상값을 사용자가 수정한 금액" if reference_modified else f"만 {age}세 {gender} · {coverage} 예상값"
+            current_modified = bool(st.session_state.get("sc_current_modified", False))
+            current_premium_basis = "실제 납부 보험료" if current_modified else f"{generation} · 만 {age}세 {gender} 예상값"
+            current_basis_title = "실제 납부 보험료" if current_modified else "세대·연령 기준 예상금액"
             st.markdown(
-                f'<div class="sc-basis"><b>공개 보험료 예시 기반 상담용 추정값</b> · 만 {age}세 {gender} · {coverage}<br>'
-                f'실제 보험료는 보험회사, 직업, 가입조건에 따라 달라질 수 있으며 현재 표시된 금액을 직접 수정할 수 있습니다.</div>',
+                f'<div class="sc-basis"><b>{current_basis_title}</b> · {current_premium_basis}<br>'
+                '보험회사와 갱신 이력에 따라 달라질 수 있으며 금액을 수정하면 실제 납부 보험료로 반영됩니다.</div>',
                 unsafe_allow_html=True,
             )
-        else:
-            fifth_premium = float(
-                st.number_input("가입제안서의 5세대 월 보험료", min_value=0, value=30_000, step=100, format="%d", key="sc_direct_premium")
-            )
-            premium_basis = "가입제안서 직접 입력 금액"
+
+            claim_level = st.selectbox("최근 1년 실손보험금 수령 수준", CLAIM_LEVELS, key="sc_claim_level")
+            if claim_level == "직접 입력":
+                st.number_input("최근 1년 수령 보험금", min_value=0, step=100_000, format="%d", key="sc_claim_exact")
+
+            st.markdown('<div class="sc-divider"></div>', unsafe_allow_html=True)
+            st.markdown('<div class="sc-subtitle"><span>5세대 비교 실손</span><span class="sc-fixed-badge">전체 보장형 고정</span></div>', unsafe_allow_html=True)
+            premium_mode = st.radio("5세대 보험료 입력 방식", PREMIUM_MODES, index=0, horizontal=True, key="sc_premium_mode")
+
+            if premium_mode == "연령별 예상 보험료":
+                estimated_premium = estimate_fifth_premium(age, gender)
+                reference_signature = (age, gender)
+                if st.session_state.get("sc_reference_signature") != reference_signature:
+                    st.session_state["sc_reference_signature"] = reference_signature
+                    st.session_state["sc_reference_premium"] = estimated_premium
+                    st.session_state["sc_reference_modified"] = False
+                fifth_premium = float(
+                    st.number_input(
+                        "비교에 적용할 5세대 월 보험료",
+                        min_value=0,
+                        step=100,
+                        format="%d",
+                        key="sc_reference_premium",
+                        on_change=_mark_reference_premium_modified,
+                    )
+                )
+                reference_modified = bool(st.session_state.get("sc_reference_modified", False))
+                premium_basis = "연령 기준 예상값을 사용자가 수정한 금액 · 전체 보장형" if reference_modified else f"만 {age}세 {gender} · 전체 보장형 예상값"
+                st.markdown(
+                    f'<div class="sc-basis"><b>공개 보험료 예시 기반 상담용 추정값</b> · 만 {age}세 {gender} · 전체 보장형<br>'
+                    f'실제 보험료는 보험회사, 직업, 가입조건에 따라 달라질 수 있으며 현재 표시된 금액을 직접 수정할 수 있습니다.</div>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                fifth_premium = float(
+                    st.number_input("가입제안서의 5세대 월 보험료", min_value=0, value=30_000, step=100, format="%d", key="sc_direct_premium")
+                )
+                premium_basis = "가입제안서 직접 입력 금액 · 전체 보장형"
 
     rates = current_rates(generation, option)
     section_intro("COMPARE", "한눈에 보는 핵심 차이", "선택한 현재 실손의 대표 기준과 5세대 기준을 비교합니다.")
@@ -415,7 +466,7 @@ def run() -> None:
         "current_rates": rates, "current_premium": current_premium, "fifth_premium": fifth_premium,
         "premium_diff": current_premium-fifth_premium, "current_payout": current_payout, "fifth_payout": fifth_payout,
         "current_burden": current_burden, "fifth_burden": fifth_burden, "burden_diff": fifth_burden-current_burden,
-        "total_medical": total_medical, "premium_basis": premium_basis,
+        "total_medical": total_medical, "premium_basis": premium_basis, "current_premium_basis": current_premium_basis,
     }
     pdf = build_pdf(data)
     filename = f"{safe_filename(data['customer'])}님_실손보험_세대비교_{date.today():%Y%m%d}.pdf"
