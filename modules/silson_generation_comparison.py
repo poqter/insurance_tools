@@ -323,27 +323,17 @@ def build_pdf(data: dict) -> bytes:
         c.drawCentredString(chart_x+chart_w*.60, y+7.5*mm, f"본인 부담 {compact_manwon(covered_burden)}")
         c.setFillColor(gray); c.setFont(font, 8.5)
         c.drawRightString(chart_x+chart_w, y+7.5*mm, f"보상 제외 {compact_manwon(excluded)}")
-        payout_w = chart_w * max(0, min(payout / total, 1))
-        burden_w = chart_w * max(0, min(covered_burden / total, 1))
-        excluded_w = chart_w * max(0, min(excluded / total, 1))
-        c.setFillColor(colors.HexColor("#E8EEF2")); c.roundRect(chart_x, y, chart_w, 6*mm, 2*mm, fill=1, stroke=0)
-        if payout_w > 0:
-            c.setFillColor(payout_color); c.roundRect(chart_x, y, payout_w, 6*mm, 2*mm, fill=1, stroke=0)
-        if burden_w > 0:
-            # 중간 구간도 부드러운 모서리를 적용하되 미세하게 겹쳐 구간 사이의 흰 틈을 방지합니다.
-            overlap = .45*mm
-            c.setFillColor(orange)
-            c.roundRect(
-                chart_x+payout_w-overlap,
-                y,
-                burden_w+overlap*2,
-                6*mm,
-                1.15*mm,
-                fill=1,
-                stroke=0,
-            )
-        if excluded_w > 0:
-            c.setFillColor(gray); c.roundRect(chart_x+chart_w-excluded_w, y, excluded_w, 6*mm, 2*mm, fill=1, stroke=0)
+        # 세 구간을 겹치지 않는 독립형 세그먼트로 배치해 접합부를 깔끔하게 표현합니다.
+        segments = [(payout, payout_color), (covered_burden, orange), (excluded, gray)]
+        active_segments = [(value, color) for value, color in segments if value > 0]
+        segment_gap = 1.05*mm
+        usable_width = chart_w-segment_gap*max(0, len(active_segments)-1)
+        segment_x = chart_x
+        for value, segment_color in active_segments:
+            segment_width = usable_width*max(0, min(value/total, 1))
+            c.setFillColor(segment_color)
+            c.roundRect(segment_x, y, segment_width, 6*mm, 1.45*mm, fill=1, stroke=0)
+            segment_x += segment_width+segment_gap
     c.setFillColor(colors.HexColor("#EEF5FB")); c.roundRect(chart_x, chart_y-63*mm, chart_w, 11*mm, 3*mm, fill=1, stroke=0)
     text(chart_x+4*mm, chart_y-59.5*mm, "고객 부담 차이", 10, muted)
     c.setFillColor(navy); c.setFont(font, 13)
@@ -370,12 +360,12 @@ def build_pdf(data: dict) -> bytes:
     group_gap, bar_width = 45*mm, 7*mm
     for idx, (years, current, fifth) in enumerate(cumulative):
         group_x = chart_left+8*mm+idx*group_gap
-        for offset, value, color in ((0, current, blue), (9*mm, fifth, teal)):
+        for offset, value, color, label_shift in ((0, current, blue, 0), (9*mm, fifth, teal, 2*mm)):
             height = max(chart_height*value/cumulative_max, 1*mm)
             c.setFillColor(color)
             c.roundRect(group_x+offset, baseline, bar_width, height, .7*mm, fill=1, stroke=0)
             c.setFillColor(color); c.setFont(font, 8.5)
-            c.drawCentredString(group_x+offset+bar_width/2, baseline+height+2*mm, compact_manwon(value))
+            c.drawCentredString(group_x+offset+bar_width/2+label_shift, baseline+height+2*mm, compact_manwon(value))
         center_x = group_x+8*mm
         c.setFillColor(navy); c.setFont(font, 9.5)
         c.drawCentredString(center_x, chart_bottom+9.5*mm, f"{years}년")
