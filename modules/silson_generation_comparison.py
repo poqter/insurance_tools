@@ -330,7 +330,18 @@ def build_pdf(data: dict) -> bytes:
         if payout_w > 0:
             c.setFillColor(payout_color); c.roundRect(chart_x, y, payout_w, 6*mm, 2*mm, fill=1, stroke=0)
         if burden_w > 0:
-            c.setFillColor(orange); c.rect(chart_x+payout_w, y, burden_w, 6*mm, fill=1, stroke=0)
+            # 중간 구간도 부드러운 모서리를 적용하되 미세하게 겹쳐 구간 사이의 흰 틈을 방지합니다.
+            overlap = .45*mm
+            c.setFillColor(orange)
+            c.roundRect(
+                chart_x+payout_w-overlap,
+                y,
+                burden_w+overlap*2,
+                6*mm,
+                1.15*mm,
+                fill=1,
+                stroke=0,
+            )
         if excluded_w > 0:
             c.setFillColor(gray); c.roundRect(chart_x+chart_w-excluded_w, y, excluded_w, 6*mm, 2*mm, fill=1, stroke=0)
     c.setFillColor(colors.HexColor("#EEF5FB")); c.roundRect(chart_x, chart_y-63*mm, chart_w, 11*mm, 3*mm, fill=1, stroke=0)
