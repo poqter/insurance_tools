@@ -118,8 +118,13 @@ def inject_styles() -> None:
         .sc-input-title span:first-child{flex:1}.sc-subtitle{display:flex;align-items:center;justify-content:space-between;margin:.1rem 0 .75rem;color:#36566E;font-size:.84rem;font-weight:850}
         .sc-fixed-badge{display:inline-flex;align-items:center;padding:.25rem .55rem;border:1px solid #BCE1DE;border-radius:999px;background:#EAF8F7;color:#147C79;font-size:.65rem;font-weight:850}
         .sc-divider{height:1px;margin:1.1rem 0;background:linear-gradient(90deg,transparent,#D7E4EC 10%,#D7E4EC 90%,transparent)}
+        .sc-cumulative-card{padding:1.05rem 1.1rem;border:1px solid #DCE6EE;border-radius:15px;background:#fff;box-shadow:0 10px 28px rgba(37,72,98,.055)}
+        .sc-cumulative-year{margin-bottom:.8rem;color:#29485F;font-size:.92rem;font-weight:850}.sc-cumulative-row{display:flex;align-items:center;justify-content:space-between;gap:.65rem;padding:.48rem .62rem;border-radius:9px;font-size:.78rem;font-weight:750}
+        .sc-cumulative-row+.sc-cumulative-row{margin-top:.4rem}.sc-cumulative-current{background:#EDF4FF;color:#175FBF}.sc-cumulative-fifth{background:#EAF8F7;color:#117C79}.sc-cumulative-row strong{font-size:1.04rem;letter-spacing:-.025em;white-space:nowrap}
+        .sc-cum-chart{margin-top:1rem;padding:1.15rem 1.25rem;border:1px solid #DCE6EE;border-radius:16px;background:#fff;box-shadow:0 11px 30px rgba(37,72,98,.055)}.sc-cum-chart-head{display:flex;align-items:center;justify-content:space-between;gap:1rem;margin-bottom:1rem}.sc-cum-chart-title{color:#29485F;font-size:.92rem;font-weight:850}.sc-cum-legend{display:flex;gap:1rem;color:#63798A;font-size:.75rem;font-weight:750}.sc-cum-dot{display:inline-block;width:.55rem;height:.55rem;margin-right:.3rem;border-radius:50%}.sc-cum-dot-current{background:#1769DC}.sc-cum-dot-fifth{background:#119B98}
+        .sc-cum-plot{display:flex;align-items:end;gap:1.4rem;min-height:15rem;padding:.8rem .6rem .2rem;border-bottom:1px solid #DCE6EE}.sc-cum-group{flex:1;display:flex;align-items:end;justify-content:center;gap:1rem;height:13.5rem;position:relative;padding-bottom:1.6rem}.sc-cum-bar-col{width:min(5.2rem,38%);height:11rem;display:flex;flex-direction:column;justify-content:end;align-items:center}.sc-cum-bar-value{margin-bottom:.35rem;color:#29485F;font-size:.79rem;font-weight:850;white-space:nowrap}.sc-cum-bar{width:100%;min-height:.28rem;border-radius:9px 9px 3px 3px}.sc-cum-bar-current{background:linear-gradient(180deg,#4C8CE8,#1769DC)}.sc-cum-bar-fifth{background:linear-gradient(180deg,#50BDB8,#119B98)}.sc-cum-year{position:absolute;bottom:0;color:#3F5C71;font-size:.85rem;font-weight:850}
         .sc-note{margin-top:.65rem;color:#718393;font-size:.74rem;line-height:1.55}
-        @media(max-width:700px){.sc-bar-row{grid-template-columns:6.5rem 1fr}.sc-value{grid-column:2}.sc-rate-grid>div{padding:.65rem .4rem;font-size:.76rem}.sc-stack-row{grid-template-columns:1fr}.sc-stack-label{font-size:.6rem}}
+        @media(max-width:700px){.sc-bar-row{grid-template-columns:6.5rem 1fr}.sc-value{grid-column:2}.sc-rate-grid>div{padding:.65rem .4rem;font-size:.76rem}.sc-stack-row{grid-template-columns:1fr}.sc-stack-label{font-size:.6rem}.sc-cum-chart{overflow-x:auto}.sc-cum-plot{min-width:42rem}.sc-cum-chart-head{min-width:42rem}}
         </style>
         """,
         unsafe_allow_html=True,
@@ -185,6 +190,27 @@ def medical_stacked_bars(
     )
 
 
+def cumulative_premium_chart(current_premium: float, fifth_premium: float) -> None:
+    values = [(years, current_premium * 12 * years, fifth_premium * 12 * years) for years in (1, 5, 10)]
+    maximum = max((max(current, fifth) for _, current, fifth in values), default=1) or 1
+    groups = []
+    for years, current, fifth in values:
+        current_height = max(2.0, current / maximum * 100)
+        fifth_height = max(2.0, fifth / maximum * 100)
+        groups.append(
+            '<div class="sc-cum-group">'
+            f'<div class="sc-cum-bar-col"><span class="sc-cum-bar-value">{won(current)}</span><div class="sc-cum-bar sc-cum-bar-current" style="height:{current_height:.2f}%"></div></div>'
+            f'<div class="sc-cum-bar-col"><span class="sc-cum-bar-value">{won(fifth)}</span><div class="sc-cum-bar sc-cum-bar-fifth" style="height:{fifth_height:.2f}%"></div></div>'
+            f'<span class="sc-cum-year">{years}년</span></div>'
+        )
+    st.markdown(
+        '<div class="sc-cum-chart"><div class="sc-cum-chart-head"><span class="sc-cum-chart-title">누적 보험료 비교 그래프</span>'
+        '<span class="sc-cum-legend"><span><i class="sc-cum-dot sc-cum-dot-current"></i>현재 실손</span><span><i class="sc-cum-dot sc-cum-dot-fifth"></i>5세대 실손</span></span></div>'
+        f'<div class="sc-cum-plot">{"".join(groups)}</div></div>',
+        unsafe_allow_html=True,
+    )
+
+
 def build_pdf(data: dict) -> bytes:
     output = BytesIO()
     page_w, page_h = landscape(A4)
@@ -211,8 +237,8 @@ def build_pdf(data: dict) -> bytes:
 
     c.setFillColor(colors.HexColor("#F6F9FC")); c.rect(0, 0, page_w, page_h, fill=1, stroke=0)
     c.setFillColor(colors.white); c.roundRect(13*mm, 11*mm, page_w-26*mm, page_h-22*mm, 5*mm, fill=1, stroke=0)
-    text(21*mm, page_h-25*mm, f"{data['customer']}님 실손보험 세대 비교 안내", 18, navy)
-    text(21*mm, page_h-33*mm, f"현재 {data['generation']} 실손과 5세대 실손의 보험료·입원 보장을 간단히 비교했습니다.", 8.5, muted)
+    text(21*mm, page_h-25*mm, f"{data['customer']}님 실손보험 세대 비교 안내", 20, navy)
+    text(21*mm, page_h-33*mm, f"현재 {data['generation']} 실손과 5세대 실손의 보험료·입원 보장을 간단히 비교했습니다.", 10, muted)
     if data["consultant"]:
         c.drawRightString(page_w-21*mm, page_h-25*mm, f"담당자  {data['consultant']}")
 
@@ -220,7 +246,7 @@ def build_pdf(data: dict) -> bytes:
     premium_x, premium_y, premium_w, premium_h = 21*mm, page_h-60*mm, 237*mm, 24*mm
     c.setFillColor(colors.HexColor("#F7FAFD"))
     c.roundRect(premium_x, premium_y, premium_w, premium_h, 4*mm, fill=1, stroke=0)
-    text(premium_x+5*mm, premium_y+17*mm, "월 보험료 비교", 9.5, navy)
+    text(premium_x+5*mm, premium_y+17*mm, "월 보험료 비교", 11, navy)
 
     premium_max = max(data["current_premium"], data["fifth_premium"], 1)
     bar_x, bar_w, bar_h = premium_x+31*mm, 128*mm, 3.7*mm
@@ -229,12 +255,12 @@ def build_pdf(data: dict) -> bytes:
         ("5세대", data["fifth_premium"], teal, premium_y+5*mm),
     ]
     for label, value, color, y in premium_rows:
-        text(premium_x+5*mm, y+.5*mm, label, 7.2, muted)
+        text(premium_x+5*mm, y+.5*mm, label, 8.5, muted)
         c.setFillColor(colors.HexColor("#E7EEF3"))
         c.roundRect(bar_x, y, bar_w, bar_h, bar_h/2, fill=1, stroke=0)
         c.setFillColor(color)
         c.roundRect(bar_x, y, max(bar_w*value/premium_max, 1.2*mm), bar_h, bar_h/2, fill=1, stroke=0)
-        c.setFillColor(navy); c.setFont(font, 8)
+        c.setFillColor(navy); c.setFont(font, 9.5)
         c.drawRightString(premium_x+174*mm, y+.5*mm, won(value))
 
     if data["premium_diff"] > 0:
@@ -246,26 +272,26 @@ def build_pdf(data: dict) -> bytes:
     badge_x = premium_x+184*mm
     c.setFillColor(colors.HexColor("#E8F6F5") if data["premium_diff"] >= 0 else colors.HexColor("#FFF3E8"))
     c.roundRect(badge_x, premium_y+4*mm, 47*mm, 16*mm, 3.5*mm, fill=1, stroke=0)
-    text(badge_x+4*mm, premium_y+14*mm, difference_title, 7, muted)
-    text(badge_x+4*mm, premium_y+7*mm, won(abs(data["premium_diff"])), 11, teal if data["premium_diff"] >= 0 else colors.HexColor("#C66A24"))
+    text(badge_x+4*mm, premium_y+14*mm, difference_title, 8.2, muted)
+    text(badge_x+4*mm, premium_y+7*mm, won(abs(data["premium_diff"])), 12, teal if data["premium_diff"] >= 0 else colors.HexColor("#C66A24"))
 
     # rates table
     x0, y0, widths, rh = 21*mm, page_h-72*mm, [54*mm, 40*mm, 40*mm], 8*mm
     headers = ["핵심 비교", f"현재 {data['generation']}", "5세대 실손"]
     for col, width in enumerate(widths):
-        x = x0 + sum(widths[:col]); c.setFillColor(colors.HexColor("#EDF3F7")); c.rect(x, y0, width, rh, fill=1, stroke=0); text(x+3*mm, y0+2.7*mm, headers[col], 7.5, muted)
+        x = x0 + sum(widths[:col]); c.setFillColor(colors.HexColor("#EDF3F7")); c.rect(x, y0, width, rh, fill=1, stroke=0); text(x+3*mm, y0+2.5*mm, headers[col], 8.5, muted)
     rate_rows = [("급여 입원 자기부담", "급여"), ("중증 비급여 자기부담", "중증 비급여"), ("비중증 비급여 자기부담", "비중증 비급여")]
     for row, (label, key) in enumerate(rate_rows, 1):
         y = y0-row*rh; c.setStrokeColor(line); c.line(x0, y, x0+sum(widths), y)
         prefix = "구분 없음 · " if data['generation'] in ("1세대", "2세대", "3세대") and key != "급여" else ""
         vals = [label, f"{prefix}{data['current_rates'][key]:g}%", f"{FIFTH_RATES[key]:g}%"]
-        for col, value in enumerate(vals): text(x0+sum(widths[:col])+3*mm, y+2.7*mm, value, 7.5, blue if col == 1 else teal if col == 2 else navy)
+        for col, value in enumerate(vals): text(x0+sum(widths[:col])+3*mm, y+2.4*mm, value, 8.2, blue if col == 1 else teal if col == 2 else navy)
 
     # 동일한 총 의료비 안에서 예상 보험금과 본인 부담을 나누어 표시
     chart_x, chart_y, chart_w = 166*mm, page_h-72*mm, 92*mm
-    text(chart_x, chart_y+5*mm, "입원·수술 예시 결과", 11, navy)
-    text(chart_x, chart_y-2*mm, "총 의료비", 7, muted)
-    c.setFillColor(navy); c.setFont(font, 10)
+    text(chart_x, chart_y+5*mm, "입원·수술 예시 결과", 12, navy)
+    text(chart_x, chart_y-2*mm, "총 의료비", 8.5, muted)
+    c.setFillColor(navy); c.setFont(font, 11)
     c.drawRightString(chart_x+chart_w, chart_y-2*mm, won(data["total_medical"]))
     total = max(data["total_medical"], 1)
     orange = colors.HexColor("#DD762F")
@@ -274,8 +300,11 @@ def build_pdf(data: dict) -> bytes:
         ("5세대 실손", data["fifth_payout"], data["fifth_burden"], teal),
     ]
     for idx, (label, payout, burden, payout_color) in enumerate(result_rows):
-        y = chart_y-14*mm-idx*14*mm
-        text(chart_x, y+6*mm, label, 7.2, muted)
+        y = chart_y-21*mm-idx*20*mm
+        text(chart_x, y+12*mm, label, 8.5, muted)
+        text(chart_x, y+7.5*mm, f"보험금  {won(payout)}", 8.2, payout_color)
+        c.setFillColor(orange); c.setFont(font, 8.2)
+        c.drawRightString(chart_x+chart_w, y+7.5*mm, f"본인 부담  {won(burden)}")
         payout_w = chart_w * max(0, min(payout / total, 1))
         burden_w = chart_w * max(0, min(burden / total, 1))
         c.setFillColor(colors.HexColor("#E8EEF2")); c.roundRect(chart_x, y, chart_w, 6*mm, 2*mm, fill=1, stroke=0)
@@ -283,36 +312,35 @@ def build_pdf(data: dict) -> bytes:
             c.setFillColor(payout_color); c.roundRect(chart_x, y, payout_w, 6*mm, 2*mm, fill=1, stroke=0)
         if burden_w > 0:
             c.setFillColor(orange); c.roundRect(chart_x+chart_w-burden_w, y, burden_w, 6*mm, 2*mm, fill=1, stroke=0)
-        c.setFillColor(colors.white); c.setFont(font, 5.7)
-        c.drawString(chart_x+2*mm, y+2.1*mm, f"보험금 {won(payout)}")
-        c.drawRightString(chart_x+chart_w-2*mm, y+2.1*mm, f"본인 부담 {won(burden)}")
-    text(chart_x, chart_y-45*mm, f"고객 부담 차이  {won(abs(data['burden_diff']))}", 10, navy)
+    text(chart_x, chart_y-60*mm, f"고객 부담 차이  {won(abs(data['burden_diff']))}", 11, navy)
 
     # 누적 보험료 비교: 1·5·10년을 같은 축에서 비교하는 그룹 막대 차트
     base_y = 25*mm
     chart_left, chart_bottom, chart_width, chart_height = 21*mm, base_y, 132*mm, 40*mm
-    text(chart_left, chart_bottom+54*mm, "누적 보험료 비교", 11, navy)
-    text(chart_left+38*mm, chart_bottom+54*mm, "● 현재 실손", 6.8, blue)
-    text(chart_left+62*mm, chart_bottom+54*mm, "● 5세대", 6.8, teal)
+    text(chart_left, chart_bottom+54*mm, "누적 보험료 비교", 12, navy)
+    text(chart_left+40*mm, chart_bottom+54*mm, "● 현재 실손", 9, blue)
+    text(chart_left+70*mm, chart_bottom+54*mm, "● 5세대", 9, teal)
     cumulative = [(years, data['current_premium']*12*years, data['fifth_premium']*12*years) for years in (1, 5, 10)]
     cumulative_max = max((max(current, fifth) for _, current, fifth in cumulative), default=1) or 1
     c.setStrokeColor(colors.HexColor("#E3EBF1")); c.setLineWidth(.5)
     c.line(chart_left, chart_bottom+5*mm, chart_left+chart_width, chart_bottom+5*mm)
-    group_gap, bar_width = 43*mm, 8*mm
+    group_gap, bar_width = 43*mm, 9*mm
     for idx, (years, current, fifth) in enumerate(cumulative):
-        group_x = chart_left+12*mm+idx*group_gap
-        for offset, value, color in ((0, current, blue), (9.5*mm, fifth, teal)):
+        group_x = chart_left+8*mm+idx*group_gap
+        for offset, value, color in ((0, current, blue), (16*mm, fifth, teal)):
             height = max(chart_height*value/cumulative_max, 1*mm)
             c.setFillColor(color)
             c.roundRect(group_x+offset, chart_bottom+5*mm, bar_width, height, 1.5*mm, fill=1, stroke=0)
-        c.setFillColor(navy); c.setFont(font, 6.5)
-        c.drawCentredString(group_x+8.75*mm, chart_bottom+1.2*mm, f"{years}년")
-        c.setFillColor(muted); c.setFont(font, 5.8)
-        c.drawCentredString(group_x+4*mm, chart_bottom+6*mm+max(chart_height*current/cumulative_max, 1*mm), won(current))
-        c.drawCentredString(group_x+13.5*mm, chart_bottom+6*mm+max(chart_height*fifth/cumulative_max, 1*mm), won(fifth))
-    text(166*mm, base_y+54*mm, "안내", 10, navy)
-    notes = ["본 자료는 입력값과 대표 자기부담률을 이용한 간단 비교입니다.", "실제 지급액은 약관, 공제금액, 보상한도와 심사 결과에 따라 달라질 수 있습니다.", f"현재 보험료: {data['current_premium_basis']}", f"5세대 보험료: {data['premium_basis']} · 기준일 {STANDARD_DATE}", "누적 보험료는 현재 월 보험료가 변동 없이 유지된다고 가정했습니다."]
-    for i, note in enumerate(notes): text(166*mm, base_y+46*mm-i*6*mm, f"- {note}", 6.7, muted)
+        c.setFillColor(navy); c.setFont(font, 9.5)
+        c.drawCentredString(group_x+12.5*mm, chart_bottom+.8*mm, f"{years}년")
+        c.setFont(font, 8.2)
+        c.setFillColor(blue)
+        c.drawCentredString(group_x+4.5*mm, chart_bottom+6.2*mm+max(chart_height*current/cumulative_max, 1*mm), won(current))
+        c.setFillColor(teal)
+        c.drawCentredString(group_x+20.5*mm, chart_bottom+6.2*mm+max(chart_height*fifth/cumulative_max, 1*mm), won(fifth))
+    text(166*mm, base_y+43*mm, "안내", 11, navy)
+    notes = ["대표 자기부담률을 적용한 상담용 비교입니다.", "실제 지급액은 약관·한도·심사에 따라 달라집니다.", f"현재 보험료: {data['current_premium_basis']}", f"5세대 보험료: {data['premium_basis']} · {STANDARD_DATE}", "누적 보험료는 보험료 변동이 없는 가정입니다."]
+    for i, note in enumerate(notes): text(166*mm, base_y+35*mm-i*6.2*mm, f"- {note}", 7.5, muted)
     c.showPage(); c.save(); output.seek(0)
     return output.getvalue()
 
@@ -448,8 +476,13 @@ def run() -> None:
     cols = st.columns(3)
     for col, years in zip(cols, (1, 5, 10)):
         with col:
-            st.markdown(f"**{years}년 누적**")
-            st.caption(f"현재 {won(current_premium*12*years)} · 5세대 {won(fifth_premium*12*years)}")
+            st.markdown(
+                f'<div class="sc-cumulative-card"><div class="sc-cumulative-year">{years}년 누적</div>'
+                f'<div class="sc-cumulative-row sc-cumulative-current"><span>현재 실손</span><strong>{won(current_premium*12*years)}</strong></div>'
+                f'<div class="sc-cumulative-row sc-cumulative-fifth"><span>5세대 실손</span><strong>{won(fifth_premium*12*years)}</strong></div></div>',
+                unsafe_allow_html=True,
+            )
+    cumulative_premium_chart(current_premium, fifth_premium)
 
     saving = current_premium - fifth_premium
     burden_gap = fifth_burden - current_burden
