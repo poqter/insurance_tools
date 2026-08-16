@@ -23,6 +23,15 @@ except ImportError:  # 단독 점검용
 STANDARD_DATE = "2026.08"
 FIFTH_RATES = {"급여": 20.0, "중증 비급여": 30.0, "비중증 비급여": 50.0}
 CLAIM_LEVELS = ["없음", "50만원 미만", "50~100만원", "100~300만원", "300만원 이상", "직접 입력"]
+PREMIUM_MODES = ["연령별 예상 보험료", "가입제안서 직접 입력"]
+COVERAGE_OPTIONS = ["전체 보장형", "핵심 보장형"]
+
+# 공개된 대표 보험료 예시를 상담용 곡선으로 환산하기 위한 기준값입니다.
+# 보험료 환경이 바뀌면 이 값만 수정할 수 있도록 한곳에 모았습니다.
+REFERENCE_PREMIUM = {
+    "남성": {"age_40_full": 17_000, "annual_factor": 1.038},
+    "여성": {"age_40_full": 19_000, "annual_factor": 1.038},
+}
 
 
 def won(value: float) -> str:
@@ -54,6 +63,18 @@ def calculate(medical: Dict[str, float], rates: Dict[str, float]) -> Tuple[float
     return max(0.0, covered - burden), burden + excluded
 
 
+def estimate_fifth_premium(age: int, gender: str, coverage: str) -> int:
+    """공개된 대표 연령 보험료를 바탕으로 1세 단위 상담용 참고값을 계산합니다."""
+    reference = REFERENCE_PREMIUM[gender]
+    full_premium = reference["age_40_full"] * (reference["annual_factor"] ** (age - 40))
+    coverage_factor = 1.0 if coverage == "전체 보장형" else 0.72
+    return max(1_000, int(round(full_premium * coverage_factor / 100) * 100))
+
+
+def _mark_reference_premium_modified() -> None:
+    st.session_state["sc_reference_modified"] = True
+
+
 def inject_styles() -> None:
     st.markdown(
         """
@@ -66,8 +87,14 @@ def inject_styles() -> None:
         .sc-bars{display:grid;gap:.8rem}.sc-bar-row{display:grid;grid-template-columns:8.2rem 1fr 6.2rem;align-items:center;gap:.75rem;font-size:.82rem;color:#536B7E}
         .sc-track{height:1rem;border-radius:999px;background:#EAF0F4;overflow:hidden}.sc-fill-blue{height:100%;background:linear-gradient(90deg,#1769DC,#5B96E8);border-radius:999px}.sc-fill-teal{height:100%;background:linear-gradient(90deg,#119B98,#56BFBA);border-radius:999px}
         .sc-value{text-align:right;color:#203B50;font-weight:800}.sc-diff{margin-top:1rem;padding:.9rem 1rem;text-align:center;border-radius:12px;background:#EDF5FF;color:#174D91;font-weight:850}
+        .sc-total{display:flex;align-items:end;justify-content:space-between;gap:1rem;margin:.9rem 0 1rem;padding:.85rem 1rem;border-radius:12px;background:#F3F7FA;color:#5B7182;font-size:.78rem}
+        .sc-total strong{color:#17364E;font-size:1.18rem}.sc-stack-wrap{display:grid;gap:1rem}.sc-stack-row{display:grid;grid-template-columns:7.2rem 1fr;align-items:center;gap:.8rem}
+        .sc-stack-name{color:#506A7D;font-size:.8rem;font-weight:750}.sc-stack{position:relative;display:flex;height:2.15rem;overflow:hidden;border-radius:10px;background:#E8EEF2;box-shadow:inset 0 0 0 1px rgba(61,91,112,.06)}
+        .sc-stack-part{height:100%}.sc-stack-current{background:linear-gradient(90deg,#1769DC,#4B8AE5)}.sc-stack-fifth{background:linear-gradient(90deg,#119B98,#4EBAB5)}.sc-stack-burden{background:linear-gradient(90deg,#E88B3D,#D96C2D)}
+        .sc-stack-label{position:absolute;top:50%;transform:translateY(-50%);z-index:2;color:white;font-size:.67rem;font-weight:850;text-shadow:0 1px 2px rgba(20,40,55,.28);white-space:nowrap}.sc-stack-left{left:.7rem}.sc-stack-right{right:.7rem}
+        .sc-basis{margin-top:.6rem;padding:.7rem .85rem;border:1px solid #DDE9F1;border-radius:10px;background:#F8FBFD;color:#687F91;font-size:.74rem;line-height:1.5}
         .sc-note{margin-top:.65rem;color:#718393;font-size:.74rem;line-height:1.55}
-        @media(max-width:700px){.sc-bar-row{grid-template-columns:6.5rem 1fr}.sc-value{grid-column:2}.sc-rate-grid>div{padding:.65rem .4rem;font-size:.76rem}}
+        @media(max-width:700px){.sc-bar-row{grid-template-columns:6.5rem 1fr}.sc-value{grid-column:2}.sc-rate-grid>div{padding:.65rem .4rem;font-size:.76rem}.sc-stack-row{grid-template-columns:1fr}.sc-stack-label{font-size:.6rem}}
         </style>
         """,
         unsafe_allow_html=True,
@@ -99,6 +126,38 @@ def comparison_bars(title: str, current_value: float, fifth_value: float, diff_l
         for name, value, css in rows
     )
     st.markdown(f'<div class="sc-card"><b>{title}</b><div class="sc-bars" style="margin-top:1rem">{html_rows}</div><div class="sc-diff">{diff_label}</div></div>', unsafe_allow_html=True)
+
+
+def medical_stacked_bars(
+    total: float,
+    generation: str,
+    current_payout: float,
+    current_burden: float,
+    fifth_payout: float,
+    fifth_burden: float,
+) -> None:
+    denominator = max(total, 1)
+    rows = []
+    for name, payout, burden, css in (
+        (f"현재 {generation}", current_payout, current_burden, "sc-stack-current"),
+        ("5세대 실손", fifth_payout, fifth_burden, "sc-stack-fifth"),
+    ):
+        payout_width = max(0.0, min(100.0, payout / denominator * 100))
+        burden_width = max(0.0, min(100.0, burden / denominator * 100))
+        rows.append(
+            f'<div class="sc-stack-row"><span class="sc-stack-name">{name}</span>'
+            f'<div class="sc-stack"><div class="sc-stack-part {css}" style="width:{payout_width:.2f}%"></div>'
+            f'<div class="sc-stack-part sc-stack-burden" style="width:{burden_width:.2f}%"></div>'
+            f'<span class="sc-stack-label sc-stack-left">예상 보험금 {won(payout)}</span>'
+            f'<span class="sc-stack-label sc-stack-right">본인 부담 {won(burden)}</span></div></div>'
+        )
+    st.markdown(
+        '<div class="sc-card"><b>총 의료비와 고객 부담 비교</b>'
+        f'<div class="sc-total"><span>동일한 입원·수술 사례의 총 의료비</span><strong>{won(total)}</strong></div>'
+        f'<div class="sc-stack-wrap">{"".join(rows)}</div>'
+        f'<div class="sc-diff">고객 부담 차이 {won(abs(current_burden-fifth_burden))}</div></div>',
+        unsafe_allow_html=True,
+    )
 
 
 def build_pdf(data: dict) -> bytes:
@@ -177,16 +236,32 @@ def build_pdf(data: dict) -> bytes:
         vals = [label, f"{prefix}{data['current_rates'][key]:g}%", f"{FIFTH_RATES[key]:g}%"]
         for col, value in enumerate(vals): text(x0+sum(widths[:col])+3*mm, y+2.7*mm, value, 7.5, blue if col == 1 else teal if col == 2 else navy)
 
-    # result bars
+    # 동일한 총 의료비 안에서 예상 보험금과 본인 부담을 나누어 표시
     chart_x, chart_y, chart_w = 166*mm, page_h-72*mm, 92*mm
     text(chart_x, chart_y+5*mm, "입원·수술 예시 결과", 11, navy)
-    max_burden = max(data["current_burden"], data["fifth_burden"], 1)
-    for idx, (label, val, color) in enumerate([("현재 고객 부담", data["current_burden"], blue), ("5세대 고객 부담", data["fifth_burden"], teal)]):
-        y = chart_y-8*mm-idx*14*mm; text(chart_x, y+4*mm, label, 7.5, muted)
-        c.setFillColor(colors.HexColor("#EAF0F4")); c.roundRect(chart_x, y, chart_w, 3.8*mm, 1.9*mm, fill=1, stroke=0)
-        c.setFillColor(color); c.roundRect(chart_x, y, chart_w*val/max_burden, 3.8*mm, 1.9*mm, fill=1, stroke=0)
-        c.drawRightString(chart_x+chart_w, y+5*mm, won(val))
-    text(chart_x, chart_y-39*mm, f"고객 부담 차이  {won(abs(data['burden_diff']))}", 10, navy)
+    text(chart_x, chart_y-2*mm, "총 의료비", 7, muted)
+    c.setFillColor(navy); c.setFont(font, 10)
+    c.drawRightString(chart_x+chart_w, chart_y-2*mm, won(data["total_medical"]))
+    total = max(data["total_medical"], 1)
+    orange = colors.HexColor("#DD762F")
+    result_rows = [
+        (f"현재 {data['generation']}", data["current_payout"], data["current_burden"], blue),
+        ("5세대 실손", data["fifth_payout"], data["fifth_burden"], teal),
+    ]
+    for idx, (label, payout, burden, payout_color) in enumerate(result_rows):
+        y = chart_y-14*mm-idx*14*mm
+        text(chart_x, y+6*mm, label, 7.2, muted)
+        payout_w = chart_w * max(0, min(payout / total, 1))
+        burden_w = chart_w * max(0, min(burden / total, 1))
+        c.setFillColor(colors.HexColor("#E8EEF2")); c.roundRect(chart_x, y, chart_w, 6*mm, 2*mm, fill=1, stroke=0)
+        if payout_w > 0:
+            c.setFillColor(payout_color); c.roundRect(chart_x, y, payout_w, 6*mm, 2*mm, fill=1, stroke=0)
+        if burden_w > 0:
+            c.setFillColor(orange); c.roundRect(chart_x+chart_w-burden_w, y, burden_w, 6*mm, 2*mm, fill=1, stroke=0)
+        c.setFillColor(colors.white); c.setFont(font, 5.7)
+        c.drawString(chart_x+2*mm, y+2.1*mm, f"보험금 {won(payout)}")
+        c.drawRightString(chart_x+chart_w-2*mm, y+2.1*mm, f"본인 부담 {won(burden)}")
+    text(chart_x, chart_y-45*mm, f"고객 부담 차이  {won(abs(data['burden_diff']))}", 10, navy)
 
     # 누적 보험료 비교: 1·5·10년을 같은 축에서 비교하는 그룹 막대 차트
     base_y = 25*mm
@@ -211,7 +286,7 @@ def build_pdf(data: dict) -> bytes:
         c.drawCentredString(group_x+4*mm, chart_bottom+6*mm+max(chart_height*current/cumulative_max, 1*mm), won(current))
         c.drawCentredString(group_x+13.5*mm, chart_bottom+6*mm+max(chart_height*fifth/cumulative_max, 1*mm), won(fifth))
     text(166*mm, base_y+54*mm, "안내", 10, navy)
-    notes = ["본 자료는 입력값과 대표 자기부담률을 이용한 간단 비교입니다.", "실제 지급액은 약관, 공제금액, 보상한도와 심사 결과에 따라 달라질 수 있습니다.", f"기준일 {STANDARD_DATE} · 보험료는 변동 없이 유지된다고 가정했습니다."]
+    notes = ["본 자료는 입력값과 대표 자기부담률을 이용한 간단 비교입니다.", "실제 지급액은 약관, 공제금액, 보상한도와 심사 결과에 따라 달라질 수 있습니다.", f"5세대 보험료: {data['premium_basis']} · 기준일 {STANDARD_DATE}", "누적 보험료는 현재 월 보험료가 변동 없이 유지된다고 가정했습니다."]
     for i, note in enumerate(notes): text(166*mm, base_y+44*mm-i*7*mm, f"- {note}", 7, muted)
     c.showPage(); c.save(); output.seek(0)
     return output.getvalue()
@@ -222,8 +297,8 @@ def run() -> None:
     page_header("고객 상담", "실손보험 세대 비교 도우미", "현재 가입 실손과 5세대 실손의 보험료와 입원 보장 차이를 한눈에 비교합니다.", "🩺")
 
     with st.expander("✦ 사용 방법 및 비교 기준", expanded=False):
-        st.markdown("1. 현재 실손 세대와 보험료를 입력합니다.\n2. 입원·수술 예시 금액을 확인하거나 수정합니다.\n3. 화면 결과를 확인한 뒤 고객용 PDF를 내려받습니다.")
-        st.caption("제작자: 박병선 팀장 · 버전 v1.0.0")
+        st.markdown("✦ 현재 실손 세대와 보험료를 입력합니다.\n\n✦ 입원·수술 예시 금액을 확인하거나 수정합니다.\n\n✦ 화면 결과를 확인한 뒤 고객용 PDF를 내려받습니다.")
+        st.caption("세대별 대표 자기부담률을 적용하는 상담용 간단 비교이며, 실제 계약의 약관과 공제금액이 우선합니다.")
 
     section_intro("INPUT", "기본 정보", "고객 정보와 비교할 실손 세대를 입력해 주세요.")
     with st.container(border=True):
@@ -247,8 +322,46 @@ def run() -> None:
             st.number_input("최근 1년 수령 보험금", min_value=0, step=100_000, format="%d", key="sc_claim_exact")
 
         p1, p2 = st.columns(2)
-        current_premium = float(p1.number_input("현재 월 보험료", min_value=0, value=60_000, step=1_000, format="%d"))
-        fifth_premium = float(p2.number_input("5세대 제안 월 보험료", min_value=0, value=30_000, step=1_000, format="%d", help="실제 가입제안서의 보험료를 입력해 주세요."))
+        current_premium = float(p1.number_input("현재 실손 월 보험료", min_value=0, value=60_000, step=1_000, format="%d"))
+        premium_mode = p2.radio("5세대 보험료 입력 방식", PREMIUM_MODES, index=0, horizontal=True)
+
+        if premium_mode == "연령별 예상 보험료":
+            a1, a2, a3 = st.columns(3)
+            age = int(a1.number_input("실제 만 나이", min_value=0, max_value=100, value=40, step=1))
+            gender = a2.selectbox("성별", ["남성", "여성"])
+            coverage = a3.selectbox(
+                "5세대 보장구성",
+                COVERAGE_OPTIONS,
+                help="전체 보장형은 급여·중증·비중증 비급여, 핵심 보장형은 급여·중증 비급여 중심의 상담용 구분입니다.",
+            )
+            estimated_premium = estimate_fifth_premium(age, gender, coverage)
+            reference_signature = (age, gender, coverage)
+            if st.session_state.get("sc_reference_signature") != reference_signature:
+                st.session_state["sc_reference_signature"] = reference_signature
+                st.session_state["sc_reference_premium"] = estimated_premium
+                st.session_state["sc_reference_modified"] = False
+            fifth_premium = float(
+                st.number_input(
+                    "비교에 적용할 5세대 월 보험료",
+                    min_value=0,
+                    step=100,
+                    format="%d",
+                    key="sc_reference_premium",
+                    on_change=_mark_reference_premium_modified,
+                )
+            )
+            reference_modified = bool(st.session_state.get("sc_reference_modified", False))
+            premium_basis = "연령 기준 예상값을 사용자가 수정한 금액" if reference_modified else f"만 {age}세 {gender} · {coverage} 예상값"
+            st.markdown(
+                f'<div class="sc-basis"><b>공개 보험료 예시 기반 상담용 추정값</b> · 만 {age}세 {gender} · {coverage}<br>'
+                f'실제 보험료는 보험회사, 직업, 가입조건에 따라 달라질 수 있으며 현재 표시된 금액을 직접 수정할 수 있습니다.</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            fifth_premium = float(
+                st.number_input("가입제안서의 5세대 월 보험료", min_value=0, value=30_000, step=100, format="%d", key="sc_direct_premium")
+            )
+            premium_basis = "가입제안서 직접 입력 금액"
 
     rates = current_rates(generation, option)
     section_intro("COMPARE", "한눈에 보는 핵심 차이", "선택한 현재 실손의 대표 기준과 5세대 기준을 비교합니다.")
@@ -278,7 +391,7 @@ def run() -> None:
     k1.metric("총 의료비", won(total_medical))
     k2.metric(f"현재 {generation} 예상 보험금", won(current_payout))
     k3.metric("5세대 예상 보험금", won(fifth_payout))
-    comparison_bars("고객 부담 비교", current_burden, fifth_burden, f"고객 부담 차이 {won(abs(current_burden-fifth_burden))}")
+    medical_stacked_bars(total_medical, generation, current_payout, current_burden, fifth_payout, fifth_burden)
 
     section_intro("RESULT", "누적 보험료", "현재 월 보험료가 동일하게 유지된다는 단순 가정입니다.")
     cols = st.columns(3)
@@ -302,6 +415,7 @@ def run() -> None:
         "current_rates": rates, "current_premium": current_premium, "fifth_premium": fifth_premium,
         "premium_diff": current_premium-fifth_premium, "current_payout": current_payout, "fifth_payout": fifth_payout,
         "current_burden": current_burden, "fifth_burden": fifth_burden, "burden_diff": fifth_burden-current_burden,
+        "total_medical": total_medical, "premium_basis": premium_basis,
     }
     pdf = build_pdf(data)
     filename = f"{safe_filename(data['customer'])}님_실손보험_세대비교_{date.today():%Y%m%d}.pdf"
