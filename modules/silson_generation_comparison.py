@@ -250,30 +250,30 @@ def build_pdf(data: dict) -> bytes:
 
     c.setFillColor(colors.HexColor("#F6F9FC")); c.rect(0, 0, page_w, page_h, fill=1, stroke=0)
     c.setFillColor(colors.white); c.roundRect(13*mm, 11*mm, page_w-26*mm, page_h-22*mm, 5*mm, fill=1, stroke=0)
-    text(21*mm, page_h-25*mm, f"{data['customer']}님 실손보험 세대 비교 안내", 20, navy)
-    text(21*mm, page_h-33*mm, f"현재 {data['generation']} 실손과 5세대 실손의 보험료·입원 보장을 간단히 비교했습니다.", 10, muted)
+    text(21*mm, page_h-24*mm, f"{data['customer']}님 실손보험 세대 비교 안내", 22, navy)
+    text(21*mm, page_h-33*mm, f"현재 {data['generation']} 실손과 5세대 실손의 보험료·입원 보장을 간단히 비교했습니다.", 11, muted)
     if data["consultant"]:
         c.drawRightString(page_w-21*mm, page_h-25*mm, f"담당자  {data['consultant']}")
 
     # 월 보험료 비교: 막대 길이와 정확한 금액을 함께 보여주는 메인 차트
-    premium_x, premium_y, premium_w, premium_h = 21*mm, page_h-60*mm, 237*mm, 24*mm
+    premium_x, premium_y, premium_w, premium_h = 21*mm, page_h-62*mm, 237*mm, 27*mm
     c.setFillColor(colors.HexColor("#F7FAFD"))
     c.roundRect(premium_x, premium_y, premium_w, premium_h, 4*mm, fill=1, stroke=0)
-    text(premium_x+5*mm, premium_y+17*mm, "월 보험료 비교", 11, navy)
+    text(premium_x+5*mm, premium_y+19*mm, "월 보험료 비교", 12.5, navy)
 
     premium_max = max(data["current_premium"], data["fifth_premium"], 1)
     bar_x, bar_w, bar_h = premium_x+31*mm, 128*mm, 3.7*mm
     premium_rows = [
-        ("현재 실손", data["current_premium"], blue, premium_y+11.5*mm),
+        ("현재 실손", data["current_premium"], blue, premium_y+12.5*mm),
         ("5세대", data["fifth_premium"], teal, premium_y+5*mm),
     ]
     for label, value, color, y in premium_rows:
-        text(premium_x+5*mm, y+.5*mm, label, 8.5, muted)
+        text(premium_x+5*mm, y+.5*mm, label, 9.5, muted)
         c.setFillColor(colors.HexColor("#E7EEF3"))
         c.roundRect(bar_x, y, bar_w, bar_h, bar_h/2, fill=1, stroke=0)
         c.setFillColor(color)
         c.roundRect(bar_x, y, max(bar_w*value/premium_max, 1.2*mm), bar_h, bar_h/2, fill=1, stroke=0)
-        c.setFillColor(navy); c.setFont(font, 9.5)
+        c.setFillColor(navy); c.setFont(font, 11)
         c.drawRightString(premium_x+174*mm, y+.5*mm, won(value))
 
     if data["premium_diff"] > 0:
@@ -284,27 +284,27 @@ def build_pdf(data: dict) -> bytes:
         difference_title = "월 보험료 차이"
     badge_x = premium_x+184*mm
     c.setFillColor(colors.HexColor("#E8F6F5") if data["premium_diff"] >= 0 else colors.HexColor("#FFF3E8"))
-    c.roundRect(badge_x, premium_y+4*mm, 47*mm, 16*mm, 3.5*mm, fill=1, stroke=0)
-    text(badge_x+4*mm, premium_y+14*mm, difference_title, 8.2, muted)
-    text(badge_x+4*mm, premium_y+7*mm, won(abs(data["premium_diff"])), 12, teal if data["premium_diff"] >= 0 else colors.HexColor("#C66A24"))
+    c.roundRect(badge_x, premium_y+4*mm, 47*mm, 19*mm, 3.5*mm, fill=1, stroke=0)
+    text(badge_x+4*mm, premium_y+16.5*mm, difference_title, 9, muted)
+    text(badge_x+4*mm, premium_y+8*mm, won(abs(data["premium_diff"])), 14, teal if data["premium_diff"] >= 0 else colors.HexColor("#C66A24"))
 
     # rates table
-    x0, y0, widths, rh = 21*mm, page_h-72*mm, [54*mm, 40*mm, 40*mm], 8*mm
+    x0, y0, widths, rh = 21*mm, page_h-75*mm, [54*mm, 40*mm, 40*mm], 10*mm
     headers = ["핵심 비교", f"현재 {data['generation']}", "5세대 실손"]
     for col, width in enumerate(widths):
-        x = x0 + sum(widths[:col]); c.setFillColor(colors.HexColor("#EDF3F7")); c.rect(x, y0, width, rh, fill=1, stroke=0); text(x+3*mm, y0+2.5*mm, headers[col], 8.5, muted)
+        x = x0 + sum(widths[:col]); c.setFillColor(colors.HexColor("#EDF3F7")); c.rect(x, y0, width, rh, fill=1, stroke=0); text(x+3*mm, y0+3.2*mm, headers[col], 9.5, muted)
     rate_rows = [("급여 입원 자기부담", "급여"), ("중증 비급여 자기부담", "중증 비급여"), ("비중증 비급여 자기부담", "비중증 비급여")]
     for row, (label, key) in enumerate(rate_rows, 1):
         y = y0-row*rh; c.setStrokeColor(line); c.line(x0, y, x0+sum(widths), y)
         prefix = "구분 없음 · " if data['generation'] in ("1세대", "2세대", "3세대") and key != "급여" else ""
         vals = [label, f"{prefix}{data['current_rates'][key]:g}%", f"{FIFTH_RATES[key]:g}%"]
-        for col, value in enumerate(vals): text(x0+sum(widths[:col])+3*mm, y+2.4*mm, value, 8.2, blue if col == 1 else teal if col == 2 else navy)
+        for col, value in enumerate(vals): text(x0+sum(widths[:col])+3*mm, y+3.2*mm, value, 9.3, blue if col == 1 else teal if col == 2 else navy)
 
     # 동일한 총 의료비 안에서 예상 보험금과 본인 부담을 나누어 표시
-    chart_x, chart_y, chart_w = 166*mm, page_h-72*mm, 92*mm
-    text(chart_x, chart_y+5*mm, "입원·수술 예시 결과", 12, navy)
-    text(chart_x, chart_y-2*mm, "총 의료비", 8.5, muted)
-    c.setFillColor(navy); c.setFont(font, 11)
+    chart_x, chart_y, chart_w = 166*mm, page_h-75*mm, 92*mm
+    text(chart_x, chart_y+6*mm, "입원·수술 예시 결과", 13.5, navy)
+    text(chart_x, chart_y-2*mm, "총 의료비", 9.5, muted)
+    c.setFillColor(navy); c.setFont(font, 13)
     c.drawRightString(chart_x+chart_w, chart_y-2*mm, won(data["total_medical"]))
     total = max(data["total_medical"], 1)
     orange, gray = colors.HexColor("#DD762F"), colors.HexColor("#84909A")
@@ -316,11 +316,11 @@ def build_pdf(data: dict) -> bytes:
     for idx, (label, payout, burden, payout_color) in enumerate(result_rows):
         y = chart_y-21*mm-idx*20*mm
         covered_burden = max(0, burden-excluded)
-        text(chart_x, y+12*mm, label, 8.5, muted)
-        text(chart_x, y+7.5*mm, f"보험금 {compact_manwon(payout)}", 7.8, payout_color)
-        c.setFillColor(orange); c.setFont(font, 7.8)
+        text(chart_x, y+12.5*mm, label, 9.5, muted)
+        text(chart_x, y+7.5*mm, f"보험금 {compact_manwon(payout)}", 8.5, payout_color)
+        c.setFillColor(orange); c.setFont(font, 8.5)
         c.drawCentredString(chart_x+chart_w*.60, y+7.5*mm, f"본인 부담 {compact_manwon(covered_burden)}")
-        c.setFillColor(gray); c.setFont(font, 7.8)
+        c.setFillColor(gray); c.setFont(font, 8.5)
         c.drawRightString(chart_x+chart_w, y+7.5*mm, f"보상 제외 {compact_manwon(excluded)}")
         payout_w = chart_w * max(0, min(payout / total, 1))
         burden_w = chart_w * max(0, min(covered_burden / total, 1))
@@ -332,39 +332,39 @@ def build_pdf(data: dict) -> bytes:
             c.setFillColor(orange); c.rect(chart_x+payout_w, y, burden_w, 6*mm, fill=1, stroke=0)
         if excluded_w > 0:
             c.setFillColor(gray); c.roundRect(chart_x+chart_w-excluded_w, y, excluded_w, 6*mm, 2*mm, fill=1, stroke=0)
-    text(chart_x, chart_y-60*mm, f"고객 부담 차이  {won(abs(data['burden_diff']))}", 11, navy)
+    c.setFillColor(colors.HexColor("#EEF5FB")); c.roundRect(chart_x, chart_y-63*mm, chart_w, 11*mm, 3*mm, fill=1, stroke=0)
+    text(chart_x+4*mm, chart_y-59.5*mm, "고객 부담 차이", 10, muted)
+    c.setFillColor(navy); c.setFont(font, 13)
+    c.drawRightString(chart_x+chart_w-4*mm, chart_y-59.5*mm, won(abs(data['burden_diff'])))
 
     # 누적 보험료 비교: 1~5년을 같은 축에서 비교하는 그룹 막대 차트
-    base_y = 25*mm
-    chart_left, chart_bottom, chart_width, chart_height = 21*mm, base_y, 132*mm, 30*mm
-    text(chart_left, chart_bottom+54*mm, "누적 보험료 비교", 12, navy)
-    text(chart_left+40*mm, chart_bottom+54*mm, "● 현재 실손", 9, blue)
-    text(chart_left+70*mm, chart_bottom+54*mm, "● 5세대", 9, teal)
+    base_y = 16*mm
+    chart_left, chart_bottom, chart_width, chart_height = 21*mm, base_y, 237*mm, 34*mm
+    text(chart_left, chart_bottom+56*mm, "누적 보험료 비교", 13.5, navy)
+    text(chart_left+43*mm, chart_bottom+56*mm, "● 현재 실손", 10, blue)
+    text(chart_left+76*mm, chart_bottom+56*mm, "● 5세대", 10, teal)
     cumulative = [(years, data['current_premium']*12*years, data['fifth_premium']*12*years) for years in range(1, 6)]
     cumulative_max = max((max(current, fifth) for _, current, fifth in cumulative), default=1) or 1
     c.setStrokeColor(colors.HexColor("#E3EBF1")); c.setLineWidth(.5)
-    baseline = chart_bottom+13*mm
+    baseline = chart_bottom+14*mm
     c.line(chart_left, baseline, chart_left+chart_width, baseline)
-    group_gap, bar_width = 25.5*mm, 6*mm
+    group_gap, bar_width = 45*mm, 9*mm
     for idx, (years, current, fifth) in enumerate(cumulative):
-        group_x = chart_left+2.5*mm+idx*group_gap
-        for offset, value, color in ((0, current, blue), (7*mm, fifth, teal)):
+        group_x = chart_left+8*mm+idx*group_gap
+        for offset, value, color in ((0, current, blue), (10.5*mm, fifth, teal)):
             height = max(chart_height*value/cumulative_max, 1*mm)
             c.setFillColor(color)
             c.roundRect(group_x+offset, baseline, bar_width, height, 1.3*mm, fill=1, stroke=0)
-        center_x = group_x+6.5*mm
-        c.setFillColor(navy); c.setFont(font, 8.3)
-        c.drawCentredString(center_x, chart_bottom+9.2*mm, f"{years}년")
+        center_x = group_x+9.75*mm
+        c.setFillColor(navy); c.setFont(font, 9.5)
+        c.drawCentredString(center_x, chart_bottom+10*mm, f"{years}년")
         c.setFillColor(blue)
-        c.setFont(font, 7.2)
-        c.drawCentredString(center_x, chart_bottom+6.2*mm, f"현재 {compact_manwon(current)}")
+        c.setFont(font, 8.5)
+        c.drawCentredString(center_x, chart_bottom+6.5*mm, f"현재 {compact_manwon(current)}")
         c.setFillColor(teal)
-        c.drawCentredString(center_x, chart_bottom+3.4*mm, f"5세대 {compact_manwon(fifth)}")
-        c.setFillColor(colors.HexColor("#365D78")); c.setFont(font, 6.8)
-        c.drawCentredString(center_x, chart_bottom+.5*mm, f"차이 {compact_manwon(abs(current-fifth))}")
-    text(166*mm, base_y+43*mm, "안내", 11, navy)
-    notes = ["대표 자기부담률을 적용한 상담용 비교입니다.", "실제 지급액은 약관·한도·심사에 따라 달라집니다.", f"현재 보험료: {data['current_premium_basis']}", f"5세대 보험료: {data['premium_basis']} · {STANDARD_DATE}", "누적 보험료는 보험료 변동이 없는 가정입니다."]
-    for i, note in enumerate(notes): text(166*mm, base_y+35*mm-i*6.2*mm, f"- {note}", 7.5, muted)
+        c.drawCentredString(center_x, chart_bottom+3.2*mm, f"5세대 {compact_manwon(fifth)}")
+        c.setFillColor(colors.HexColor("#365D78")); c.setFont(font, 8.2)
+        c.drawCentredString(center_x, chart_bottom, f"차이 {compact_manwon(abs(current-fifth))}")
     c.showPage(); c.save(); output.seek(0)
     return output.getvalue()
 
