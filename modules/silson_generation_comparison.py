@@ -339,7 +339,7 @@ def build_pdf(data: dict) -> bytes:
 
     # 누적 보험료 비교: 1~5년을 같은 축에서 비교하는 그룹 막대 차트
     base_y = 16*mm
-    chart_left, chart_bottom, chart_width, chart_height = 21*mm, base_y, 237*mm, 34*mm
+    chart_left, chart_bottom, chart_width, chart_height = 21*mm, base_y, 237*mm, 30*mm
     text(chart_left, chart_bottom+56*mm, "누적 보험료 비교", 13.5, navy)
     text(chart_left+43*mm, chart_bottom+56*mm, "● 현재 실손", 10, blue)
     text(chart_left+76*mm, chart_bottom+56*mm, "● 5세대", 10, teal)
@@ -355,16 +355,13 @@ def build_pdf(data: dict) -> bytes:
             height = max(chart_height*value/cumulative_max, 1*mm)
             c.setFillColor(color)
             c.roundRect(group_x+offset, baseline, bar_width, height, 1.3*mm, fill=1, stroke=0)
+            c.setFillColor(color); c.setFont(font, 8.5)
+            c.drawCentredString(group_x+offset+bar_width/2, baseline+height+2*mm, compact_manwon(value))
         center_x = group_x+9.75*mm
         c.setFillColor(navy); c.setFont(font, 9.5)
-        c.drawCentredString(center_x, chart_bottom+10*mm, f"{years}년")
-        c.setFillColor(blue)
-        c.setFont(font, 8.5)
-        c.drawCentredString(center_x, chart_bottom+6.5*mm, f"현재 {compact_manwon(current)}")
-        c.setFillColor(teal)
-        c.drawCentredString(center_x, chart_bottom+3.2*mm, f"5세대 {compact_manwon(fifth)}")
-        c.setFillColor(colors.HexColor("#365D78")); c.setFont(font, 8.2)
-        c.drawCentredString(center_x, chart_bottom, f"차이 {compact_manwon(abs(current-fifth))}")
+        c.drawCentredString(center_x, chart_bottom+9.5*mm, f"{years}년")
+        c.setFillColor(colors.HexColor("#365D78")); c.setFont(font, 8.5)
+        c.drawCentredString(center_x, chart_bottom+4.5*mm, f"차이 {compact_manwon(abs(current-fifth))}")
     c.showPage(); c.save(); output.seek(0)
     return output.getvalue()
 
@@ -508,7 +505,7 @@ def run() -> None:
                 f'<div class="sc-cumulative-card"><div class="sc-cumulative-year">{years}년 누적</div>'
                 f'<div class="sc-cumulative-row sc-cumulative-current"><span>현재 실손</span><strong>{won(current_premium*12*years)}</strong></div>'
                 f'<div class="sc-cumulative-row sc-cumulative-fifth"><span>5세대 실손</span><strong>{won(fifth_premium*12*years)}</strong></div>'
-                f'<div class="sc-cumulative-diff"><span>누적 보험료 차이</span><strong>{won(abs((current_premium-fifth_premium)*12*years))}</strong></div></div>',
+                f'<div class="sc-cumulative-diff"><span>차이</span><strong>{won(abs((current_premium-fifth_premium)*12*years))}</strong></div></div>',
                 unsafe_allow_html=True,
             )
     cumulative_premium_chart(current_premium, fifth_premium)
