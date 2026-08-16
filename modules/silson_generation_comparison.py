@@ -223,7 +223,7 @@ def run() -> None:
 
     with st.expander("✦ 사용 방법 및 비교 기준", expanded=False):
         st.markdown("1. 현재 실손 세대와 보험료를 입력합니다.\n2. 입원·수술 예시 금액을 확인하거나 수정합니다.\n3. 화면 결과를 확인한 뒤 고객용 PDF를 내려받습니다.")
-        st.caption("세대별 대표 자기부담률을 적용하는 상담용 간단 비교이며, 실제 계약의 약관과 공제금액이 우선합니다.")
+        st.caption("제작자: 박병선 팀장 · 버전 v1.0.0")
 
     section_intro("INPUT", "기본 정보", "고객 정보와 비교할 실손 세대를 입력해 주세요.")
     with st.container(border=True):
