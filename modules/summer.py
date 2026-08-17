@@ -461,8 +461,8 @@ def compute_summer(df: pd.DataFrame) -> pd.DataFrame:
 def check_monthly_requirements(dfin: pd.DataFrame):
     """
     월별 조건:
-    1. 한화생명 5만원 이상 1건
-    2. 환산업적 50만원 이상
+    1. 한화생명 월 환산업적 합계 5만원 이상
+    2. 전체 월 환산업적 50만원 이상
     """
     if dfin.empty:
         return {
@@ -475,26 +475,13 @@ def check_monthly_requirements(dfin: pd.DataFrame):
     summer_sum = dfin["썸머환산금액"].sum()
     amount_ok = summer_sum >= MONTHLY_TARGET
 
-    hanwha_target_mask = (
-        is_hanwha_life_series(dfin["보험사"])
-        & (
-            pd.to_numeric(dfin["보험료"], errors="coerce").fillna(0)
-            >= MONTHLY_HANWHA_MIN_PREMIUM
-        )
-    )
-
-    # 한화생명 5만원 이상 계약도 쉐어율만큼 건수로 인정합니다.
-    # 예: 50% 한 건은 0.5건, 50% 두 건은 합계 1건입니다.
-    # 쉐어율 공란은 0건으로 간주하여 필수조건 판정에서 제외합니다.
-    if "쉐어건수" in dfin.columns:
-        hanwha_count = pd.to_numeric(
-            dfin.loc[hanwha_target_mask, "쉐어건수"], errors="coerce"
-        ).fillna(0).sum()
-    else:
-        # 이전 형식 데이터가 들어오는 경우에는 행당 1건으로 안전하게 처리합니다.
-        hanwha_count = float(hanwha_target_mask.sum())
-
-    hanwha_ok = hanwha_count >= 1.0
+    # 한화생명 계약의 썸머 환산업적을 월 단위로 합산하여
+    # 합계가 5만원 이상인지 판정합니다.
+    hanwha_mask = is_hanwha_life_series(dfin["보험사"])
+    hanwha_summer_sum = pd.to_numeric(
+        dfin.loc[hanwha_mask, "썸머환산금액"], errors="coerce"
+    ).fillna(0).sum()
+    hanwha_ok = hanwha_summer_sum >= MONTHLY_HANWHA_MIN_PREMIUM
 
     total_ok = amount_ok and hanwha_ok
 
@@ -878,11 +865,11 @@ def write_final_result_block(ws, row, result):
 
     rows = [
         ["7월 환산업적", won(result["7월"]["환산금액"])],
-        ["7월 한화생명 5만원 이상 1건", mark(result["7월"]["한화생명5만"])],
+        ["7월 한화생명 환산업적 합계 5만원 이상", mark(result["7월"]["한화생명5만"])],
         ["7월 환산업적 50만원 이상", mark(result["7월"]["환산50만"])],
         ["7월 조건 달성", mark(result["7월"]["월달성"])],
         ["8월 환산업적", won(result["8월"]["환산금액"])],
-        ["8월 한화생명 5만원 이상 1건", mark(result["8월"]["한화생명5만"])],
+        ["8월 한화생명 환산업적 합계 5만원 이상", mark(result["8월"]["한화생명5만"])],
         ["8월 환산업적 50만원 이상", mark(result["8월"]["환산50만"])],
         ["8월 조건 달성", mark(result["8월"]["월달성"])],
         ["기본 7월+8월 합산 환산업적", won(result["기본합산환산금액"])],
@@ -1025,9 +1012,9 @@ def run():
         st.subheader("🌞 월별 필수조건")
         st.markdown(
             f"""
-            - 7월: 한화생명 **{MONTHLY_HANWHA_MIN_PREMIUM:,.0f}원 이상 1건**
+            - 7월: 한화생명 환산업적 합계 **{MONTHLY_HANWHA_MIN_PREMIUM:,.0f}원 이상**
             - 7월: 환산업적 **{MONTHLY_TARGET:,.0f}원 이상**
-            - 8월: 한화생명 **{MONTHLY_HANWHA_MIN_PREMIUM:,.0f}원 이상 1건**
+            - 8월: 한화생명 환산업적 합계 **{MONTHLY_HANWHA_MIN_PREMIUM:,.0f}원 이상**
             - 8월: 환산업적 **{MONTHLY_TARGET:,.0f}원 이상**
             """
         )
@@ -1173,7 +1160,7 @@ def run():
     condition_df = candidate_df[condition_mask].copy()
     if not condition_df.empty:
         condition_df["확인사항"] = condition_issues.loc[condition_df.index]
-        condition_df["반영상태"] = "금액 반영 · 건수/필수조건 보류"
+        condition_df["반영상태"] = "금액 반영 · 인정 건수 보류"
 
     review_df = pd.concat([blocked_df, condition_df]).sort_index()
     review_disp_all = build_review_display(review_df)
@@ -1188,7 +1175,7 @@ def run():
     if not condition_df.empty:
         st.info(
             f"쉐어율 확인이 필요한 계약 {len(condition_df):,}건은 환산금액에는 포함하고 "
-            "인정 건수와 필수조건에서는 제외했습니다."
+            "인정 건수에서는 제외했습니다."
         )
     if not review_disp_all.empty:
         with st.expander("⚠️ 아직 확인이 필요한 계약", expanded=False):
@@ -1305,7 +1292,7 @@ def run():
         )
         st.markdown(
             req_box(
-                f"7월 한화생명 {MONTHLY_HANWHA_MIN_PREMIUM:,.0f}원 이상 1건",
+                f"7월 한화생명 환산업적 합계 {MONTHLY_HANWHA_MIN_PREMIUM:,.0f}원 이상",
                 selected_result["7월"]["한화생명5만"],
             ),
             unsafe_allow_html=True,
@@ -1330,7 +1317,7 @@ def run():
         )
         st.markdown(
             req_box(
-                f"8월 한화생명 {MONTHLY_HANWHA_MIN_PREMIUM:,.0f}원 이상 1건",
+                f"8월 한화생명 환산업적 합계 {MONTHLY_HANWHA_MIN_PREMIUM:,.0f}원 이상",
                 selected_result["8월"]["한화생명5만"],
             ),
             unsafe_allow_html=True,
