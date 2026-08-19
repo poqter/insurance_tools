@@ -42,6 +42,14 @@ def won(x) -> str:
         return ""
 
 
+def signed_won(x) -> str:
+    try:
+        value = int(float(x))
+        return f"{value:+,} 원" if value else "0 원"
+    except Exception:
+        return ""
+
+
 def pct(x) -> str:
     try:
         return f"{float(x):,.0f} %"
@@ -284,9 +292,10 @@ def find_data_issues(df: pd.DataFrame, require_valid_date: bool = True):
         df["쉐어율"].astype("string").str.replace("%", "", regex=False).str.strip()
     )
     share_numeric = pd.to_numeric(share_text, errors="coerce")
+    # 공란은 100% 단독계약으로 기본 적용하며, 화면에서 개별적으로 50%로 바꿀 수 있습니다.
     add_issue(
         condition,
-        share_numeric.isna() | (share_numeric <= 0) | (share_numeric > 100),
+        share_numeric.notna() & ((share_numeric <= 0) | (share_numeric > 100)),
         "쉐어율 확인 필요",
     )
 
@@ -404,11 +413,39 @@ def compute_summer(df: pd.DataFrame) -> pd.DataFrame:
     else:
         df["쉐어율"] = np.nan
 
-    # 쉐어율이 입력된 계약만 건수로 인정합니다.
-    # 100% = 1건, 50% = 0.5건이며, 공란은 미입력으로 남겨 집계에서 제외합니다.
+    df["원본보험료"] = df["보험료"]
+
+    # 공란은 기본 100%이며 화면에서 해당 행만 50%로 변경할 수 있습니다.
     df["쉐어율미입력"] = df["쉐어율"].isna()
-    df["적용쉐어율"] = df["쉐어율"].clip(lower=0, upper=100)
-    df["쉐어건수"] = df["적용쉐어율"] / 100
+    if "_공란적용쉐어율" not in df.columns:
+        df["_공란적용쉐어율"] = 100.0
+    df["_공란적용쉐어율"] = pd.to_numeric(
+        df["_공란적용쉐어율"], errors="coerce"
+    ).fillna(100.0)
+    df["원본계산쉐어율"] = np.where(
+        df["쉐어율미입력"], df["_공란적용쉐어율"], df["쉐어율"]
+    )
+    df["원본계산쉐어율"] = pd.to_numeric(df["원본계산쉐어율"], errors="coerce")
+
+    valid_share = df["원본계산쉐어율"].between(1, 100, inclusive="both")
+    is_shared = valid_share & (df["원본계산쉐어율"] < 100)
+    df["적용쉐어율"] = np.where(is_shared, 50.0, np.where(valid_share, 100.0, df["원본계산쉐어율"]))
+    df["쉐어건수"] = np.where(is_shared, 0.5, np.where(valid_share, 1.0, 0.0))
+
+    # 원본 보험료는 원래 쉐어율이 이미 반영된 금액입니다.
+    # 모든 공동계약을 50%로 통일하고 최종 원 미만 금액은 반올림 없이 버립니다.
+    df["전체보험료역산"] = np.where(
+        is_shared,
+        df["원본보험료"] * 100 / df["원본계산쉐어율"],
+        df["원본보험료"],
+    )
+    adjusted = np.where(
+        is_shared,
+        df["원본보험료"] * 50 / df["원본계산쉐어율"],
+        df["원본보험료"],
+    )
+    df["실적보험료"] = np.floor(adjusted).astype(float)
+    df["조정차액"] = df["실적보험료"] - df["원본보험료"]
 
     ins = df["보험사"].astype(str).str.strip()
     term = df["납입기간_num"]
@@ -418,6 +455,14 @@ def compute_summer(df: pd.DataFrame) -> pd.DataFrame:
     is_nonlife = is_nonlife_series(ins)
     is_other_nonlife = is_nonlife & ~is_special_nonlife
     is_other_life = is_other_life_series(ins)
+
+    product_name = df.get("상품명", pd.Series("", index=df.index)).fillna("").astype(str)
+    product_group = df.get("상품군2", pd.Series("", index=df.index)).fillna("").astype(str)
+    df["치아보험자동판정"] = product_name.str.contains("치아", na=False) | product_group.str.contains("치아", na=False)
+    if "_치아보험예외적용" not in df.columns:
+        df["_치아보험예외적용"] = df["치아보험자동판정"]
+    df["치아보험예외적용"] = df["_치아보험예외적용"].fillna(False).astype(bool)
+    long_term_rule = (term > 10) | df["치아보험예외적용"]
 
     # ✅ 썸머 환산율
     # 손해보험
@@ -429,14 +474,14 @@ def compute_summer(df: pd.DataFrame) -> pd.DataFrame:
     # - 10년납 이하: 한화생명 100%, 이외 생명보험 50%
     df["썸머율"] = np.select(
         [
-            is_special_nonlife & (term > 10),
-            is_special_nonlife & (term <= 10),
-            is_other_nonlife & (term > 10),
-            is_other_nonlife & (term <= 10),
-            is_hanwha_life & (term > 10),
-            is_hanwha_life & (term <= 10),
-            is_other_life & (term > 10),
-            is_other_life & (term <= 10),
+            is_special_nonlife & long_term_rule,
+            is_special_nonlife & ~long_term_rule,
+            is_other_nonlife & long_term_rule,
+            is_other_nonlife & ~long_term_rule,
+            is_hanwha_life & long_term_rule,
+            is_hanwha_life & ~long_term_rule,
+            is_other_life & long_term_rule,
+            is_other_life & ~long_term_rule,
         ],
         [
             250,
@@ -451,9 +496,22 @@ def compute_summer(df: pd.DataFrame) -> pd.DataFrame:
         default=0,
     ).astype(int)
 
-    # 현재 기준: 보험료가 이미 쉐어율 반영된 값이라고 보고 그대로 사용
-    df["실적보험료"] = df["보험료"]
     df["썸머환산금액"] = df["실적보험료"] * df["썸머율"] / 100
+
+    def application_label(row):
+        labels = []
+        if pd.isna(row["쉐어율"]):
+            labels.append(f"쉐어율 공란 → {row['적용쉐어율']:.0f}% {'기본' if row['적용쉐어율'] == 100 else '수동'} 적용")
+        elif row["쉐어율"] < 100:
+            if row["쉐어율"] == 50:
+                labels.append("쉐어 50% 적용")
+            else:
+                labels.append(f"쉐어 조정 적용 {row['쉐어율']:g}% → 50%")
+        if row["치아보험예외적용"]:
+            labels.append("치아보험 예외 적용")
+        return " · ".join(labels)
+
+    df["적용 구분"] = df.apply(application_label, axis=1)
 
     return df
 
@@ -577,11 +635,16 @@ def to_styled(dfin: pd.DataFrame) -> pd.DataFrame:
             "보험사",
             "상품명",
             "납입기간",
-            "보험료",
-            "쉐어율",
+            "원본 보험료",
+            "원본 쉐어율",
+            "적용 쉐어율",
+            "전체 보험료 역산",
             "실적보험료",
+            "조정 차액",
+            "인정 건수",
             "썸머율",
             "썸머환산금액",
+            "적용 구분",
         ])
 
     df["계약일자"] = pd.to_datetime(df["계약일자"], errors="coerce").dt.strftime("%Y-%m-%d")
@@ -590,13 +653,24 @@ def to_styled(dfin: pd.DataFrame) -> pd.DataFrame:
         lambda x: f"{int(x)}년" if pd.notnull(x) else ""
     )
 
-    df["보험료"] = df["보험료"].map(won)
-    df["쉐어율"] = df["쉐어율"].apply(
-        lambda x: pct(x) if pd.notnull(x) else "⚠️ 미입력"
-    )
+    df["원본보험료"] = df["원본보험료"].map(won)
+    df["쉐어율"] = df["쉐어율"].apply(lambda x: pct(x) if pd.notnull(x) else "공란")
+    df["적용쉐어율"] = df["적용쉐어율"].apply(lambda x: pct(x) if pd.notnull(x) else "확인 필요")
+    df["전체보험료역산"] = np.floor(pd.to_numeric(df["전체보험료역산"], errors="coerce")).map(won)
     df["실적보험료"] = df["실적보험료"].map(won)
+    df["조정차액"] = df["조정차액"].map(signed_won)
+    df["쉐어건수"] = df["쉐어건수"].apply(lambda x: f"{x:g}건")
     df["썸머율"] = df["썸머율"].map(pct)
     df["썸머환산금액"] = df["썸머환산금액"].map(won)
+
+    df.rename(columns={
+        "원본보험료": "원본 보험료",
+        "쉐어율": "원본 쉐어율",
+        "적용쉐어율": "적용 쉐어율",
+        "전체보험료역산": "전체 보험료 역산",
+        "조정차액": "조정 차액",
+        "쉐어건수": "인정 건수",
+    }, inplace=True)
 
     cols = [
         "계약월",
@@ -605,14 +679,70 @@ def to_styled(dfin: pd.DataFrame) -> pd.DataFrame:
         "보험사",
         "상품명",
         "납입기간",
-        "보험료",
-        "쉐어율",
+        "원본 보험료",
+        "원본 쉐어율",
+        "적용 쉐어율",
+        "전체 보험료 역산",
         "실적보험료",
+        "조정 차액",
+        "인정 건수",
         "썸머율",
         "썸머환산금액",
+        "적용 구분",
     ]
 
     return df[[c for c in cols if c in df.columns]]
+
+
+def style_detail_table(dfin: pd.DataFrame):
+    display = to_styled(dfin)
+    highlight_cols = {
+        "원본 쉐어율", "적용 쉐어율", "전체 보험료 역산", "실적보험료",
+        "조정 차액", "인정 건수", "썸머율", "적용 구분",
+    }
+
+    def color_row(row):
+        label = str(row.get("적용 구분", ""))
+        has_share = "쉐어" in label
+        has_dental = "치아보험" in label
+        color = ""
+        if has_share and has_dental:
+            color = "background-color: #eee3ff"
+        elif has_dental:
+            color = "background-color: #e3f2fd"
+        elif has_share:
+            color = "background-color: #fff4cc"
+        return [color if col in highlight_cols else "" for col in row.index]
+
+    try:
+        return display.style.apply(color_row, axis=1)
+    except ImportError:
+        # 배포 환경에 스타일 선택 의존성이 없더라도 계산과 표 표시는 유지합니다.
+        return display
+
+
+def adjustment_summary(dfin: pd.DataFrame) -> dict:
+    if dfin is None or dfin.empty:
+        return {"원본": 0, "조정": 0, "차액": 0, "증가": 0, "감소": 0, "쉐어건수": 0}
+    diff = pd.to_numeric(dfin["조정차액"], errors="coerce").fillna(0)
+    return {
+        "원본": dfin["원본보험료"].sum(),
+        "조정": dfin["실적보험료"].sum(),
+        "차액": diff.sum(),
+        "증가": diff[diff > 0].sum(),
+        "감소": diff[diff < 0].sum(),
+        "쉐어건수": int((dfin["적용쉐어율"] < 100).sum()),
+    }
+
+
+def render_adjustment_summary(dfin: pd.DataFrame, title="쉐어 조정 요약"):
+    summary = adjustment_summary(dfin)
+    st.markdown(f"#### {title}")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("원본 보험료 합계", won(summary["원본"]))
+    c2.metric("50% 조정 보험료 합계", won(summary["조정"]), signed_won(summary["차액"]))
+    c3.metric("증가액 / 감소액", f"+{summary['증가']:,.0f} / {summary['감소']:,.0f} 원")
+    c4.metric("쉐어 적용 계약", f"{summary['쉐어건수']:,}건")
 
 
 def money_box(title, value, color="#ff9800"):
@@ -781,7 +911,7 @@ def format_summary_for_display(summary: pd.DataFrame) -> pd.DataFrame:
                     if pd.notnull(value)
                     else "0"
                 )
-                return f"{base}건 (⚠️ 미입력 {missing}건)" if missing else f"{base}건"
+                return f"{base}건 (공란 기본 100% {missing}건)" if missing else f"{base}건"
 
             df[count_col] = df.apply(format_count, axis=1)
 
@@ -841,6 +971,29 @@ def write_table(ws, df_for_sheet: pd.DataFrame, start_row: int = 1, name_suffix:
     table = Table(displayName=display_name, ref=f"A{start_row}:{end_col_letter}{last_row}")
     table.tableStyleInfo = TableStyleInfo(name="TableStyleMedium9", showRowStripes=True)
     ws.add_table(table)
+
+    # 화면과 동일하게 조정·예외 적용 셀을 강조합니다.
+    if "적용 구분" in df_for_sheet.columns:
+        headers = {cell.value: cell.column for cell in ws[start_row]}
+        target_headers = [
+            "원본 쉐어율", "적용 쉐어율", "전체 보험료 역산", "실적보험료",
+            "조정 차액", "인정 건수", "썸머율", "적용 구분",
+        ]
+        for row_num in range(start_row + 1, last_row + 1):
+            label = str(ws.cell(row=row_num, column=headers["적용 구분"]).value or "")
+            has_share = "쉐어" in label
+            has_dental = "치아보험" in label
+            fill_color = None
+            if has_share and has_dental:
+                fill_color = "EEE3FF"
+            elif has_dental:
+                fill_color = "E3F2FD"
+            elif has_share:
+                fill_color = "FFF4CC"
+            if fill_color:
+                for header in target_headers:
+                    if header in headers:
+                        ws.cell(row=row_num, column=headers[header]).fill = PatternFill("solid", fgColor=fill_color)
 
     autosize_columns_full(ws, padding=5)
 
@@ -976,19 +1129,19 @@ def render_result_tabs(summary_df, july_df, august_df, other_month_df):
         if july_df.empty:
             st.info("7월 계약이 없습니다.")
         else:
-            st.dataframe(to_styled(july_df), use_container_width=True)
+            st.dataframe(style_detail_table(july_df), use_container_width=True)
 
     with tab3:
         if august_df.empty:
             st.info("8월 계약이 없습니다.")
         else:
-            st.dataframe(to_styled(august_df), use_container_width=True)
+            st.dataframe(style_detail_table(august_df), use_container_width=True)
 
     with tab4:
         if other_month_df.empty:
             st.info("7월/8월 외 계약이 없습니다.")
         else:
-            st.dataframe(to_styled(other_month_df), use_container_width=True)
+            st.dataframe(style_detail_table(other_month_df), use_container_width=True)
 
 
 # ── 메인 실행 ────────────────────────────────────────────────
@@ -1054,6 +1207,11 @@ def run():
             - 10년납 초과: 이외 생명보험 100%
             - 10년납 이하: 한화생명 100%
             - 10년납 이하: 이외 생명보험 50%
+
+            **예외 및 쉐어 기준**
+            - 상품명 또는 상품군에 `치아`가 포함되면 보험사와 관계없이 10년납 초과 구간 적용
+            - 공동계약은 원래 쉐어율과 관계없이 50% 보험료·0.5건으로 통일
+            - 조정 실적보험료의 원 미만 금액은 반올림하지 않고 버림
             """
         )
 
@@ -1168,13 +1326,73 @@ def run():
     df_valid.loc[:, "쉐어율"] = share_numeric.loc[df_valid.index]
     excluded_disp = build_excluded_with_reason(excluded_df)
 
+    upload_key = hashlib.sha256(file_bytes).hexdigest()[:16]
+
+    # 쉐어율 공란은 기본 100%로 적용하되 행별로 50%를 선택할 수 있습니다.
+    df_valid["_공란적용쉐어율"] = 100.0
+    blank_share_mask = df_valid["쉐어율"].isna()
+    blank_share_df = df_valid[blank_share_mask].copy()
+    if not blank_share_df.empty:
+        st.markdown(f"#### 쉐어율 공란 확인 대상 {len(blank_share_df):,}건")
+        st.caption("기본값은 100% 단독계약입니다. 필요한 계약만 50% 쉐어계약으로 변경해 주세요.")
+        blank_editor = blank_share_df[
+            ["_원본행번호", "수금자명", "보험사", "상품명", "보험료"]
+        ].copy()
+        blank_editor["적용 쉐어율"] = "100%"
+        blank_editor = st.data_editor(
+            blank_editor.reset_index(drop=True),
+            use_container_width=True,
+            hide_index=True,
+            disabled=["_원본행번호", "수금자명", "보험사", "상품명", "보험료"],
+            column_config={
+                "적용 쉐어율": st.column_config.SelectboxColumn(
+                    "적용 쉐어율", options=["100%", "50%"], required=True
+                )
+            },
+            key=f"summer_blank_share_{upload_key}",
+        )
+        for _, edited_row in blank_editor.iterrows():
+            row_mask = df_valid["_원본행번호"] == edited_row["_원본행번호"]
+            df_valid.loc[row_mask, "_공란적용쉐어율"] = 50.0 if edited_row["적용 쉐어율"] == "50%" else 100.0
+
+    # 상품명 또는 상품군2에 '치아'가 있으면 기본 체크하고, 해제 시 즉시 일반 납기 기준으로 계산합니다.
+    product_name = df_valid["상품명"].fillna("").astype(str)
+    product_group = df_valid["상품군2"].fillna("").astype(str)
+    dental_mask = product_name.str.contains("치아", na=False) | product_group.str.contains("치아", na=False)
+    df_valid["_치아보험예외적용"] = False
+    dental_df = df_valid[dental_mask].copy()
+    st.markdown(f"#### 치아보험 확인 대상 {len(dental_df):,}건")
+    if dental_df.empty:
+        st.info("상품명 또는 상품군에 '치아'가 포함된 계약이 없습니다.")
+    else:
+        st.caption("체크된 계약은 실제 납입기간과 관계없이 10년납 초과 환산율을 적용합니다.")
+        dental_editor = dental_df[
+            ["_원본행번호", "수금자명", "보험사", "상품명", "상품군2", "납입기간"]
+        ].copy()
+        dental_editor["치아보험 예외 적용"] = True
+        dental_editor = st.data_editor(
+            dental_editor.reset_index(drop=True),
+            use_container_width=True,
+            hide_index=True,
+            disabled=["_원본행번호", "수금자명", "보험사", "상품명", "상품군2", "납입기간"],
+            column_config={
+                "치아보험 예외 적용": st.column_config.CheckboxColumn(
+                    "치아보험 예외 적용", default=True
+                )
+            },
+            key=f"summer_dental_check_{upload_key}",
+        )
+        for _, edited_row in dental_editor.iterrows():
+            row_mask = df_valid["_원본행번호"] == edited_row["_원본행번호"]
+            df_valid.loc[row_mask, "_치아보험예외적용"] = bool(edited_row["치아보험 예외 적용"])
+
     if not blocked_df.empty:
         st.warning(
             f"중요 항목을 확인할 수 없는 계약 {len(blocked_df):,}건은 계산에서 제외했습니다."
         )
     if not condition_df.empty:
         st.info(
-            f"쉐어율 확인이 필요한 계약 {len(condition_df):,}건은 환산금액에는 포함하고 "
+            f"범위를 벗어난 쉐어율 계약 {len(condition_df):,}건은 환산금액에는 포함하고 "
             "인정 건수에서는 제외했습니다."
         )
     if not review_disp_all.empty:
@@ -1226,6 +1444,7 @@ def run():
 
     # 2. 전체 환산 결과
     section_intro("전체 결과", "썸머 환산 결과", "반영 계약과 제외 계약을 포함한 전체 계산 결과입니다.")
+    render_adjustment_summary(df, "전체 쉐어 조정 요약")
     render_result_tabs(
         summary_df=total_summary,
         july_df=july_df,
@@ -1271,6 +1490,8 @@ def run():
 
     st.markdown(f"### 📌 선택 기준: {selected_collector}")
     st.caption(f"레디포썸머 보너스율: {ready_bonus_rate}%")
+
+    render_adjustment_summary(selected_df, f"{selected_collector} 쉐어 조정 요약")
 
     render_result_tabs(
         summary_df=selected_summary,
