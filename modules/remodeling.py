@@ -13,11 +13,19 @@ from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.page import PageMargins
 
 try:
-    from .ui_components import page_header, section_intro
+    from .ui_components import page_footer, page_header, section_intro, tool_guide
 except ImportError:  # 단독 실행·테스트용
     def page_header(_section: str, title: str, description: str, _code: str) -> None:
         st.title(title)
         st.caption(description)
+
+    def page_footer(*_args, **_kwargs) -> None:
+        return None
+
+    def tool_guide(*_args, **_kwargs) -> None:
+        return None
+
+APP_VERSION = "1.0.1"
 
 
 APP_TITLE = "보험 리모델링 비교 제안서"
@@ -297,6 +305,9 @@ def _excel_setup(ws, last_col: str, last_row: int) -> None:
     ws.print_options.horizontalCentered = True
     ws.print_options.verticalCentered = True
     ws.print_area = f"A1:{last_col}{last_row}"
+    ws.oddHeader.right.text = "&K1769DC&BH  |  화랑 WORKSPACE"
+    ws.oddHeader.right.size = 9
+    ws.oddHeader.right.font = "Pretendard,Bold"
 
 
 def _excel_top(ws, people: list[Person], title: str) -> None:
@@ -617,6 +628,14 @@ def render_preview(people: list[Person]) -> None:
 
 def run() -> None:
     page_header("고객 상담", APP_TITLE, "고객별 기존 계약 처리 계획과 새로운 보장 구성을 작성해 엑셀로 내려받습니다.", "RM")
+    tool_guide(
+        "사용 방법 및 작성 기준",
+        "기존 계약의 처리 계획과 새롭게 구성할 보험을 고객별 비교안으로 정리합니다.",
+        [("상담 정보", "대상 인원·상담일·담당자를 입력합니다."),
+         ("고객별 작성", "신규 보험과 기존 계약별 유지·감액·해지 등의 계획을 작성합니다."),
+         ("결과 확인", "자동 계산 결과와 미리보기를 검토한 뒤 엑셀을 내려받습니다.")],
+        criteria="월 보험료와 납입 예정 총액은 입력한 보험료·납입기간을 기준으로 자동 계산됩니다.",
+    )
     section_intro("공통 정보", "상담 기본정보", "대상 인원과 상담 정보를 먼저 확인해 주세요.")
     c1, c2, c3, c4 = st.columns([.85, 1, 1.15, 1])
     with c1:
@@ -624,7 +643,7 @@ def run() -> None:
     with c2:
         consultation_date = st.date_input("상담일", value=date.today(), key="rm_date")
     with c3:
-        consultant = st.text_input("담당자", key="rm_consultant", placeholder="예: 박병선 팀장")
+        consultant = st.text_input("담당자", key="rm_consultant", placeholder="예: 박병선")
     with c4:
         st.markdown('<div style="height:1.78rem"></div>', unsafe_allow_html=True)
         if st.button("예시 데이터 입력", use_container_width=True):
@@ -677,6 +696,7 @@ def run() -> None:
         use_container_width=True,
         type="primary",
     )
+    page_footer("보험 리모델링", APP_VERSION)
 
 
 if __name__ == "__main__":

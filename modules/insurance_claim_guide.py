@@ -32,12 +32,12 @@ from reportlab.platypus import (
 )
 
 try:
-    from .ui_components import page_header, section_intro
+    from .ui_components import page_footer, page_header, section_intro, tool_guide
 except ImportError:  # 단독 파일 점검용
-    from ui_components import page_header, section_intro
+    from ui_components import page_footer, page_header, section_intro, tool_guide
 
 
-GUIDE_VERSION = "1.3.0"
+GUIDE_VERSION = "1.3.1"
 GUIDE_STANDARD_DATE = "2026.08"
 STATE_PREFIX = "cg_"
 
@@ -932,6 +932,19 @@ def build_guide_pdf(selected_claims: list[str], docs: list[DocumentRule], accide
 
     def footer(canvas, doc):
         canvas.saveState()
+        # 고객용 자료 공통 브랜드 락업
+        brand_y = A4[1] - 10 * mm
+        canvas.setFillColor(colors.HexColor("#1769DC"))
+        canvas.roundRect(A4[0] - 69 * mm, brand_y - 3.7 * mm, 7.4 * mm, 7.4 * mm, 1.8 * mm, fill=1, stroke=0)
+        canvas.setFillColor(colors.white)
+        canvas.setFont(font_name, 7.5)
+        canvas.drawCentredString(A4[0] - 65.3 * mm, brand_y - 1.3 * mm, "H")
+        canvas.setStrokeColor(colors.HexColor("#C7D7E5"))
+        canvas.setLineWidth(.6)
+        canvas.line(A4[0] - 58.7 * mm, brand_y - 3.7 * mm, A4[0] - 58.7 * mm, brand_y + 3.7 * mm)
+        canvas.setFillColor(colors.HexColor("#183B67"))
+        canvas.setFont(font_name, 7.5)
+        canvas.drawString(A4[0] - 55.5 * mm, brand_y - 1.3 * mm, "화랑 WORKSPACE")
         canvas.setFont(font_name, 7.5)
         canvas.setFillColor(colors.HexColor("#64748B"))
         canvas.drawString(15 * mm, 9 * mm, f"보험금 청구 가이드 · {date.today():%Y.%m.%d}")
@@ -943,7 +956,7 @@ def build_guide_pdf(selected_claims: list[str], docs: list[DocumentRule], accide
         pagesize=A4,
         leftMargin=15 * mm,
         rightMargin=15 * mm,
-        topMargin=13 * mm,
+        topMargin=18 * mm,
         bottomMargin=15 * mm,
         title="보험금 청구 준비 안내",
         author="보험금 청구 가이드",
@@ -1313,10 +1326,19 @@ def render_accident_helper(selected_claims: list[str]) -> str:
 def run() -> None:
     inject_styles()
     page_header("고객 상담", "보험금 청구 가이드", "청구 항목별 필요서류를 확인하고 보장분석 PDF에서 관련 담보와 가입금액을 찾습니다.", "CG")
+    tool_guide(
+        "사용 방법 및 서류 안내 기준",
+        "청구 유형에 맞는 준비서류와 고객 전달용 안내문을 빠르게 구성합니다.",
+        [("청구 유형 선택", "고객이 청구할 항목을 한 개 이상 선택합니다."),
+         ("가입내용 확인", "필요한 경우 보장분석 PDF를 등록해 관련 담보를 확인합니다."),
+         ("안내자료 생성", "추천서류를 검토한 뒤 문자 안내문과 고객용 PDF를 만듭니다.")],
+        criteria="선택한 청구 유형과 추가 질문의 답변을 기준으로 추천서류가 자동 갱신됩니다.",
+        caution="실제 지급 여부와 추가서류는 가입 약관 및 보험회사의 심사 결과가 우선합니다.",
+    )
 
     top_left, top_right = st.columns([5, 1])
     with top_left:
-        st.caption(f"제작자: 박병선 팀장 · {GUIDE_STANDARD_DATE}　|　버전 {GUIDE_VERSION}")
+        st.caption(f"서류 안내 기준 {GUIDE_STANDARD_DATE}")
     with top_right:
         if st.button("처음부터 다시", key="cg_reset", use_container_width=True):
             clear_state()
@@ -1432,3 +1454,4 @@ def run() -> None:
 
     st.divider()
     st.caption("이 가이드는 보장분석 자료와 선택한 청구 항목을 기준으로 관련 담보와 준비서류를 안내합니다. 실제 지급 여부와 추가서류는 가입 약관 및 보험회사의 심사 결과에 따라 달라질 수 있습니다.")
+    page_footer("보험금 청구 가이드", GUIDE_VERSION)

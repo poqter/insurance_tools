@@ -12,7 +12,9 @@ from difflib import SequenceMatcher
 from typing import Any
 
 import streamlit as st
-from .ui_components import page_header, section_intro
+from .ui_components import page_footer, page_header, section_intro
+
+APP_VERSION = "1.0.1"
 import streamlit.components.v1 as components
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -2159,3 +2161,4 @@ def run() -> None:
             type="primary",
             use_container_width=True,
         )
+    page_footer("수수료 계산기", APP_VERSION)

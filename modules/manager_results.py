@@ -9,7 +9,9 @@ import os
 import re
 import numpy as np
 import hashlib
-from .ui_components import page_header, section_intro
+from .ui_components import page_footer, page_header, section_intro
+
+APP_VERSION = "1.0.1"
 
 
 # ── 전역 상수 ────────────────────────────────────────────────
@@ -739,8 +741,8 @@ def build_workbook(
 # ── 메인 실행 함수 ───────────────────────────────────────────
 def run():
     page_header("실적 관리", "매니저 업적 환산", "선택한 수금자의 실적 환산금액과 지점 합산 결과를 확인합니다.", "MR")
-    with st.expander("사용 방법 및 환산 기준 보기"):
-        st.header("🧭 사용 방법")
+    with st.expander("사용 방법 및 실적 환산 기준", expanded=False):
+        st.markdown("#### 사용 순서")
         st.markdown(
             """
             **🖥️ 한화라이프랩 전산**  
@@ -1075,6 +1077,7 @@ def run():
         file_name=download_filename,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
+    page_footer("매니저 업적 환산", APP_VERSION)
 
 
 if __name__ == "__main__":

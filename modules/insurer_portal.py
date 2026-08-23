@@ -10,9 +10,11 @@ from urllib.parse import urlparse
 import streamlit as st
 
 try:
-    from modules.ui_components import page_header
+    from modules.ui_components import page_footer, page_header
 except ImportError:  # 모듈 단독 미리보기용
-    from ui_components import page_header
+    from ui_components import page_footer, page_header
+
+APP_VERSION = "1.0.1"
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -367,3 +369,4 @@ def run() -> None:
     non_life_section = _section("손해보험", len(NON_LIFE_INSURERS), NON_LIFE_INSURERS, "ip-non-life")
     st.markdown(f'<div class="ip-layout">{life_section}{non_life_section}</div>', unsafe_allow_html=True)
     st.caption("각 보험사의 접속 정책과 보안 프로그램에 따라 로그인 방식이 달라질 수 있습니다. 고객센터 번호는 공식적으로 확인된 보험사만 표시됩니다.")
+    page_footer("보험사 전산 포털", APP_VERSION)

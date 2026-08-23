@@ -2,7 +2,9 @@ import time
 
 import streamlit as st
 
-from .ui_components import page_header, section_intro
+from .ui_components import page_footer, page_header, section_intro, tool_guide
+
+APP_VERSION = "2.0.3"
 
 
 TAX_RATE = 0.154
@@ -389,6 +391,7 @@ def render_styles() -> None:
         .hw-current-rate { color: var(--hw-navy); font-weight: 850; }
 
         .hw-note { margin-top: 14px; color: var(--hw-muted); font-size: 11px; line-height: 1.55; }
+        .hw-print-head { display:none; }
 
         @media (max-width: 680px) {
             .hw-result-title { font-size: 23px; }
@@ -415,13 +418,49 @@ def render_styles() -> None:
         @page { size: A4 portrait; margin: 9mm; }
 
         @media print {
-            header, footer, [data-testid="stSidebar"], [data-testid="stForm"], [data-testid="stExpander"] {
+            header, footer, [data-testid="stSidebar"], [data-testid="stHeader"], [data-testid="stToolbar"],
+            [data-testid="stStatusWidget"], [data-testid="stForm"], [data-testid="stExpander"],
+            [data-testid="stAlert"], .stButton, .stDownloadButton, .hw-page-head, .hw-page-footer,
+            .hw-section-head {
                 display: none !important;
             }
 
-            html, body {
+            /* 숨긴 화면 요소의 Streamlit 바깥 래퍼와 그 사이 간격까지 제거합니다. */
+            [data-testid="stElementContainer"]:has(.hw-page-head),
+            [data-testid="stElementContainer"]:has(.hw-page-footer),
+            [data-testid="stElementContainer"]:has(.hw-section-head),
+            [data-testid="stElementContainer"]:has([data-testid="stExpander"]),
+            [data-testid="stElementContainer"]:has([data-testid="stForm"]),
+            [data-testid="stElementContainer"]:has([data-testid="stAlert"]) {
+                display: none !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+
+            html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], main {
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
+                height: auto !important;
+                max-height: none !important;
+                overflow: visible !important;
+            }
+
+            * { scrollbar-width: none !important; }
+            *::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
+
+            .hw-print-head {
+                display:flex !important; align-items:center; justify-content:space-between; gap:1rem;
+                margin:0 0 6mm; padding:0 0 3mm; border-bottom:1px solid #D7E2EB;
+            }
+            .hw-print-title { color:#16324F; font-size:18pt; font-weight:800; letter-spacing:-.04em; }
+            .hw-print-brand { display:flex; align-items:center; gap:3mm; color:#16324F; font-size:9pt; font-weight:750; }
+            .hw-print-mark { width:8mm; height:8mm; display:grid; place-items:center; border-radius:2mm;
+                background:#1769DC; color:#FFF; font-weight:850; }
+            .hw-print-divider { width:1px; height:8mm; background:#C7D7E5; }
+
+            [data-testid="stAppViewBlockContainer"], [data-testid="stMainBlockContainer"],
+            .stMainBlockContainer, main .block-container {
+                max-width:none !important; padding:0 !important; margin:0 !important;
             }
 
             .block-container {
@@ -608,31 +647,15 @@ def run():
         "DS",
     )
 
-    with st.expander("인쇄 방법 및 계산 기준"):
-        st.markdown(
-            """
-            **계산 기준**
-
-            - 적금은 1년 만기 상품을 동일한 월납입액과 금리로 10회 반복한 단리 계산입니다.
-            - 매년 만기 원금의 재예치와 복리 효과는 반영하지 않습니다.
-            - 적금 이자에는 이자소득세 15.4%를 반영합니다.
-            - 단기납은 입력한 10년 시점 예상 해지환급률을 기준으로 계산합니다.
-
-            **인쇄 안내**
-
-            - Ctrl + P -> 설정 더보기를 누릅니다. 
-            - 배율을 맞춤설정으로 변경 후 78로 조정.
-            - 머리글과 바닥글, 배경그래픽 체크 해제 후 인쇄.
-            """
-        )
-        st.markdown(
-            """
-            <div style="margin-top:14px; color:#6e7e90; font-size:12px;">
-                제작자: 박병선 팀장 · 버전 v2.0.0
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+    tool_guide(
+        "사용 방법 및 계산 기준",
+        "같은 월납입금액을 기준으로 적금과 단기납의 10년 예상 결과를 비교합니다.",
+        [("조건 입력", "월납입금액·적금 금리·단기납 기간·환급률을 입력합니다."),
+         ("비교 실행", "입력한 조건으로 두 방식의 예상 수령액과 이익을 계산합니다."),
+         ("결과 활용", "비교 결과를 확인하고 필요하면 브라우저에서 인쇄합니다.")],
+        criteria="- 적금은 1년 만기 상품을 같은 조건으로 10회 반복한 단리 계산입니다.\n- 재예치와 복리 효과는 반영하지 않으며 이자소득세 15.4%를 적용합니다.\n- 단기납은 입력한 10년 시점 예상 해지환급률을 적용합니다.",
+        caution="인쇄 시 Ctrl+P에서 배율 78을 우선 적용하고 머리글·바닥글과 배경 그래픽을 해제해 주세요.",
+    )
 
     section_intro("입력", "상담 조건 입력", "적금과 단기납에 적용할 네 가지 조건을 입력해 주세요.")
     with st.form("hwarang_deposit_shortpay_form"):
@@ -706,6 +729,13 @@ def run():
     else:
         headline = f"현재 조건에서는 적금 누적 세후이자가 <strong>{format_currency(abs(advantage))} 더 큽니다</strong>"
 
+    st.markdown(
+        '''<div class="hw-print-head">
+          <div class="hw-print-title">적금 vs 단기납 10년 예상 이익 비교</div>
+          <div class="hw-print-brand"><span class="hw-print-mark">H</span><span class="hw-print-divider"></span><span>화랑 WORKSPACE</span></div>
+        </div>''',
+        unsafe_allow_html=True,
+    )
     section_intro("분석 결과", "10년 예상 이익 비교", "같은 월납입금액을 활용했을 때의 예상 결과입니다.")
     st.markdown(
         f"""
@@ -765,3 +795,4 @@ def run():
         """,
         unsafe_allow_html=True,
     )
+    page_footer("적금 vs 단기납", APP_VERSION)

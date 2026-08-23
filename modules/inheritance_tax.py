@@ -3,7 +3,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from io import BytesIO
 from typing import Any, Dict, Tuple
-from .ui_components import page_header
+from .ui_components import page_footer, page_header, tool_guide
+
+APP_VERSION = "2.1.4"
 
 try:
     from openpyxl import Workbook
@@ -362,8 +364,6 @@ def load_selected_example() -> None:
 
 def render_sidebar() -> None:
     # 함수명은 기존 호출과의 호환을 위해 유지하고, 표시는 본문으로 이동합니다.
-    st.caption("제작 박병선 팀장 · 버전 v2.1.3")
-
     with st.expander("계산 흐름"):
         st.markdown(
             """
@@ -901,6 +901,10 @@ def build_excel_report(
         sheet.oddFooter.center.color = GRAY
 
     buffer = BytesIO()
+    for report_sheet in wb.worksheets:
+        report_sheet.oddHeader.right.text = "&K1769DC&BH  |  화랑 WORKSPACE"
+        report_sheet.oddHeader.right.size = 9
+        report_sheet.oddHeader.right.font = "Pretendard,Bold"
     wb.save(buffer)
     return buffer.getvalue()
 
@@ -910,6 +914,15 @@ def build_excel_report(
 # -----------------------------------------------------------------------------
 def run():
     page_header("고객 상담", "상속세 예상 계산기", "상속재산과 공제 항목을 입력하여 예상 상속세와 납부재원 부족액을 확인합니다.", "IT")
+    tool_guide(
+        "사용 방법 및 계산 기준",
+        "상속재산과 공제·상속인 정보를 바탕으로 예상 상속세와 납부재원을 계산합니다.",
+        [("재산 입력", "상속재산과 채무·장례비·사전증여 재산을 입력합니다."),
+         ("공제 확인", "상속인 구성과 적용할 공제·고급 조건을 확인합니다."),
+         ("결과 활용", "예상 세액과 부족한 납부재원을 확인하고 상담용 엑셀을 내려받습니다.")],
+        criteria="모든 금액은 만원 단위이며 입력값을 억·만원 단위로 자동 해석해 표시합니다.",
+        caution="상담용 예상치이므로 실제 신고 요건과 재산평가 결과에 따라 달라질 수 있습니다.",
+    )
     st.info("모든 금액은 **만원 단위**로 입력합니다. 입력값은 자동으로 억·만원 단위로 해석해 표시합니다.")
 
     render_sidebar()
@@ -1373,6 +1386,7 @@ def run():
     st.info(
         "상담용 예상치입니다. 실제 신고 시 상속관계, 재산평가, 사전증여 내역과 공제 요건을 별도로 확인해야 합니다."
     )
+    page_footer("상속세 예상 계산기", APP_VERSION)
 
 
 if __name__ == "__main__":

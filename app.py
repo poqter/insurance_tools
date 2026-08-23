@@ -68,15 +68,15 @@ inject_pretendard_font()
 
 # 공지는 이 목록만 수정하면 로그인 화면에 반영됩니다.
 NOTICE = {
-    "date": "2026.08.01",
-    "title": "화랑WORKSPACE 화면이 새롭게 개편되었습니다.",
+    "date": "2026.08.22",
+    "title": "화랑 WORKSPACE 디자인이 새롭게 정리되었습니다.",
     "items": [
-        "로그인 후 통합 홈에서 필요한 업무를 선택할 수 있습니다.",
-        "고객 상담과 실적 관리 메뉴가 업무 목적별로 구분되었습니다.",
-        "썸머·컨벤션·상속세 계산기가 추가되었습니다.",
-        "비밀번호 입력 후 Enter 키를 눌러 로그인할 수 있습니다.",
+        "모든 기능의 화면 구성과 안내 형식을 하나의 기준으로 통일했습니다.",
+        "고객 상담과 실적 관리 도구는 업무 목적별로 구분되어 있습니다.",
+        "각 기능의 사용 방법과 적용 기준은 접힌 안내에서 확인할 수 있습니다.",
+        "기존 계산식과 데이터 처리 방식은 그대로 유지됩니다.",
     ],
-    "important": "8월1일부터 비밀번호가 변경되었습니다. 변경된 비밀번호는 박병선 팀장에게 문의해 주세요.",
+    "important": "비밀번호 또는 이용 권한은 박병선에게 문의해 주세요.",
     "contact_url": "https://open.kakao.com/o/sFxdv4Rf",
 }
 
@@ -254,7 +254,7 @@ def render_notice() -> None:
                 <span>변경된 비밀번호가 필요하신가요?</span>
               </div>
               <a class="hw-login-contact-link" href="{NOTICE['contact_url']}" target="_blank" rel="noopener noreferrer">
-                박병선 팀장에게 문의해 주세요 <span>↗</span>
+                박병선에게 문의해 주세요 <span>↗</span>
               </a>
             </div>
             '''
@@ -269,7 +269,7 @@ def render_login() -> bool:
 
     st.markdown(
         """
-        <div class="hw-login-brand"><span class="hw-logo">H</span><strong>화랑 <b>WORKSPACE</b></strong></div>
+        <div class="hw-login-brand"><span class="hw-logo">H</span><div><strong>화랑 <b>WORKSPACE</b></strong><small>Insurance Consulting Support</small></div></div>
         <div class="hw-login-hero">
           <div class="hw-login-copy">
             <span class="hw-login-kicker"><i></i>HWARANG BUSINESS WORKSPACE</span>

@@ -6,6 +6,22 @@ import html
 import streamlit as st
 
 
+_PAGE_ICONS = {
+    "보장 분석 도우미": '<svg viewBox="0 0 24 24"><path d="M6 3h9l3 3v15H6z"/><path d="M14 3v4h4M9 11h6M9 15h6M9 19h4"/></svg>',
+    "보험 리모델링": '<svg viewBox="0 0 24 24"><path d="M20 7h-5V2"/><path d="M20 7a8 8 0 10.2 9"/><path d="M4 17h5v5"/></svg>',
+    "적금 vs 단기납": '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5c-1-1-6-1-6 1.4 0 2.6 6 1.3 6 4 0 2.4-5 2.5-7 1M12 6v12"/></svg>',
+    "갱신형 vs 비갱신형": '<svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16"/><path d="M7 15l4-4 3 2 5-6"/></svg>',
+    "상속세 예상 계산기": '<svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h2M12 11h2M16 11h1M8 15h2M12 15h2M16 15h1M8 18h6"/></svg>',
+    "보험금 청구 가이드": '<svg viewBox="0 0 24 24"><path d="M7 3h10v18H7z"/><path d="M10 3V2h4v1M12 8v6M9 11h6M10 17h4"/></svg>',
+    "실손보험 세대 비교 도우미": '<svg viewBox="0 0 24 24"><path d="M12 3l8 3v5c0 5-3.4 8.4-8 10-4.6-1.6-8-5-8-10V6z"/><path d="M12 8v6M9 11h6"/></svg>',
+    "보험사 전산 포털": '<svg viewBox="0 0 24 24"><path d="M14 5h5v5M19 5l-8 8"/><path d="M17 13v6H5V7h6"/></svg>',
+    "수수료 계산기": '<svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h2M12 15h2M16 15h1M8 18h6"/></svg>',
+    "매니저 업적 환산": '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3.5 20v-2a5.5 5.5 0 0111 0v2M15 11l2 2 4-5"/></svg>',
+    "컨벤션 계산기": '<svg viewBox="0 0 24 24"><path d="M8 4h8v4a4 4 0 01-8 0zM8 6H4v2a4 4 0 004 4M16 6h4v2a4 4 0 01-4 4M12 12v5M8 21h8M9 17h6"/></svg>',
+    "썸머 계산기": '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg>',
+}
+
+
 def inject_global_styles() -> None:
     st.markdown(
         """
@@ -154,6 +170,8 @@ def inject_global_styles() -> None:
             border-radius:1rem; background:linear-gradient(145deg,var(--hw-soft-blue),var(--hw-soft-teal));
             color:var(--hw-blue); font-size:1.45rem; border:1px solid rgba(190,215,233,.88);
             box-shadow:0 9px 24px rgba(37,72,98,.06); }
+        .hw-page-icon svg { width:1.65rem; height:1.65rem; fill:none; stroke:currentColor; stroke-width:1.7;
+            stroke-linecap:round; stroke-linejoin:round; }
         .hw-page-copy { min-width:0; }
         .hw-breadcrumb { color:#52758A; font-size:.73rem; font-weight:800; letter-spacing:.08em; text-transform:uppercase; margin-bottom:.25rem; }
         .hw-page-title { margin:0; font-size:2rem; line-height:1.25; font-weight:780; letter-spacing:-.055em; color:var(--hw-ink); }
@@ -164,6 +182,20 @@ def inject_global_styles() -> None:
         .hw-section-title { margin:0; color:var(--hw-ink); font-size:1.42rem; line-height:1.35;
             font-weight:780; letter-spacing:-.045em; }
         .hw-section-desc { margin:.32rem 0 0; color:var(--hw-muted); font-size:.88rem; line-height:1.55; }
+        .hw-guide-intro { margin:0 0 .75rem; color:#344F65; font-size:.9rem; line-height:1.65; }
+        .hw-guide-label { margin:1rem 0 .4rem; color:var(--hw-blue); font-size:.72rem; font-weight:850;
+            letter-spacing:.08em; text-transform:uppercase; }
+        .hw-guide-steps { display:grid; gap:.55rem; margin:.2rem 0 .8rem; }
+        .hw-guide-step { display:flex; gap:.7rem; align-items:flex-start; padding:.65rem .75rem; border-radius:11px;
+            border:1px solid #DFE9F1; background:#F9FBFD; }
+        .hw-guide-number { flex:0 0 1.55rem; width:1.55rem; height:1.55rem; display:grid; place-items:center;
+            border-radius:50%; color:#1769DC; background:#EAF3FF; font-size:.68rem; font-weight:850; }
+        .hw-guide-copy b { display:block; color:#18344A; font-size:.84rem; }
+        .hw-guide-copy span { color:#687D8E; font-size:.79rem; line-height:1.45; }
+        .hw-page-footer { display:flex; align-items:center; justify-content:space-between; gap:1rem; margin:3.2rem 0 0;
+            padding:1rem 0 .25rem; border-top:1px solid #DCE6EE; color:#718494; font-size:.7rem; }
+        .hw-page-footer-brand { color:#294A62; font-weight:750; }
+        .hw-page-footer-brand b { color:#1769DC; }
         .hw-side-brand { display:flex; align-items:center; gap:.7rem; margin:.1rem 0 1rem; color:#10283D; }
         .hw-side-brand span,.hw-login-brand .hw-logo { width:2.25rem; height:2.25rem; display:grid; place-items:center; border-radius:.7rem;
             background:linear-gradient(145deg,#1769DC,#119B98); color:white; font-weight:900; box-shadow:0 8px 18px rgba(23,105,220,.18); }
@@ -171,6 +203,8 @@ def inject_global_styles() -> None:
         .hw-login-brand { display:flex; align-items:center; gap:.75rem; margin:0 0 1.25rem !important; }
         .hw-login-brand strong { color:#10283D; font-size:1.2rem; letter-spacing:-.04em; }
         .hw-login-brand b { font-weight:800; }
+        .hw-login-brand>div { display:flex; flex-direction:column; gap:.08rem; }
+        .hw-login-brand small { color:#6D8192; font-size:.62rem; font-weight:700; letter-spacing:.055em; }
         .hw-login-hero { position:relative; overflow:hidden; display:grid; grid-template-columns:minmax(0,1.08fr) minmax(250px,.92fr);
             align-items:center; gap:2rem; min-height:0 !important; height:auto !important; margin-bottom:1.5rem !important;
             padding:1.9rem 2.4rem !important; border:1px solid rgba(184,208,226,.82); border-radius:18px;
@@ -233,10 +267,11 @@ def inject_global_styles() -> None:
 
 
 def page_header(category: str, title: str, description: str, icon: str) -> None:
+    icon_markup = _PAGE_ICONS.get(title, html.escape(icon))
     st.markdown(
         f"""
         <div class="hw-page-head">
-          <div class="hw-page-icon">{html.escape(icon)}</div>
+          <div class="hw-page-icon">{icon_markup}</div>
           <div class="hw-page-copy">
             <div class="hw-breadcrumb">화랑 WORKSPACE&nbsp;&nbsp;/&nbsp;&nbsp;{html.escape(category)}</div>
             <div class="hw-page-title">{html.escape(title)}</div>
@@ -244,6 +279,42 @@ def page_header(category: str, title: str, description: str, icon: str) -> None:
           </div>
         </div>
         """,
+        unsafe_allow_html=True,
+    )
+
+
+def tool_guide(
+    title: str,
+    introduction: str,
+    steps: list[tuple[str, str]],
+    criteria: str = "",
+    caution: str = "",
+) -> None:
+    """기능별 안내를 동일한 닫힌 펼침 형식으로 표시합니다."""
+    with st.expander(title, expanded=False):
+        st.markdown(f'<div class="hw-guide-intro">{html.escape(introduction)}</div>', unsafe_allow_html=True)
+        if steps:
+            cards = "".join(
+                f'<div class="hw-guide-step"><span class="hw-guide-number">{index:02d}</span>'
+                f'<div class="hw-guide-copy"><b>{html.escape(step_title)}</b>'
+                f'<span>{html.escape(step_description)}</span></div></div>'
+                for index, (step_title, step_description) in enumerate(steps, 1)
+            )
+            st.markdown(f'<div class="hw-guide-label">사용 순서</div><div class="hw-guide-steps">{cards}</div>', unsafe_allow_html=True)
+        if criteria:
+            st.markdown('<div class="hw-guide-label">계산·판정 기준</div>', unsafe_allow_html=True)
+            st.markdown(criteria)
+        if caution:
+            st.markdown('<div class="hw-guide-label">확인사항</div>', unsafe_allow_html=True)
+            st.markdown(caution)
+
+
+def page_footer(tool_name: str, version: str, updated: str = "2026.08.22") -> None:
+    st.markdown(
+        f'''<div class="hw-page-footer">
+          <span class="hw-page-footer-brand">Planned &amp; Built by <b>박병선</b></span>
+          <span>{html.escape(tool_name)} v{html.escape(version.lstrip("v"))} · Updated {html.escape(updated)}</span>
+        </div>''',
         unsafe_allow_html=True,
     )
 

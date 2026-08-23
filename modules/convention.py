@@ -10,7 +10,9 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, Border, Side, PatternFill
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.worksheet.table import Table, TableStyleInfo
-from .ui_components import page_header, section_intro
+from .ui_components import page_footer, page_header, section_intro
+
+APP_VERSION = "1.0.1"
 
 
 # ── 컨벤션 기준 ──────────────────────────────────────────────
@@ -866,8 +868,8 @@ def build_workbook(
 def run():
     page_header("실적 관리", "컨벤션 계산기", "보험 계약 실적을 환산하고 컨벤션 달성 여부를 확인합니다.", "CV")
 
-    with st.expander("컨벤션 달성 기준 및 환산율 보기"):
-        st.header("🧭 사용 방법")
+    with st.expander("사용 방법 및 실적 환산 기준", expanded=False):
+        st.markdown("#### 사용 순서")
         st.markdown(
             """
             **🖥️ 한화라이프랩 전산**  
@@ -880,7 +882,7 @@ def run():
 
         st.divider()
 
-        st.subheader("🏆 컨벤션 기준")
+        st.markdown("#### 컨벤션 기준")
         st.markdown(
             f"""
             **달성 기준**
@@ -1164,3 +1166,4 @@ def run():
         file_name=download_filename,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
+    page_footer("컨벤션 계산기", APP_VERSION)

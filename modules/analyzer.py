@@ -12,7 +12,9 @@ from openpyxl.drawing.image import Image as XLImage
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 
-from .ui_components import page_header
+from .ui_components import page_footer, page_header, tool_guide
+
+APP_VERSION = "2.13.1"
 
 
 DEFAULT_COVERAGES = [
@@ -483,6 +485,9 @@ def _populate_analysis_sheet(
 ) -> None:
     ws = workbook.create_sheet(title)
     ws.sheet_view.showGridLines = False
+    ws.oddHeader.right.text = "&K1769DC&BH  |  화랑 WORKSPACE"
+    ws.oddHeader.right.size = 9
+    ws.oddHeader.right.font = "Pretendard,Bold"
     contracts = [data["contracts"][index] for index in contract_indices]
     contract_count = len(contracts)
     last_col = 3 + contract_count
@@ -794,21 +799,17 @@ def run() -> None:
         "▤",
     )
 
-    with st.expander("사용 방법 안내"):
-        st.markdown(
-            """
-            1. 전체 보장내용이 포함된 **컨설팅보장분석.xlsx** 파일을 업로드합니다.
-            2. **간편모드**는 추천 기본 보장을 즉시 적용합니다.
-            3. **개인모드**는 전체 보장 중 원하는 항목을 직접 선택합니다.
-            4. 간편모드는 업로드 즉시 결과가 생성되며, 개인모드는 항목 선택 후 시작 버튼을 누릅니다.
-
-            - 결과물은 하나의 시트에서 A3 용지에 맞춰집니다.
-            - 결과 엑셀은 A3 세로형에서 **너비 1페이지·높이 자동 맞춤**을 기본값으로 사용합니다.
-            - 필요하면 가로·세로 방향, 출력 배율과 페이지 나누기를 엑셀 인쇄 화면에서 직접 조정할 수 있습니다.
-            - 페이지 하단에는 현재 페이지와 전체 페이지 번호가 표시됩니다.
-            """
-        )
-        st.caption("제작 박병선 팀장 최종 · 버전 v2.13.0")
+    tool_guide(
+        "사용 방법 및 출력 기준",
+        "전체 보장분석 엑셀을 고객 상담용 보장표로 자동 정리합니다.",
+        [
+            ("원본 업로드", "전체 보장내용이 포함된 컨설팅보장분석.xlsx 파일을 등록합니다."),
+            ("분석 방식 선택", "간편모드는 기본 보장을 적용하고, 개인모드는 출력 항목을 직접 선택합니다."),
+            ("결과 확인", "생성된 상담용 보장표를 확인하고 엑셀로 내려받습니다."),
+        ],
+        criteria="- A3 세로형, 너비 1페이지·높이 자동 맞춤으로 생성됩니다.\n- 페이지 하단에 현재 페이지와 전체 페이지 번호가 표시됩니다.",
+        caution="필요한 경우 엑셀 인쇄 화면에서 방향·배율·페이지 나누기를 조정할 수 있습니다.",
+    )
 
     st.markdown("### ✦ 전체 보장분석 원본")
     uploaded_main = st.file_uploader(
@@ -925,6 +926,8 @@ def run() -> None:
             use_container_width=True,
             key="analyzer_v2_download",
         )
+
+    page_footer("보장 분석 도우미", APP_VERSION)
 
 
 if __name__ == "__main__":

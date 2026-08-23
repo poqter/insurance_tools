@@ -10,7 +10,9 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, Border, Side, PatternFill
 from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.worksheet.table import Table, TableStyleInfo
-from .ui_components import page_header, section_intro
+from .ui_components import page_footer, page_header, section_intro
+
+APP_VERSION = "1.0.1"
 
 
 # ── 썸머 기준 ────────────────────────────────────────────────
@@ -1148,8 +1150,8 @@ def render_result_tabs(summary_df, july_df, august_df, other_month_df):
 def run():
     page_header("실적 관리", "썸머 계산기", "계약일 기준으로 7월과 8월을 분리해 썸머 업적과 최종 등급을 계산합니다.", "SU")
 
-    with st.expander("월별 필수조건·보너스·등급·환산율 보기"):
-        st.header("🧭 사용 방법")
+    with st.expander("사용 방법 및 실적 환산 기준", expanded=False):
+        st.markdown("#### 사용 순서")
         st.markdown(
             """
             **🖥️ 한화라이프랩 전산**  
@@ -1162,7 +1164,7 @@ def run():
 
         st.divider()
 
-        st.subheader("🌞 월별 필수조건")
+        st.markdown("#### 월별 필수조건")
         st.markdown(
             f"""
             - 7월: 한화생명 환산업적 합계 **{MONTHLY_HANWHA_MIN_PREMIUM:,.0f}원 이상**
@@ -1172,7 +1174,7 @@ def run():
             """
         )
 
-        st.subheader("🎁 레디포썸머 보너스")
+        st.markdown("#### 레디포썸머 보너스")
         st.markdown(
             """
             - 수금자 선택 후 보너스율 직접 선택
@@ -1182,7 +1184,7 @@ def run():
             """
         )
 
-        st.subheader("🏆 최종 합산 등급")
+        st.markdown("#### 최종 합산 등급")
         st.markdown(
             """
             - 일반: 300만원 이상
@@ -1193,7 +1195,7 @@ def run():
             """
         )
 
-        st.subheader("📌 환산율")
+        st.markdown("#### 환산율")
         st.markdown(
             """
             **손해보험**
@@ -1631,3 +1633,4 @@ def run():
         file_name=download_filename,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     )
+    page_footer("썸머 계산기", APP_VERSION)
