@@ -15,11 +15,12 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 
 try:
-    from .ui_components import page_header, section_intro
+    from .ui_components import page_footer, page_header, section_intro
 except ImportError:  # 단독 점검용
-    from ui_components import page_header, section_intro
+    from ui_components import page_footer, page_header, section_intro
 
 
+APP_VERSION = "1.0.0"
 STANDARD_DATE = "2026.08"
 FIFTH_RATES = {"급여": 20.0, "중증 비급여": 30.0, "비중증 비급여": 50.0}
 PREMIUM_MODES = ["연령별 예상 보험료", "가입제안서 직접 입력"]
@@ -529,3 +530,5 @@ def run() -> None:
     filename = f"{safe_filename(data['customer'])}님_실손보험_세대비교_{date.today():%Y%m%d}.pdf"
     st.download_button("고객용 비교안 PDF 다운로드", pdf, filename, "application/pdf", type="primary", use_container_width=True)
     st.caption("본 자료는 간단 비교용이며 실제 보험금은 가입 상품의 약관, 공제금액, 보상한도 및 보험회사 심사에 따라 달라질 수 있습니다.")
+
+    page_footer("실손보험 세대 비교", APP_VERSION)
