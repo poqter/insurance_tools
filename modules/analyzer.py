@@ -14,7 +14,7 @@ from openpyxl.utils import get_column_letter
 
 from .ui_components import page_footer, page_header, tool_guide
 
-APP_VERSION = "2.13.1"
+APP_VERSION = "2.14.2"
 
 
 DEFAULT_COVERAGES = [
@@ -696,6 +696,166 @@ def _populate_analysis_sheet(
     _configure_print(ws, contract_count, len(selected), coverage_end, last_col, page_count)
 
 
+def _populate_proposal_sheet(
+    workbook: Workbook,
+    data: dict,
+    selected: list[dict],
+) -> None:
+    """보장 분석 합계와 사용자가 입력할 보장 제안 칸을 한 표에 구성합니다."""
+    ws = workbook.create_sheet("보장 제안서")
+    ws.sheet_view.showGridLines = False
+    ws.oddHeader.right.text = "&K1769DC&BH  |  화랑 WORKSPACE"
+    ws.oddHeader.right.size = 9
+    ws.oddHeader.right.font = "Pretendard,Bold"
+
+    proposal_start_col = 5  # E열
+    proposal_end_col = 9  # I열
+    coverage_start = 11
+    output_items = [
+        {"label": "일반사망", "display": "일반 사망", "group": "사망"},
+        *selected,
+        {"label": "기타", "display": "기타", "group": "기타"},
+    ]
+    coverage_end = coverage_start + len(output_items) - 1
+
+    bold_font = Font(name="나눔고딕", size=10, bold=True, color=COLORS["black"])
+    blue_font = Font(name="나눔고딕", size=11, bold=True, color=COLORS["blue"])
+    center = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    ws.merge_cells("A1:D1")
+    title_customer_name = re.sub(r"님$", "", str(data["customer_name"] or "OOO").strip()) or "OOO"
+    ws["A1"] = f"{title_customer_name}님의 보장 제안서"
+    ws["A1"].font = Font(name="나눔고딕", size=13, bold=True)
+    ws["A1"].alignment = Alignment(horizontal="center", vertical="bottom")
+    ws.row_dimensions[1].height = 82
+    for col in range(1, proposal_end_col + 1):
+        ws.cell(1, col).fill = PatternFill("solid", fgColor=COLORS["white"])
+        ws.cell(1, col).border = Border()
+        ws.cell(1, col).alignment = center
+
+    logo = XLImage(BytesIO(_extract_logo()))
+    logo.width = 350
+    logo.height = 43
+    ws.add_image(logo, "A1")
+
+    for col in range(1, 5):
+        ws.merge_cells(start_row=2, start_column=col, end_row=3, end_column=col)
+    ws["A2"] = "기존 보험 합계"
+    ws["B2"] = "구분"
+    ws["C2"] = "보장명"
+    ws["D2"] = "보장 제안 합계"
+    ws["A2"].font = Font(name="나눔고딕", size=11, bold=True, color=COLORS["red"])
+    ws["D2"].font = Font(name="나눔고딕", size=11, bold=True, color=COLORS["red"])
+
+    # E~I열은 제목을 포함해 사용자가 자유롭게 작성할 수 있도록 비워 둡니다.
+    for row in range(2, 4):
+        for col in range(1, proposal_end_col + 1):
+            cell = ws.cell(row, col)
+            cell.fill = PatternFill("solid", fgColor=COLORS["header"])
+            cell.border = THIN_BORDER
+            cell.alignment = center
+            if col not in (1, 4):
+                cell.font = bold_font
+    ws.row_dimensions[2].height = 25
+    ws.row_dimensions[3].height = 25
+
+    # 보장 분석 시트와 동일하게 계약 기본정보 및 보험료 요약 행을 유지합니다.
+    meta_rows = [
+        (4, "보장기간"),
+        (5, "납입횟수"),
+        (6, "납입주기"),
+        (7, "월보험료"),
+        (8, "납입완료"),
+        (9, "납입예정"),
+        (10, "총보험료"),
+    ]
+    proposal_total_fill = PatternFill("solid", fgColor="FFFF00")
+    for row, label in meta_rows:
+        if row <= 6:
+            ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=4)
+            ws.cell(row, 1, label)
+        else:
+            ws.cell(row, 1, f"='보장 분석'!A{row}")
+            ws.merge_cells(start_row=row, start_column=2, end_row=row, end_column=3)
+            ws.cell(row, 2, label)
+            ws.cell(row, 4, f"=SUM(E{row}:I{row})")
+
+        fill_color = COLORS["header"] if row == 7 or row <= 6 else COLORS["premium"]
+        for col in range(1, proposal_end_col + 1):
+            cell = ws.cell(row, col)
+            cell.fill = (
+                proposal_total_fill
+                if col == 4 and row >= 7
+                else PatternFill("solid", fgColor=fill_color)
+            )
+            cell.border = THIN_BORDER
+            cell.alignment = center
+            cell.font = blue_font if row >= 7 and col in (1, 4) else bold_font
+            if row >= 7 and (col == 1 or col >= 4):
+                cell.number_format = '#,##0"원"'
+        ws.row_dimensions[row].height = 25
+
+    group_ranges: list[tuple[int, int]] = []
+    group_start = coverage_start
+    current_group = output_items[0]["group"]
+    for offset, item in enumerate(output_items):
+        row = coverage_start + offset
+        group = item["group"]
+        if group != current_group:
+            group_ranges.append((group_start, row - 1))
+            group_start = row
+            current_group = group
+
+        section_color = COLORS["white"]
+        if group == "암\n보장":
+            section_color = COLORS["cancer"]
+        elif group == "뇌\n보장":
+            section_color = COLORS["brain"]
+        elif group == "심장\n보장":
+            section_color = COLORS["heart"]
+
+        analysis_row = coverage_start + offset
+        ws.cell(row, 1, f"='보장 분석'!A{analysis_row}")
+        ws.cell(row, 2, group)
+        ws.cell(row, 3, item["display"])
+        ws.cell(row, 4, f"=SUM(E{row}:I{row})")
+
+        for col in range(1, proposal_end_col + 1):
+            cell = ws.cell(row, col)
+            if col == 4:
+                cell.fill = proposal_total_fill
+            else:
+                cell.fill = PatternFill("solid", fgColor=COLORS["header"] if col == 2 else section_color)
+            cell.border = THIN_BORDER
+            cell.alignment = center
+            cell.font = blue_font if col in (1, 4) else bold_font
+            if col == 1 or col >= 4:
+                cell.number_format = '#,##0"만원";[Red]-#,##0"만원";;'
+        ws.row_dimensions[row].height = 25
+    group_ranges.append((group_start, coverage_end))
+
+    for start, end in group_ranges:
+        if end > start:
+            ws.merge_cells(start_row=start, start_column=2, end_row=end, end_column=2)
+        ws.cell(start, 2).alignment = center
+        _set_outline(ws, start, end, 1, proposal_end_col, MEDIUM_SIDE)
+
+    _set_outline(ws, 2, 3, 1, proposal_end_col, MEDIUM_SIDE)
+    _set_outline(ws, 4, 6, 1, proposal_end_col, MEDIUM_SIDE)
+    _set_outline(ws, 7, 10, 1, proposal_end_col, MEDIUM_SIDE)
+    _set_vertical_borders(ws, 2, coverage_end, 1, proposal_end_col, MEDIUM_SIDE)
+    _set_outline(ws, 2, coverage_end, 1, proposal_end_col, THICK_SIDE)
+
+    ws.column_dimensions["A"].width = 18
+    ws.column_dimensions["B"].width = 11
+    ws.column_dimensions["C"].width = 31
+    ws.column_dimensions["D"].width = 18
+    for col in range(proposal_start_col, proposal_end_col + 1):
+        ws.column_dimensions[get_column_letter(col)].width = 18
+
+    _configure_print(ws, 5, len(selected), coverage_end, proposal_end_col)
+
+
 def build_analysis_file(
     main_bytes: bytes,
     selected_labels: list[str] | None = None,
@@ -722,6 +882,7 @@ def build_analysis_file(
         contracts_per_page=len(data["contracts"]),
         page_count=1,
     )
+    _populate_proposal_sheet(workbook, data, selected)
     workbook.calculation.calcMode = "auto"
     workbook.calculation.fullCalcOnLoad = True
     workbook.calculation.forceFullCalc = True
