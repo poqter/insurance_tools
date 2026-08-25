@@ -12,7 +12,7 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 from openpyxl.worksheet.table import Table, TableStyleInfo
 from .ui_components import page_footer, page_header, section_intro
 
-APP_VERSION = "1.0.1"
+APP_VERSION = "1.1.0"
 
 
 # ── 썸머 기준 ────────────────────────────────────────────────
@@ -20,6 +20,34 @@ MONTHLY_TARGET = 500_000
 MONTHLY_HANWHA_MIN_PREMIUM = 50_000
 
 READY_BONUS_RATES = [0, 15, 20, 25, 30]
+
+# 회사 레디포썸머 명단: 수금자코드와 수금자명이 모두 일치할 때만 자동 적용합니다.
+READY_BONUS_BY_COLLECTOR = {
+    ("2025050036", "김원기"): 20,
+    ("2024110242", "김종섭"): 20,
+    ("2024060010", "도형진"): 20,
+    ("2026050261", "이은애"): 20,
+    ("2024050041", "강민희"): 15,
+    ("2024050047", "강태구"): 15,
+    ("2025060150", "김선우"): 15,
+    ("2024060046", "김우람"): 15,
+    ("2024060009", "김진우"): 15,
+    ("2024050039", "모상우"): 15,
+    ("2024050091", "박병선"): 15,
+    ("2024050052", "송은솔"): 15,
+    ("2025050268", "신현태"): 15,
+    ("2024050036", "안계준"): 15,
+    ("2024050040", "염준희"): 15,
+    ("2025040304", "윤보연"): 15,
+    ("2026010264", "이나경"): 15,
+    ("2024050034", "이득재"): 15,
+    ("2026070105", "이영민"): 15,
+    ("2025110189", "조영은"): 15,
+    ("2024050042", "최영님"): 15,
+    ("2024060005", "최지희"): 15,
+    ("2024050035", "현세영"): 15,
+    ("2026010320", "홍민영"): 15,
+}
 
 SUMMER_GRADES = [
     ("HWARANG", 15_000_000),
@@ -71,10 +99,46 @@ def standardize_columns(df: pd.DataFrame) -> pd.DataFrame:
     if "계약일" in df.columns and "계약일자" not in df.columns:
         df.rename(columns={"계약일": "계약일자"}, inplace=True)
 
-    if "초회보험료" in df.columns and "보험료" not in df.columns:
-        df.rename(columns={"초회보험료": "보험료"}, inplace=True)
+    # 썸머 계산은 초회보험료가 아닌 계속보험료만 사용합니다.
+    if "계속보험료" in df.columns:
+        df["보험료"] = df["계속보험료"]
 
     return df
+
+
+def parse_payment_period(series: pd.Series) -> pd.Series:
+    """10, 10.0, '10년', '10 년납' 등을 숫자 10으로 정규화합니다."""
+    text = series.astype("string").str.strip()
+    text = text.str.replace(r"\s+", "", regex=True)
+    text = text.str.replace(r"년납?$", "", regex=True)
+    return pd.to_numeric(text, errors="coerce")
+
+
+def normalize_collector_code(value) -> str:
+    text = str(value).strip()
+    return re.sub(r"\.0$", "", text)
+
+
+def get_ready_bonus_rate(dfin: pd.DataFrame, selected_collector: str) -> tuple[int, str]:
+    if selected_collector == "전체" or dfin is None or dfin.empty:
+        return 0, "명단 미적용"
+
+    identities = dfin.loc[
+        dfin["수금자명"].astype(str) == str(selected_collector),
+        ["수금자코드", "수금자명"],
+    ].drop_duplicates()
+
+    matched_rates = {
+        READY_BONUS_BY_COLLECTOR.get(
+            (normalize_collector_code(row["수금자코드"]), str(row["수금자명"]).strip())
+        )
+        for _, row in identities.iterrows()
+    }
+    matched_rates.discard(None)
+
+    if len(matched_rates) == 1:
+        return int(next(iter(matched_rates))), "회사 명단 기준 자동 선택"
+    return 0, "회사 명단 미등록"
 
 
 def safe_table_name(base: str) -> str:
@@ -235,24 +299,31 @@ def exclude_contracts(df: pd.DataFrame):
     제외 조건:
     - 일시납
     - 연금성 / 저축성
-    - 철회 / 해약 / 실효
+    - 본인계약
+    - 계약상태가 정상이 아닌 모든 계약
     """
     excluded_df = pd.DataFrame()
 
-    needed = {"납입방법", "상품군2", "계약상태"}
+    needed = {"납입방법", "상품군1", "상품군2", "계약상태", "본인계약"}
 
     if needed.issubset(df.columns):
         tmp = df.copy()
 
         tmp["납입방법"] = tmp["납입방법"].astype(str).str.strip()
+        tmp["상품군1"] = tmp["상품군1"].astype(str).str.strip()
         tmp["상품군2"] = tmp["상품군2"].astype(str).str.strip()
         tmp["계약상태"] = tmp["계약상태"].astype(str).str.strip()
+        tmp["본인계약"] = tmp["본인계약"].astype("string").str.strip().str.lower()
 
         is_lumpsum = tmp["납입방법"].str.contains("일시납", na=False)
-        is_savings = tmp["상품군2"].str.contains("연금성|저축성", regex=True, na=False)
-        is_cancelled = tmp["계약상태"].str.contains("철회|해약|실효", regex=True, na=False)
+        is_savings = (
+            tmp["상품군1"].str.contains("연금성|저축성", regex=True, na=False)
+            | tmp["상품군2"].str.contains("연금성|저축성", regex=True, na=False)
+        )
+        is_self_contract = tmp["본인계약"].isin(["y", "on"])
+        is_not_normal = tmp["계약상태"].ne("정상")
 
-        is_excluded = is_lumpsum | is_savings | is_cancelled
+        is_excluded = is_lumpsum | is_savings | is_self_contract | is_not_normal
 
         excluded_df = tmp[is_excluded].copy()
         df_valid = tmp[~is_excluded].copy()
@@ -277,14 +348,23 @@ def find_data_issues(df: pd.DataFrame, require_valid_date: bool = True):
         text = df[column].astype("string").str.strip().str.lower()
         return df[column].isna() | text.isin(["", "nan", "none", "<na>"])
 
-    for column in ["수금자명", "보험사", "납입방법", "상품군2", "계약상태"]:
+    for column in ["수금자코드", "수금자명", "보험사", "납입방법", "상품군1", "상품군2", "계약상태", "본인계약"]:
         add_issue(blocking, blank_mask(column), f"{column} 누락")
 
-    period = pd.to_numeric(df["납입기간"], errors="coerce")
+    # 본인계약 공란은 일반계약으로 정상 처리합니다.
+    self_text = df["본인계약"].astype("string").str.strip().str.lower()
+    self_blank = df["본인계약"].isna() | self_text.isin(["", "nan", "none", "<na>"])
+    blocking.loc[self_blank & blocking.str.contains("본인계약 누락", na=False)] = blocking.loc[
+        self_blank & blocking.str.contains("본인계약 누락", na=False)
+    ].str.replace(r"(^| / )본인계약 누락(?= / |$)", "", regex=True).str.strip(" /")
+    known_self_values = self_blank | self_text.isin(["y", "on", "n", "0", "off", "false"])
+    add_issue(blocking, ~known_self_values, "본인계약 여부 확인 필요")
+
+    period = parse_payment_period(df["납입기간"])
     add_issue(blocking, period.isna() | (period <= 0), "납입기간 확인 필요")
 
-    premium = pd.to_numeric(df["보험료"], errors="coerce")
-    add_issue(blocking, premium.isna() | (premium <= 0), "보험료 확인 필요")
+    premium = pd.to_numeric(df["계속보험료"], errors="coerce")
+    add_issue(blocking, premium.isna() | (premium <= 0), "계속보험료 확인 필요")
 
     if require_valid_date:
         dates = pd.to_datetime(df["계약일자"], errors="coerce")
@@ -294,12 +374,16 @@ def find_data_issues(df: pd.DataFrame, require_valid_date: bool = True):
         df["쉐어율"].astype("string").str.replace("%", "", regex=False).str.strip()
     )
     share_numeric = pd.to_numeric(share_text, errors="coerce")
-    # 공란은 100% 단독계약으로 기본 적용하며, 화면에서 개별적으로 50%로 바꿀 수 있습니다.
+    # 공란은 별도 선택 없이 100% 단독계약으로 기본 적용합니다.
     add_issue(
-        condition,
+        blocking,
         share_numeric.notna() & ((share_numeric <= 0) | (share_numeric > 100)),
         "쉐어율 확인 필요",
     )
+
+    insurer = df["보험사"].astype(str).str.strip()
+    classified = is_nonlife_series(insurer) | is_life_series(insurer)
+    add_issue(blocking, ~classified, "보험사 분류 확인 필요")
 
     return blocking, condition, share_numeric
 
@@ -307,7 +391,7 @@ def find_data_issues(df: pd.DataFrame, require_valid_date: bool = True):
 def build_review_display(review_df: pd.DataFrame) -> pd.DataFrame:
     columns = [
         "원본행", "수금자명", "계약일자", "보험사", "상품명",
-        "납입기간", "보험료", "쉐어율", "확인사항", "반영상태",
+        "납입기간", "계속보험료", "쉐어율", "확인사항", "반영상태",
     ]
     if review_df is None or review_df.empty:
         return pd.DataFrame(columns=columns)
@@ -327,9 +411,10 @@ def build_excluded_with_reason(exdf: pd.DataFrame) -> pd.DataFrame:
         "보험사",
         "상품명",
         "납입기간",
-        "보험료",
+        "계속보험료",
         "납입방법",
         "계약상태",
+        "본인계약",
         "제외사유",
     ]
 
@@ -344,17 +429,17 @@ def build_excluded_with_reason(exdf: pd.DataFrame) -> pd.DataFrame:
         if "일시납" in str(row.get("납입방법", "")):
             reasons.append("일시납")
 
-        product_group = str(row.get("상품군2", ""))
+        product_group = f"{row.get('상품군1', '')} {row.get('상품군2', '')}"
         if "연금성" in product_group or "저축성" in product_group:
             reasons.append("연금/저축성")
 
-        status = str(row.get("계약상태", ""))
-        if "철회" in status:
-            reasons.append("철회")
-        if "해약" in status:
-            reasons.append("해약")
-        if "실효" in status:
-            reasons.append("실효")
+        self_contract = str(row.get("본인계약", "")).strip().lower()
+        if self_contract in ["y", "on"]:
+            reasons.append("본인계약")
+
+        status = str(row.get("계약상태", "")).strip()
+        if status != "정상":
+            reasons.append(f"계약상태: {status if status else '미입력'}")
 
         return " / ".join(reasons) if reasons else "제외 조건 미상"
 
@@ -366,11 +451,11 @@ def build_excluded_with_reason(exdf: pd.DataFrame) -> pd.DataFrame:
 
     tmp["계약일자"] = pd.to_datetime(tmp["계약일자"], errors="coerce").dt.strftime("%Y-%m-%d")
 
-    tmp["납입기간"] = pd.to_numeric(tmp["납입기간"], errors="coerce").apply(
+    tmp["납입기간"] = parse_payment_period(tmp["납입기간"]).apply(
         lambda x: f"{int(x)}년" if pd.notnull(x) else ""
     )
 
-    tmp["보험료"] = pd.to_numeric(tmp["보험료"], errors="coerce").apply(
+    tmp["계속보험료"] = pd.to_numeric(tmp["계속보험료"], errors="coerce").apply(
         lambda x: won(x) if pd.notnull(x) else ""
     )
 
@@ -380,15 +465,18 @@ def build_excluded_with_reason(exdf: pd.DataFrame) -> pd.DataFrame:
 def check_required_columns(df: pd.DataFrame):
     required_columns = {
         "수금자명",
+        "수금자코드",
         "계약일자",
         "보험사",
         "상품명",
         "납입기간",
-        "보험료",
+        "계속보험료",
         "쉐어율",
         "납입방법",
+        "상품군1",
         "상품군2",
         "계약상태",
+        "본인계약",
     }
 
     return required_columns - set(df.columns)
@@ -402,7 +490,7 @@ def compute_summer(df: pd.DataFrame) -> pd.DataFrame:
     df["계약월"] = df["계약일자_raw"].dt.month
 
     df["보험료"] = pd.to_numeric(df["보험료"], errors="coerce").fillna(0)
-    df["납입기간_num"] = pd.to_numeric(df["납입기간"], errors="coerce").fillna(0).astype(int)
+    df["납입기간_num"] = parse_payment_period(df["납입기간"]).fillna(0).astype(int)
 
     if "쉐어율" in df.columns:
         df["쉐어율"] = pd.to_numeric(
@@ -417,7 +505,7 @@ def compute_summer(df: pd.DataFrame) -> pd.DataFrame:
 
     df["원본보험료"] = df["보험료"]
 
-    # 공란은 기본 100%이며 화면에서 해당 행만 50%로 변경할 수 있습니다.
+    # 쉐어율 공란은 별도 선택 없이 100% 단독계약으로 적용합니다.
     df["쉐어율미입력"] = df["쉐어율"].isna()
     if "_공란적용쉐어율" not in df.columns:
         df["_공란적용쉐어율"] = 100.0
@@ -434,7 +522,7 @@ def compute_summer(df: pd.DataFrame) -> pd.DataFrame:
     df["적용쉐어율"] = np.where(is_shared, 50.0, np.where(valid_share, 100.0, df["원본계산쉐어율"]))
     df["쉐어건수"] = np.where(is_shared, 0.5, np.where(valid_share, 1.0, 0.0))
 
-    # 원본 보험료는 원래 쉐어율이 이미 반영된 금액입니다.
+    # 원본 계속보험료는 원래 쉐어율이 이미 반영된 FP 귀속금액입니다.
     # 모든 공동계약을 50%로 통일하고 최종 원 미만 금액은 반올림 없이 버립니다.
     df["전체보험료역산"] = np.where(
         is_shared,
@@ -521,13 +609,16 @@ def compute_summer(df: pd.DataFrame) -> pd.DataFrame:
 def check_monthly_requirements(dfin: pd.DataFrame):
     """
     월별 조건:
-    1. 한화생명 월 환산업적 합계 5만원 이상
-    2. 전체 월 환산업적 50만원 이상
+    1. 전체 월 환산업적 50만원 이상
+    2. 한화생명 월 환산업적 합계 5만원 이상
+    3. 한화생명 인정 건수 합계 1건 이상
     """
     if dfin.empty:
         return {
             "환산금액": 0,
             "한화생명5만": False,
+            "한화생명1건": False,
+            "한화생명인정건수": 0,
             "환산50만": False,
             "월달성": False,
         }
@@ -541,13 +632,19 @@ def check_monthly_requirements(dfin: pd.DataFrame):
     hanwha_summer_sum = pd.to_numeric(
         dfin.loc[hanwha_mask, "썸머환산금액"], errors="coerce"
     ).fillna(0).sum()
-    hanwha_ok = hanwha_summer_sum >= MONTHLY_HANWHA_MIN_PREMIUM
+    hanwha_count = pd.to_numeric(
+        dfin.loc[hanwha_mask, "쉐어건수"], errors="coerce"
+    ).fillna(0).sum()
+    hanwha_amount_ok = hanwha_summer_sum >= MONTHLY_HANWHA_MIN_PREMIUM
+    hanwha_count_ok = hanwha_count >= 1
 
-    total_ok = amount_ok and hanwha_ok
+    total_ok = amount_ok and hanwha_amount_ok and hanwha_count_ok
 
     return {
         "환산금액": summer_sum,
-        "한화생명5만": hanwha_ok,
+        "한화생명5만": hanwha_amount_ok,
+        "한화생명1건": hanwha_count_ok,
+        "한화생명인정건수": hanwha_count,
         "환산50만": amount_ok,
         "월달성": total_ok,
     }
@@ -558,7 +655,10 @@ def get_summer_grade(total_amount: float):
     7월 + 8월 합산 환산업적 기준 등급 산정.
     가장 높은 등급부터 체크.
     """
-    for grade, target in SUMMER_GRADES:
+    if total_amount > 15_000_000:
+        return "HWARANG", 15_000_000
+
+    for grade, target in SUMMER_GRADES[1:]:
         if total_amount >= target:
             return grade, target
 
@@ -575,7 +675,10 @@ def get_next_grade_gap(total_amount: float):
     ]
 
     for grade, target in ascending:
-        if total_amount < target:
+        if grade == "HWARANG":
+            if total_amount <= target:
+                return grade, target, max(1, target - total_amount + 1)
+        elif total_amount < target:
             return grade, target, target - total_amount
 
     return None, None, 0
@@ -637,7 +740,7 @@ def to_styled(dfin: pd.DataFrame) -> pd.DataFrame:
             "보험사",
             "상품명",
             "납입기간",
-            "원본 보험료",
+            "원본 계속보험료",
             "원본 쉐어율",
             "적용 쉐어율",
             "전체 보험료 역산",
@@ -651,7 +754,7 @@ def to_styled(dfin: pd.DataFrame) -> pd.DataFrame:
 
     df["계약일자"] = pd.to_datetime(df["계약일자"], errors="coerce").dt.strftime("%Y-%m-%d")
 
-    df["납입기간"] = pd.to_numeric(df["납입기간"], errors="coerce").apply(
+    df["납입기간"] = parse_payment_period(df["납입기간"]).apply(
         lambda x: f"{int(x)}년" if pd.notnull(x) else ""
     )
 
@@ -666,7 +769,7 @@ def to_styled(dfin: pd.DataFrame) -> pd.DataFrame:
     df["썸머환산금액"] = df["썸머환산금액"].map(won)
 
     df.rename(columns={
-        "원본보험료": "원본 보험료",
+        "원본보험료": "원본 계속보험료",
         "쉐어율": "원본 쉐어율",
         "적용쉐어율": "적용 쉐어율",
         "전체보험료역산": "전체 보험료 역산",
@@ -681,7 +784,7 @@ def to_styled(dfin: pd.DataFrame) -> pd.DataFrame:
         "보험사",
         "상품명",
         "납입기간",
-        "원본 보험료",
+        "원본 계속보험료",
         "원본 쉐어율",
         "적용 쉐어율",
         "전체 보험료 역산",
@@ -741,7 +844,7 @@ def render_adjustment_summary(dfin: pd.DataFrame, title="쉐어 조정 요약"):
     summary = adjustment_summary(dfin)
     st.markdown(f"#### {title}")
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("원본 보험료 합계", won(summary["원본"]))
+    c1.metric("원본 계속보험료 합계", won(summary["원본"]))
     c2.metric("50% 조정 보험료 합계", won(summary["조정"]), signed_won(summary["차액"]))
     c3.metric("증가액 / 감소액", f"+{summary['증가']:,.0f} / {summary['감소']:,.0f} 원")
     c4.metric("쉐어 적용 계약", f"{summary['쉐어건수']:,}건")
@@ -838,7 +941,7 @@ def req_box(title, ok):
 def make_collector_summary(july_df: pd.DataFrame, august_df: pd.DataFrame) -> pd.DataFrame:
     """
     수금자별 요약은 기본 환산업적 기준으로 표시.
-    레디포썸머 보너스는 선택 수금자 화면에서 직접 선택 후 별도 반영.
+    레디포썸머 보너스는 수금자 선택 시 회사 명단 기준으로 자동 선택되며 수정할 수 있습니다.
     """
     all_df = pd.concat([july_df, august_df], ignore_index=True)
 
@@ -851,12 +954,14 @@ def make_collector_summary(july_df: pd.DataFrame, august_df: pd.DataFrame) -> pd
             "7월쉐어미입력",
             "7월환산",
             "7월한화5만",
+            "7월한화1건",
             "7월50만",
             "7월달성",
             "8월건수",
             "8월쉐어미입력",
             "8월환산",
             "8월한화5만",
+            "8월한화1건",
             "8월50만",
             "8월달성",
             "기본합산환산",
@@ -880,12 +985,14 @@ def make_collector_summary(july_df: pd.DataFrame, august_df: pd.DataFrame) -> pd
             "7월쉐어미입력": int(july_sub["쉐어율"].isna().sum()),
             "7월환산": result["7월"]["환산금액"],
             "7월한화5만": mark(result["7월"]["한화생명5만"]),
+            "7월한화1건": mark(result["7월"]["한화생명1건"]),
             "7월50만": mark(result["7월"]["환산50만"]),
             "7월달성": mark(result["7월"]["월달성"]),
             "8월건수": august_sub["쉐어건수"].sum(min_count=1),
             "8월쉐어미입력": int(august_sub["쉐어율"].isna().sum()),
             "8월환산": result["8월"]["환산금액"],
             "8월한화5만": mark(result["8월"]["한화생명5만"]),
+            "8월한화1건": mark(result["8월"]["한화생명1건"]),
             "8월50만": mark(result["8월"]["환산50만"]),
             "8월달성": mark(result["8월"]["월달성"]),
             "기본합산환산": result["기본합산환산금액"],
@@ -1021,10 +1128,14 @@ def write_final_result_block(ws, row, result):
     rows = [
         ["7월 환산업적", won(result["7월"]["환산금액"])],
         ["7월 한화생명 환산업적 합계 5만원 이상", mark(result["7월"]["한화생명5만"])],
+        ["7월 한화생명 인정 건수", f"{result['7월']['한화생명인정건수']:g}건"],
+        ["7월 한화생명 인정 건수 1건 이상", mark(result["7월"]["한화생명1건"])],
         ["7월 환산업적 50만원 이상", mark(result["7월"]["환산50만"])],
         ["7월 조건 달성", mark(result["7월"]["월달성"])],
         ["8월 환산업적", won(result["8월"]["환산금액"])],
         ["8월 한화생명 환산업적 합계 5만원 이상", mark(result["8월"]["한화생명5만"])],
+        ["8월 한화생명 인정 건수", f"{result['8월']['한화생명인정건수']:g}건"],
+        ["8월 한화생명 인정 건수 1건 이상", mark(result["8월"]["한화생명1건"])],
         ["8월 환산업적 50만원 이상", mark(result["8월"]["환산50만"])],
         ["8월 조건 달성", mark(result["8월"]["월달성"])],
         ["기본 7월+8월 합산 환산업적", won(result["기본합산환산금액"])],
@@ -1167,17 +1278,20 @@ def run():
         st.markdown("#### 월별 필수조건")
         st.markdown(
             f"""
+            - 7월: 전체 환산업적 **{MONTHLY_TARGET:,.0f}원 이상**
             - 7월: 한화생명 환산업적 합계 **{MONTHLY_HANWHA_MIN_PREMIUM:,.0f}원 이상**
-            - 7월: 환산업적 **{MONTHLY_TARGET:,.0f}원 이상**
+            - 7월: 한화생명 인정 건수 **1건 이상**
+            - 8월: 전체 환산업적 **{MONTHLY_TARGET:,.0f}원 이상**
             - 8월: 한화생명 환산업적 합계 **{MONTHLY_HANWHA_MIN_PREMIUM:,.0f}원 이상**
-            - 8월: 환산업적 **{MONTHLY_TARGET:,.0f}원 이상**
+            - 8월: 한화생명 인정 건수 **1건 이상**
             """
         )
 
         st.markdown("#### 레디포썸머 보너스")
         st.markdown(
             """
-            - 수금자 선택 후 보너스율 직접 선택
+            - 수금자코드와 수금자명이 회사 명단과 일치하면 보너스율 자동 선택
+            - 자동 선택된 보너스율은 직접 변경 가능
             - 선택 가능: 0%, 15%, 20%, 25%, 30%
             - 등급 판정은 보너스 반영 후 금액 기준
             - 월별 필수조건은 보너스 전 기준으로 판단
@@ -1191,7 +1305,7 @@ def run():
             - 더블: 500만원 이상
             - 트리플: 800만원 이상
             - 크라운: 1,000만원 이상
-            - HWARANG: 1,500만원 이상
+            - HWARANG: 1,500만원 초과
             """
         )
 
@@ -1212,7 +1326,10 @@ def run():
 
             **예외 및 쉐어 기준**
             - 상품명 또는 상품군에 `치아`가 포함되면 보험사와 관계없이 10년납 초과 구간 적용
+            - 원본 계속보험료는 해당 FP의 원래 쉐어율이 이미 반영된 귀속금액으로 간주
+            - 공동계약은 귀속 계속보험료와 쉐어율로 전체 보험료를 역산
             - 공동계약은 원래 쉐어율과 관계없이 50% 보험료·0.5건으로 통일
+            - 쉐어율 공란은 100% 단독계약으로 적용
             - 조정 실적보험료의 원 미만 금액은 반올림하지 않고 버림
             """
         )
@@ -1222,7 +1339,8 @@ def run():
             **🚫 제외 기준**  
             - 일시납  
             - 연금성 / 저축성  
-            - 철회 / 해약 / 실효
+            - 본인계약  
+            - 계약상태가 정상이 아닌 모든 계약
             """
         )
 
@@ -1273,8 +1391,8 @@ def run():
         )
         editor_columns = [
             "_원본행번호", "수금자명", "계약일자", "보험사", "상품명",
-            "납입기간", "보험료", "쉐어율", "납입방법", "상품군2",
-            "계약상태", "확인사항",
+            "납입기간", "계속보험료", "쉐어율", "납입방법", "상품군1", "상품군2",
+            "계약상태", "본인계약", "확인사항",
         ]
 
         st.warning(
@@ -1295,8 +1413,8 @@ def run():
                 )
 
         editable_columns = [
-            "수금자명", "계약일자", "보험사", "납입기간", "보험료",
-            "쉐어율", "납입방법", "상품군2", "계약상태",
+            "수금자명", "계약일자", "보험사", "납입기간", "계속보험료",
+            "쉐어율", "납입방법", "상품군1", "상품군2", "계약상태", "본인계약",
         ]
         for _, edited_row in edited_review.iterrows():
             row_mask = candidate_df["_원본행번호"] == edited_row["_원본행번호"]
@@ -1330,32 +1448,8 @@ def run():
 
     upload_key = hashlib.sha256(file_bytes).hexdigest()[:16]
 
-    # 쉐어율 공란은 기본 100%로 적용하되 행별로 50%를 선택할 수 있습니다.
+    # 쉐어율 공란은 별도 확인 화면 없이 100% 단독계약으로 적용합니다.
     df_valid["_공란적용쉐어율"] = 100.0
-    blank_share_mask = df_valid["쉐어율"].isna()
-    blank_share_df = df_valid[blank_share_mask].copy()
-    if not blank_share_df.empty:
-        st.markdown(f"#### 쉐어율 공란 확인 대상 {len(blank_share_df):,}건")
-        st.caption("기본값은 100% 단독계약입니다. 필요한 계약만 50% 쉐어계약으로 변경해 주세요.")
-        blank_editor = blank_share_df[
-            ["_원본행번호", "수금자명", "보험사", "상품명", "보험료"]
-        ].copy()
-        blank_editor["적용 쉐어율"] = "100%"
-        blank_editor = st.data_editor(
-            blank_editor.reset_index(drop=True),
-            use_container_width=True,
-            hide_index=True,
-            disabled=["_원본행번호", "수금자명", "보험사", "상품명", "보험료"],
-            column_config={
-                "적용 쉐어율": st.column_config.SelectboxColumn(
-                    "적용 쉐어율", options=["100%", "50%"], required=True
-                )
-            },
-            key=f"summer_blank_share_{upload_key}",
-        )
-        for _, edited_row in blank_editor.iterrows():
-            row_mask = df_valid["_원본행번호"] == edited_row["_원본행번호"]
-            df_valid.loc[row_mask, "_공란적용쉐어율"] = 50.0 if edited_row["적용 쉐어율"] == "50%" else 100.0
 
     # 상품명 또는 상품군2에 '치아'가 있으면 기본 체크하고, 해제 시 즉시 일반 납기 기준으로 계산합니다.
     product_name = df_valid["상품명"].fillna("").astype(str)
@@ -1394,8 +1488,7 @@ def run():
         )
     if not condition_df.empty:
         st.info(
-            f"범위를 벗어난 쉐어율 계약 {len(condition_df):,}건은 환산금액에는 포함하고 "
-            "인정 건수에서는 제외했습니다."
+            f"조건을 확인해야 하는 계약 {len(condition_df):,}건이 있습니다."
         )
     if not review_disp_all.empty:
         with st.expander("⚠️ 아직 확인이 필요한 계약", expanded=False):
@@ -1435,7 +1528,7 @@ def run():
     if excluded_disp is not None and not excluded_disp.empty:
         st.warning(
             f"⚠️ 제외된 계약 {len(excluded_disp)}건이 있습니다. "
-            "제외 조건: 일시납 / 연금성·저축성 / 철회·해약·실효"
+            "제외 조건: 일시납 / 연금성·저축성 / 본인계약 / 정상 외 계약상태"
         )
 
         with st.expander("🚫 제외된 계약 보기", expanded=True):
@@ -1466,12 +1559,24 @@ def run():
         key="summer_selected_collector",
     )
 
+    auto_bonus_rate, auto_bonus_source = get_ready_bonus_rate(df, selected_collector)
+    bonus_identity_key = f"{selected_collector}|{auto_bonus_rate}|{upload_key}"
+    if st.session_state.get("summer_bonus_identity_key") != bonus_identity_key:
+        st.session_state["summer_ready_bonus_rate"] = auto_bonus_rate
+        st.session_state["summer_bonus_identity_key"] = bonus_identity_key
+
     ready_bonus_rate = st.selectbox(
         "🎁 레디포썸머 보너스율을 선택하세요.",
         READY_BONUS_RATES,
-        index=0,
         format_func=lambda x: f"{x}%",
         key="summer_ready_bonus_rate",
+    )
+    bonus_selection_source = (
+        auto_bonus_source if ready_bonus_rate == auto_bonus_rate else "사용자 수동 변경"
+    )
+    st.caption(
+        f"{bonus_selection_source}: {ready_bonus_rate}% "
+        f"(자동 기준 {auto_bonus_rate}%)"
     )
 
     selected_df = filter_by_collector(df, selected_collector)
@@ -1491,7 +1596,13 @@ def run():
     selected_review_disp = filter_excluded_by_collector(review_disp_all, selected_collector)
 
     st.markdown(f"### 📌 선택 기준: {selected_collector}")
-    st.caption(f"레디포썸머 보너스율: {ready_bonus_rate}%")
+    st.caption(f"레디포썸머 보너스율: {ready_bonus_rate}% · {bonus_selection_source}")
+
+    st.info(
+        "업로드 파일의 계속보험료는 해당 FP의 원래 쉐어율이 반영된 귀속금액입니다. "
+        "공동계약은 전체 보험료를 역산한 뒤 내부 인정 기준에 따라 "
+        "50% 보험료·0.5건으로 재산정합니다."
+    )
 
     render_adjustment_summary(selected_df, f"{selected_collector} 쉐어 조정 요약")
 
@@ -1522,6 +1633,14 @@ def run():
         )
         st.markdown(
             req_box(
+                f"7월 한화생명 인정 건수 1건 이상 "
+                f"(현재 {selected_result['7월']['한화생명인정건수']:g}건)",
+                selected_result["7월"]["한화생명1건"],
+            ),
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            req_box(
                 f"7월 환산업적 {MONTHLY_TARGET:,.0f}원 이상",
                 selected_result["7월"]["환산50만"],
             ),
@@ -1542,6 +1661,14 @@ def run():
             req_box(
                 f"8월 한화생명 환산업적 합계 {MONTHLY_HANWHA_MIN_PREMIUM:,.0f}원 이상",
                 selected_result["8월"]["한화생명5만"],
+            ),
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            req_box(
+                f"8월 한화생명 인정 건수 1건 이상 "
+                f"(현재 {selected_result['8월']['한화생명인정건수']:g}건)",
+                selected_result["8월"]["한화생명1건"],
             ),
             unsafe_allow_html=True,
         )
