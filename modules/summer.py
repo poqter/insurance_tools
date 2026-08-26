@@ -1061,6 +1061,24 @@ def filter_excluded_by_collector(excluded_disp: pd.DataFrame, selected_collector
 
 
 # ── 엑셀 출력 ────────────────────────────────────────────────
+def excel_safe_value(value):
+    """계산 결과는 유지하면서 Excel 셀에 기록 가능한 값으로만 변환합니다."""
+    if value is None:
+        return None
+
+    try:
+        missing = pd.isna(value)
+        if isinstance(missing, (bool, np.bool_)) and missing:
+            return None
+    except (TypeError, ValueError):
+        pass
+
+    if isinstance(value, np.generic):
+        return value.item()
+
+    return value
+
+
 def write_table(ws, df_for_sheet: pd.DataFrame, start_row: int = 1, name_suffix: str = "A"):
     global TABLE_SEQ
 
@@ -1068,7 +1086,11 @@ def write_table(ws, df_for_sheet: pd.DataFrame, start_row: int = 1, name_suffix:
 
     for r_idx, row in enumerate(dataframe_to_rows(df_for_sheet, index=False, header=True), start_row):
         for c_idx, value in enumerate(row, 1):
-            cell = ws.cell(row=r_idx, column=c_idx, value=value)
+            cell = ws.cell(
+                row=r_idx,
+                column=c_idx,
+                value=excel_safe_value(value),
+            )
             cell.alignment = Alignment(horizontal="center", vertical="center")
 
     end_col_letter = ws.cell(row=start_row, column=max(df_for_sheet.shape[1], 1)).column_letter
