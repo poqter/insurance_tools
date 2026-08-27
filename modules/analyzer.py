@@ -515,7 +515,7 @@ def _populate_analysis_sheet(
     age_text = f" (보험연령:{data['age']}세)" if data["age"] else ""
     title_customer_name = re.sub(r"님$", "", str(data["customer_name"] or "OOO").strip()) or "OOO"
     ws["A1"] = f"{title_customer_name}님의 보장 분석{age_text}"
-    ws["A1"].font = Font(name="나눔고딕", size=13, bold=True)
+    ws["A1"].font = Font(name="나눔고딕", size=14, bold=True)
     ws["A1"].alignment = Alignment(horizontal="center", vertical="bottom")
     ws.row_dimensions[1].height = 82
     for col in range(1, last_col + 1):
@@ -548,7 +548,7 @@ def _populate_analysis_sheet(
     for index, contract in enumerate(contracts, start=4):
         ws.cell(2, index, contract["company"])
         ws.cell(3, index, contract["product"])
-        ws.cell(2, index).font = Font(name="나눔고딕", size=10, bold=True, color="1F4E78")
+        ws.cell(2, index).font = Font(name="나눔고딕", size=10, bold=True, color=COLORS["black"])
         ws.cell(3, index).font = Font(name="나눔고딕", size=9, bold=True)
     ws.row_dimensions[2].height = 25
     ws.row_dimensions[3].height = 55
@@ -638,7 +638,7 @@ def _populate_analysis_sheet(
             cell.alignment = center
             cell.font = blue_font if col == 1 else bold_font
             if col == 1 or col >= 4:
-                cell.number_format = '#,##0"만원";[Red]-#,##0"만원";;'
+                cell.number_format = '#,##0"만원";[Red]-#,##0"만원";;@'
         ws.row_dimensions[row].height = 25
     group_ranges.append((group_start, coverage_end))
 
@@ -693,6 +693,25 @@ def _populate_analysis_sheet(
     for col in range(4, last_col + 1):
         ws.column_dimensions[get_column_letter(col)].width = contract_width
 
+    # 첫 행의 보험계약 영역은 하단 정렬과 굵은 글씨를 사용합니다.
+    for col in range(4, last_col + 1):
+        cell = ws.cell(1, col)
+        alignment = copy(cell.alignment)
+        alignment.vertical = "bottom"
+        cell.alignment = alignment
+        font = copy(cell.font)
+        font.name = "나눔고딕"
+        font.bold = True
+        cell.font = font
+
+    # 다운로드 엑셀의 모든 셀 글꼴을 나눔고딕으로 통일하되,
+    # 크기·굵기·색상 등 기존 글꼴 속성은 그대로 유지합니다.
+    for row in ws.iter_rows(min_row=1, max_row=coverage_end, min_col=1, max_col=last_col):
+        for cell in row:
+            font = copy(cell.font)
+            font.name = "나눔고딕"
+            cell.font = font
+
     _configure_print(ws, contract_count, len(selected), coverage_end, last_col, page_count)
 
 
@@ -723,9 +742,10 @@ def _populate_proposal_sheet(
     center = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
     ws.merge_cells("A1:D1")
+    age_text = f" (보험연령:{data['age']}세)" if data["age"] else ""
     title_customer_name = re.sub(r"님$", "", str(data["customer_name"] or "OOO").strip()) or "OOO"
-    ws["A1"] = f"{title_customer_name}님의 보장 제안서"
-    ws["A1"].font = Font(name="나눔고딕", size=13, bold=True)
+    ws["A1"] = f"{title_customer_name}님의 보장 제안서{age_text}"
+    ws["A1"].font = Font(name="나눔고딕", size=14, bold=True)
     ws["A1"].alignment = Alignment(horizontal="center", vertical="bottom")
     ws.row_dimensions[1].height = 82
     for col in range(1, proposal_end_col + 1):
@@ -830,7 +850,11 @@ def _populate_proposal_sheet(
             cell.alignment = center
             cell.font = blue_font if col in (1, 4) else bold_font
             if col == 1 or col >= 4:
-                cell.number_format = '#,##0"만원";[Red]-#,##0"만원";;'
+                cell.number_format = '#,##0"만원";[Red]-#,##0"만원";;@'
+            if row >= coverage_start and proposal_start_col <= col <= proposal_end_col:
+                font = copy(cell.font)
+                font.color = COLORS["black"]
+                cell.font = font
         ws.row_dimensions[row].height = 25
     group_ranges.append((group_start, coverage_end))
 
@@ -852,6 +876,26 @@ def _populate_proposal_sheet(
     ws.column_dimensions["D"].width = 18
     for col in range(proposal_start_col, proposal_end_col + 1):
         ws.column_dimensions[get_column_letter(col)].width = 18
+
+    # 첫 행의 직접 입력 영역은 보장 분석 시트와 동일하게
+    # 하단 정렬과 굵은 글씨를 사용합니다.
+    for col in range(proposal_start_col, proposal_end_col + 1):
+        cell = ws.cell(1, col)
+        alignment = copy(cell.alignment)
+        alignment.vertical = "bottom"
+        cell.alignment = alignment
+        font = copy(cell.font)
+        font.name = "나눔고딕"
+        font.bold = True
+        cell.font = font
+
+    # 다운로드 엑셀의 모든 셀 글꼴을 나눔고딕으로 통일하되,
+    # 크기·굵기·색상 등 기존 글꼴 속성은 그대로 유지합니다.
+    for row in ws.iter_rows(min_row=1, max_row=coverage_end, min_col=1, max_col=proposal_end_col):
+        for cell in row:
+            font = copy(cell.font)
+            font.name = "나눔고딕"
+            cell.font = font
 
     _configure_print(ws, 5, len(selected), coverage_end, proposal_end_col)
 
