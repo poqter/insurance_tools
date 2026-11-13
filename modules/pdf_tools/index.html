@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>PDF·이미지 도구</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <div>
+        <span class="eyebrow">DOCUMENT STUDIO</span>
+        <h1>필요한 페이지를, 하나로.</h1>
+        <p>
+          파일은 이 브라우저에서만 처리됩니다. 원본 파일은 변경되지 않습니다.
+        </p>
+      </div>
+      <button id="reset">작업 비우기</button>
+    </header>
+    <nav class="steps">
+      <b id="stepEdit">1 페이지 편집</b><span>→</span
+      ><b id="stepReview">2 저장 전 확인</b>
+    </nav>
+    <div id="notice" role="status" aria-live="polite"></div>
+    <div id="errors" role="alert"></div>
+    <main id="editor" inert>
+      <section>
+        <label class="drop" id="drop" tabindex="0"
+          ><strong>＋ PDF·이미지 파일 추가</strong
+          ><span>클릭하거나 파일을 끌어 놓으세요</span
+          ><small
+            >PDF · JPG · PNG · WEBP · BMP / 최대 30개·100페이지·원본 합계
+            200MB</small
+          ><input
+            id="files"
+            type="file"
+            multiple
+            accept=".pdf,.jpg,.jpeg,.png,.webp,.bmp"
+            hidden
+        /></label>
+        <p class="subtle">
+          큰 이미지는 자동 압축합니다. 새로고침·메뉴 이동 시 현재 작업은
+          사라집니다.
+        </p>
+        <div id="sources" class="sources"></div>
+        <div class="toolbar">
+          <strong id="count">파일을 추가해 주세요</strong>
+          <div>
+            <button id="selectAll">전체 선택</button
+            ><button id="excludeAll">전체 제외</button
+            ><button id="undo" disabled>↶ 실행 취소</button
+            ><button id="redo" disabled>↷ 다시 실행</button>
+          </div>
+        </div>
+        <div id="pages" class="grid"></div>
+        <div id="empty" class="empty">
+          제안서와 사진을 함께 올려보세요.<br /><small
+            >페이지를 보면서 순서와 구성을 정리할 수 있습니다.</small
+          >
+        </div>
+      </section>
+      <aside>
+        <h2>저장 설정</h2>
+        <label
+          >저장 방식<select id="mode">
+            <option value="merge">하나로 합치기</option>
+            <option value="pages">페이지별 저장 · ZIP</option>
+            <option value="groups">그룹별 저장 · ZIP</option>
+          </select></label
+        ><label
+          >파일명<input
+            id="filename"
+            value="고객_상담자료"
+            maxlength="80" /></label
+        ><label
+          >목표 용량 · PDF 한 개당<select id="target">
+            <option value="0">제한 없음</option>
+            <option value="3">3MB 이하</option>
+            <option value="5" selected>5MB 이하</option>
+            <option value="10">10MB 이하</option>
+            <option value="custom">직접 입력</option>
+          </select></label
+        ><label id="customWrap" hidden
+          >목표 용량 (MB)<input
+            id="custom"
+            type="number"
+            min="0.1"
+            max="200"
+            step="0.1"
+            value="5" /></label
+        ><label
+          >품질<select id="quality">
+            <option value="recommended">권장 압축</option>
+            <option value="original">원본 품질 유지</option>
+          </select></label
+        >
+        <details>
+          <summary>세부 설정</summary>
+          <label
+            >이미지 페이지 크기<select id="size">
+              <option value="original">원본 비율</option>
+              <option value="a4">A4 자동 방향</option>
+            </select></label
+          ><label class="check"
+            ><input id="raster" type="checkbox" />목표 초과 시 페이지 이미지화
+            허용</label
+          >
+          <p class="subtle">
+            전체 페이지를 이미지로 바꿔 추가 압축합니다. 글자 선택·검색 기능이
+            사라질 수 있습니다. 생성 후 화질을 확인해 주세요.
+          </p>
+        </details>
+        <div id="dirty" class="subtle"></div>
+        <button id="generate" class="primary" disabled>결과 만들기</button>
+        <p class="subtle">생성 후 실제 용량과 최종 순서를 확인합니다.</p>
+      </aside>
+    </main>
+    <section id="review" hidden>
+      <div class="toolbar">
+        <div>
+          <h2>저장 전 확인</h2>
+          <p>실제로 생성된 파일입니다. 내려받기 전에 내용을 확인하세요.</p>
+        </div>
+        <button id="back">← 편집으로 돌아가기</button>
+      </div>
+      <div id="results"></div>
+      <div class="toolbar">
+        <strong id="zipSize"></strong
+        ><button id="download" class="primary">다운로드</button>
+      </div>
+      <div id="reviewPages" class="grid"></div>
+    </section>
+    <dialog id="viewer">
+      <div class="toolbar">
+        <strong id="viewTitle">페이지 확인</strong
+        ><button id="closeView" aria-label="닫기">닫기 ✕</button>
+      </div>
+      <div class="toolbar">
+        <label
+          >확대
+          <select id="zoom">
+            <option value="1">100%</option>
+            <option value="1.5">150%</option>
+            <option value="2">200%</option>
+            <option value="3">300%</option>
+          </select></label
+        ><span id="compareHint">좌우 확대·스크롤 위치가 함께 움직입니다.</span>
+      </div>
+      <div class="mobileTabs">
+        <button id="tabOriginal">원본</button
+        ><button id="tabResult">압축 결과</button>
+      </div>
+      <div class="compare">
+        <section id="originalPane">
+          <h3>원본</h3>
+          <div class="viewport"><canvas id="originalCanvas"></canvas></div>
+        </section>
+        <section id="resultPane">
+          <h3>저장 결과</h3>
+          <div class="viewport"><canvas id="resultCanvas"></canvas></div>
+        </section>
+      </div>
+    </dialog>
+    <div id="busy" hidden role="status">
+      <div>
+        <span class="spinner"></span><strong id="progress">처리 중…</strong
+        ><button id="cancel">취소</button>
+      </div>
+    </div>
+    <script src="vendor/pdf-lib.min.js"></script>
+    <script src="vendor/jszip.min.js"></script>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

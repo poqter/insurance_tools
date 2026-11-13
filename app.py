@@ -3,6 +3,7 @@ import textwrap
 from pathlib import Path
 
 import streamlit as st
+from modules import pdf_image_tools
 import modules.commission_calculator as commission_calculator
 import modules.insurance_claim_guide as insurance_claim_guide
 import modules.silson_generation_comparison as silson_generation_comparison
@@ -124,6 +125,12 @@ APP_DEFINITIONS = {
         "description": "현재 가입 실손과 5세대 실손의 보험료와 입원 보장을 비교합니다.",
         "action": "실손 세대 비교 시작", "run": silson_generation_comparison.run,
     },
+    "pdf_image_tools": {
+        "name": "PDF·이미지 도구", "icon": "📄", "code": "PDF", "category": "고객 상담",
+        "badge": {"text": "NEW", "tone": "new"},
+        "description": "PDF와 이미지를 편집·압축하고 순서와 용량을 확인한 뒤 저장합니다.",
+        "action": "PDF·이미지 도구 열기", "run": pdf_image_tools.run,
+    },
     "convention": {
         "name": "컨벤션 계산기", "icon": "🏆", "code": "CV", "category": "실적 관리",
         "description": "계약 실적을 환산하고 컨벤션 달성 여부를 확인합니다.", "action": "컨벤션 계산 시작", "run": convention.run,
@@ -147,6 +154,7 @@ APP_DEFINITIONS = {
 
 # 홈 카드용 아이콘입니다. 외부 이미지나 추가 패키지 없이 동일한 모양으로 표시됩니다.
 HOME_ICONS = {
+    "pdf_image_tools": '<svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h4M9 12h6M9 16h6"/></svg>',
     "analyzer": '<svg viewBox="0 0 24 24"><path d="M9 11l2 2 4-4"/><path d="M12 3l7 3v5c0 4.6-3 8.1-7 10-4-1.9-7-5.4-7-10V6l7-3z"/></svg>',
     "insurance_claim_guide": '<svg viewBox="0 0 24 24"><path d="M7 3h10v3H7z"/><path d="M5 5h14v16H5z"/><path d="M8 11l2 2 4-4M8 17h8"/></svg>',
     "silson_generation_comparison": '<svg viewBox="0 0 24 24"><path d="M6 3v6a6 6 0 0012 0V3"/><path d="M9 3v5a3 3 0 006 0V3M12 15v6"/><circle cx="18" cy="18" r="3"/></svg>',
@@ -164,6 +172,7 @@ HOME_ICONS = {
 
 USER_PERMISSIONS = {
     "Admin": {
+        "pdf_image_tools": True,
         "insurance_claim_guide": True,
         "silson_generation_comparison": True,
         "analyzer": True, "remodeling": True, "deposit_vs_shortpay": True,
@@ -173,6 +182,7 @@ USER_PERMISSIONS = {
         "commission_calculator": True,
     },
     "Manager1": {
+        "pdf_image_tools": True,
         "insurance_claim_guide": True,
         "silson_generation_comparison": True,
         "analyzer": True, "remodeling": True, "deposit_vs_shortpay": True,
@@ -182,6 +192,7 @@ USER_PERMISSIONS = {
         "commission_calculator": True,
     },
     "Basic": {
+        "pdf_image_tools": True,
         "insurance_claim_guide": True,
         "silson_generation_comparison": True,
         "analyzer": True, "remodeling": False, "deposit_vs_shortpay": False,
@@ -191,6 +202,7 @@ USER_PERMISSIONS = {
         "commission_calculator": False,
     },
     "Crew": {
+        "pdf_image_tools": True,
         "insurance_claim_guide": True,
         "silson_generation_comparison": True,
         "analyzer": True, "remodeling": False, "deposit_vs_shortpay": True,
@@ -200,6 +212,7 @@ USER_PERMISSIONS = {
         "commission_calculator": False,
     },
     "Dream": {
+        "pdf_image_tools": True,
         "insurance_claim_guide": True,
         "silson_generation_comparison": True,
         "analyzer": True, "remodeling": True, "deposit_vs_shortpay": True,
